@@ -26,7 +26,8 @@ const server = http.createServer((request, response) => {
 <html>
 
 <head>
-    <title>Simple Kaomoji Table</title>
+<meta charset="UTF-8">    
+<title>Simple Kaomoji Table</title>
 </head>
 
 <h1>Happy Kaomoji Table</h1>
