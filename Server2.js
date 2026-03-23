@@ -170,7 +170,7 @@ const server = http.createServer((request, response) => {
   }
   else {
     response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G PS Jonathan is Dummy');
+    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G PS Jonathan is NICE');
   }
 
 });
