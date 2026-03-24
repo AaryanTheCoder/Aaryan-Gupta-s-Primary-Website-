@@ -1,4 +1,6 @@
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -168,13 +170,83 @@ const server = http.createServer((request, response) => {
 </body>
 </html>`);
   }
+  else if (request.url === '/games/pong.py' && request.method === 'GET') {
+    const filePath = path.join(__dirname, 'games', 'pong.py');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('pong.py not found');
+        return;
+      }
+      response.writeHead(200, {
+        'Content-Type': 'text/x-python; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="pong.py"'
+      });
+      response.end(data);
+    });
+  }
+  else if (request.url === '/games' && request.method === 'GET') {
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    response.end(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Games | Near Impossible Pong</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 40px; background:#0b0b0b; color:#f3f3f3; }
+    .card { max-width: 760px; margin: 0 auto; background:#141414; border:1px solid #222; border-radius: 14px; padding: 24px 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { opacity: .9; line-height: 1.6; }
+    code { background:#1c1c1c; padding:2px 6px; border-radius:6px; }
+    .actions { margin-top: 18px; display:flex; gap:12px; flex-wrap:wrap; }
+    a.btn { display:inline-block; background:#1f6feb; color:white; text-decoration:none; padding:10px 14px; border-radius:10px; font-weight:600; }
+    a.secondary { background:#2a2a2a; color:#ddd; }
+    .note { margin-top:14px; font-size:14px; color:#b7b7b7; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .95em; }
+  </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Near Impossible Pong</h1>
+      <p>This game is written in Python Turtle (desktop). Web browsers can’t run Turtle directly, so play it locally by downloading the Python file below.</p>
+      <div class="actions">
+        <a class="btn" href="/games/pong.py" download>Download Python Game</a>
+        <a class="btn secondary" href="/">Back Home</a>
+      </div>
+      <div class="note">
+        <p><strong>How to run</strong></p>
+        <ol>
+          <li>Install <span class="kbd">Python 3</span> (includes Tkinter on most systems).</li>
+          <li>Open Terminal in the folder where you saved <span class="kbd">pong.py</span>.</li>
+          <li>Run: <code>python3 pong.py</code></li>
+        </ol>
+        <p>Optional sound effects use macOS <span class="kbd">afplay</span>. If you’re not on macOS, you can ignore those lines.</p>
+      </div>
+    </div>
+  </body>
+  </html>`);
+  }
+  else if (request.url === '/aaryan' && request.method === 'GET') {
+    response.writeHead(200, {'Content-Type':'text/html; charset=utf-8'});
+    response.end('<!DOCTYPE html><title>Aaryan</title><img src=/aaryan/photo alt=Aaryan width=240>');
+  }
+  else if (request.url === '/aaryan/photo' && request.method === 'GET') {
+    const photoFile = path.join(__dirname, 'Photo on 24-3-26 at 10.30 AM.jpg');
+    fs.createReadStream(photoFile)
+      .on('error', () => { response.writeHead(404, {'Content-Type':'text/plain; charset=utf-8'}); response.end('Photo not found'); })
+      .pipe(response);
+  }
   else {
     response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G PS Jonathan is NICE');
   }
 
 });
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, function () {
   console.log(`Server running at http://localhost:${PORT}`);
 });
+  
