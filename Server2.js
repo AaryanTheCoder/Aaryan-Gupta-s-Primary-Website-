@@ -252,6 +252,30 @@ function filterKaomoji() {
 </body>
 </html>`);
   }
+  else if (request.url === '/7d2e594b9e08ab2fba15ece12d239457.jpg' && request.method === 'GET') {
+    const filePath = path.join(__dirname, '7d2e594b9e08ab2fba15ece12d239457.jpg');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('Cursor image not found');
+        return;
+      }
+      response.writeHead(200, { 'Content-Type': 'image/jpeg' });
+      response.end(data);
+    });
+  }
+  else if (request.url === '/freesound_community-evil-laugh-89423.mp3' && request.method === 'GET') {
+    const filePath = path.join(__dirname, 'freesound_community-evil-laugh-89423.mp3');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('Sound file not found');
+        return;
+      }
+      response.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+      response.end(data);
+    });
+  }
   else if (request.url === '/games/pong.py' && request.method === 'GET') {
     const filePath = path.join(__dirname, 'games', 'pong.py');
     fs.readFile(filePath, (err, data) => {
