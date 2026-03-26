@@ -51,6 +51,60 @@ const server = http.createServer((request, response) => {
             align-items: center;
             padding: 40px 20px;
             margin: 0;
+            cursor: url("7d2e594b9e08ab2fba15ece12d239457.jpg"), auto;
+        }
+
+        .prompt-wrap {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 24px;
+        }
+
+        #geminiPrompt {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid var(--primary-pink);
+            border-radius: 12px;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 1rem;
+            box-sizing: border-box;
+            outline: none;
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        #geminiReply {
+            margin-top: 14px;
+            background: white;
+            padding: 16px 18px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            white-space: pre-wrap;
+            line-height: 1.5;
+            min-height: 24px;
+        }
+
+        .search-wrap {
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 20px;
+        }
+
+        #searchBar {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid var(--secondary-blue);
+            border-radius: 12px;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 1rem;
+            box-sizing: border-box;
+            outline: none;
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        #searchBar:focus {
+            border-color: #5a9edb;
         }
 
         h1 {
@@ -93,8 +147,8 @@ const server = http.createServer((request, response) => {
             font-size: 1.1rem;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-family: monospace; /* Monospace keeps ASCII art aligned */
-            white-space: pre;    /* Ensures the cow keeps its shape on the button */
+            font-family: monospace;
+            white-space: pre;
         }
 
         button:hover {
@@ -111,6 +165,14 @@ const server = http.createServer((request, response) => {
 
     <h1>Happy Kaomoji Table</h1>
     <p>Click a kaomoji to copy it.</p>
+<div class="search-wrap">
+    <input
+        type="text"
+        id="searchBar"
+        placeholder="Search kaomoji or name..."
+        onkeyup="filterKaomoji()"
+    >
+</div>
 
     <table>
         <thead>
@@ -121,50 +183,70 @@ const server = http.createServer((request, response) => {
         </thead>
         <tbody>
             <tr>
-                <td><button onclick="copyKaomoji('(◕‿◕)')">(◕‿◕)</button></td>
+                <td><button onclick="playSound(); copyKaomoji('(◕‿◕)')">(◕‿◕)</button></td>
                 <td class="name-cell">Simple happy</td>
             </tr>
             <tr>
-                <td><button onclick="copyKaomoji('٩(^‿^)۶')">٩(^‿^)۶</button></td>
+                <td><button onclick="playSound(); copyKaomoji('٩(^‿^)۶')">٩(^‿^)۶</button></td>
                 <td class="name-cell">Happy</td>
             </tr>
             <tr>
-                <td><button onclick="copyKaomoji('(｡◕‿◕｡)')">(｡◕‿◕｡)</button></td>
+                <td><button onclick="playSound(); copyKaomoji('(｡◕‿◕｡)')">(｡◕‿◕｡)</button></td>
                 <td class="name-cell">Cute happy</td>
             </tr>
             <tr>
-                <td><button onclick="copyKaomoji('(ﾉ◕ヮ◕)ﾉ')">(ﾉ◕ヮ◕)ﾉ</button></td>
+                <td><button onclick="playSound(); copyKaomoji('(ﾉ◕ヮ◕)ﾉ')">(ﾉ◕ヮ◕)ﾉ</button></td>
                 <td class="name-cell">Hands up</td>
             </tr>
             <tr>
                 <td>
-<button onclick="copyKaomoji(\`  ____
+<button onclick="playSound(); copyKaomoji('(\"^__^\")')">  ____
  < hi >
   ----
-         \\   ^__^
-          \\  (oo)\\_______
-             (__)\\       )\\/\\
-                 ||----w |
-                 ||     ||\`)">  ____
- < hi >
-  ----
-         \   ^__^
-          \  (oo)\_______
-             (__)\       )\/\
-                 ||----w |
+            ^__^
+            (oo)_______
+             (__)       )/                 ||----w |
                  ||     ||</button>
                 </td>
                 <td class="name-cell">Cowsayhi</td>
             </tr>
         </tbody>
     </table>
+<div class="prompt-wrap">
+    <input
+        type="text"
+        id="geminiPrompt"
+        placeholder="Ask Gemini to send a kaomoji to you!"
+    >
+    <div id="geminiReply"></div>
+</div>
 
     <script>
+const clickSound = new Audio("freesound_community-evil-laugh-89423.mp3");
+function playSound() {
+    clickSound.currentTime = 0;
+    clickSound.play();
+}
         function copyKaomoji(text) {
             navigator.clipboard.writeText(text).then(() => {
                 alert("Copied to clipboard!");
             });
+}
+function filterKaomoji() {
+    const input = document.getElementById("searchBar").value.toLowerCase();
+    const rows = document.querySelectorAll("tbody tr");
+
+    rows.forEach(row => {
+        const kaomojiText = row.cells[0].innerText.toLowerCase();
+        const nameText = row.cells[1].innerText.toLowerCase();
+
+        if (kaomojiText.includes(input) || nameText.includes(input)) {
+            row.style.display = "";
+        } else {
+            row.style.display = "none";
         }
+    });
+}      
     </script>
 
 </body>
