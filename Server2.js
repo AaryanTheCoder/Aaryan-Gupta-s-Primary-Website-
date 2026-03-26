@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const GEMINI_API_KEY = 'AIzaSyBZkwBzVllcGYbkbSS130c6SROvTuUHMmE';
+const GEMINI_API_KEY = 'AIzaSyDGQ_I9qExtfB3ckEIV48DcI62J5ES0NvQ';
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
