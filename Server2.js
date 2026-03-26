@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const GEMINI_API_KEY = 'AIzaSyBZkwBzVllcGYbkbSS130c6SROvTuUHMmE';
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -42,46 +43,20 @@ const server = http.createServer((request, response) => {
             --shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         }
 
-        body {
-            font-family: 'Quicksand', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px;
-            margin: 0;
-            cursor: url("7d2e594b9e08ab2fba15ece12d239457.jpg"), auto;
+                body {
+          margin: 0;
+          font-family: Arial, sans-serif;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: url("/aaryan/photo") center center / cover no-repeat fixed;
+          color: #4b3b47;
         }
 
-        .prompt-wrap {
-            width: 100%;
-            max-width: 600px;
-            margin-top: 24px;
-        }
-
-        #geminiPrompt {
-            width: 100%;
-            padding: 14px 18px;
-            border: 2px solid var(--primary-pink);
-            border-radius: 12px;
-            font-family: 'Quicksand', sans-serif;
-            font-size: 1rem;
-            box-sizing: border-box;
-            outline: none;
-            background: white;
-            box-shadow: var(--shadow);
-        }
-
-        #geminiReply {
-            margin-top: 14px;
-            background: white;
-            padding: 16px 18px;
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-            white-space: pre-wrap;
-            line-height: 1.5;
-            min-height: 24px;
+        * {
+          cursor: url("/7d2e594b9e08ab2fba15ece12d239457.png"), auto !important;
         }
 
         .search-wrap {
@@ -212,17 +187,9 @@ const server = http.createServer((request, response) => {
             </tr>
         </tbody>
     </table>
-<div class="prompt-wrap">
-    <input
-        type="text"
-        id="geminiPrompt"
-        placeholder="Ask Gemini to send a kaomoji to you!"
-    >
-    <div id="geminiReply"></div>
-</div>
 
     <script>
-const clickSound = new Audio("freesound_community-evil-laugh-89423.mp3");
+const clickSound = new Audio("/freesound_community-evil-laugh-89423.mp3");
 function playSound() {
     clickSound.currentTime = 0;
     clickSound.play();
@@ -248,19 +215,77 @@ function filterKaomoji() {
     });
 }      
     </script>
+      <section id="gemini-kaomoji-box" style="width:min(720px,92vw);margin:24px auto 0;padding:18px;border:1px solid #e7cfe0;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(75,59,71,0.08);">
+        <h2 style="margin:0 0 12px 0;font-size:1.2rem;">Kaomoji Gemini Reply</h2>
+        <textarea id="gemini-message" placeholder="Type your message here..." style="width:100%;min-height:110px;padding:12px;border:1px solid #d7b7c8;border-radius:12px;font:inherit;resize:vertical;box-sizing:border-box;"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+          <button id="gemini-send" type="button" style="padding:10px 16px;border:none;border-radius:999px;background:#4b3b47;color:#fff;font:inherit;cursor:pointer;">Send to Gemini</button>
+          <span id="gemini-status" style="font-size:0.95rem;color:#6b5564;"></span>
+        </div>
+        <pre id="gemini-reply" style="white-space:pre-wrap;word-wrap:break-word;margin:14px 0 0 0;padding:14px;border-radius:12px;background:#fff7fb;border:1px solid #eed9e5;min-height:72px;box-sizing:border-box;">Gemini reply will show here.</pre>
+      </section>
 
+      <script>
+        (function () {
+          const messageBox = document.getElementById('gemini-message');
+          const sendButton = document.getElementById('gemini-send');
+          const replyBox = document.getElementById('gemini-reply');
+          const statusBox = document.getElementById('gemini-status');
+
+          async function sendGeminiMessage() {
+            const message = messageBox.value.trim();
+            if (!message) {
+              replyBox.textContent = 'Please type a message first.';
+              return;
+            }
+
+            statusBox.textContent = 'Thinking...';
+            replyBox.textContent = 'Waiting for Gemini...';
+            sendButton.disabled = true;
+
+            try {
+              const res = await fetch('/api/kaomoji-gemini', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+              });
+
+              const data = await res.json();
+
+              if (!res.ok) {
+                throw new Error(data.error || 'Gemini request failed.');
+              }
+
+              replyBox.textContent = data.reply || 'No reply received.';
+              statusBox.textContent = 'Done.';
+            } catch (error) {
+              replyBox.textContent = 'Error: ' + error.message;
+              statusBox.textContent = 'Failed.';
+            } finally {
+              sendButton.disabled = false;
+            }
+          }
+
+          sendButton.addEventListener('click', sendGeminiMessage);
+          messageBox.addEventListener('keydown', function (event) {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+              sendGeminiMessage();
+            }
+          });
+        })();
+      </script>
 </body>
 </html>`);
   }
-  else if (request.url === '/7d2e594b9e08ab2fba15ece12d239457.jpg' && request.method === 'GET') {
-    const filePath = path.join(__dirname, '7d2e594b9e08ab2fba15ece12d239457.jpg');
+  else if (request.url === '/7d2e594b9e08ab2fba15ece12d239457.png' && request.method === 'GET') {
+    const filePath = path.join(__dirname, '7d2e594b9e08ab2fba15ece12d239457.png');
     fs.readFile(filePath, (err, data) => {
       if (err) {
         response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         response.end('Cursor image not found');
         return;
       }
-      response.writeHead(200, { 'Content-Type': 'image/jpeg' });
+      response.writeHead(200, { 'Content-Type': 'image/png' });
       response.end(data);
     });
   }
@@ -274,6 +299,57 @@ function filterKaomoji() {
       }
       response.writeHead(200, { 'Content-Type': 'audio/mpeg' });
       response.end(data);
+    });
+  }
+    else if (request.url === '/api/kaomoji-gemini' && request.method === 'POST') {
+    let body = '';
+
+    request.on('data', chunk => {
+      body += chunk;
+    });
+
+    request.on('end', async () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+
+        if (!message) {
+          response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          response.end(JSON.stringify({ error: 'Message is required.' }));
+          return;
+        }
+
+        const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `Reply helpfully and a little playfully for a kaomoji-themed web page. User message: ${message}`
+                  }
+                ]
+              }
+            ]
+          })
+        });
+
+        const geminiData = await geminiResponse.json();
+        const reply = geminiData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+
+        if (!geminiResponse.ok) {
+          response.writeHead(geminiResponse.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+          response.end(JSON.stringify({ error: geminiData?.error?.message || 'Gemini API request failed.' }));
+          return;
+        }
+
+        response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ reply: reply || 'Gemini returned an empty reply.' }));
+      } catch (error) {
+        response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ error: error.message || 'Internal server error.' }));
+      }
     });
   }
   else if (request.url === '/games/pong.py' && request.method === 'GET') {
@@ -346,7 +422,7 @@ function filterKaomoji() {
   }
   else {
     response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G PS Jonathan is NICE');
+    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G PS Jonathan is NICE Domain names: /ramen /kaomoji /games /aaryan (they are all public)');
   }
 
 });
