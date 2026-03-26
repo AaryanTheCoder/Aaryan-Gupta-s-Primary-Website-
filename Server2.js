@@ -55,8 +55,8 @@ const server = http.createServer((request, response) => {
           color: #4b3b47;
         }
 
-        * {
-          cursor: url("/7d2e594b9e08ab2fba15ece12d239457.png"), auto !important;
+        html, body, button, input, textarea, table, th, td, a, p, h1, h2, section, div, span {
+          cursor: url("/7d2e594b9e08ab2fba15ece12d239457.png") 8 8, auto !important;
         }
 
         .search-wrap {
@@ -285,7 +285,10 @@ function filterKaomoji() {
         response.end('Cursor image not found');
         return;
       }
-      response.writeHead(200, { 'Content-Type': 'image/png' });
+      response.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'no-store'
+      });
       response.end(data);
     });
   }
