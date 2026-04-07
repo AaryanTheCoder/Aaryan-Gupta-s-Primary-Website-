@@ -815,7 +815,7 @@ function filterKaomoji() {
   }
   else {
     response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G PS Jonathan is NICE Domain names: /ramen /kaomoji /games /aaryan (they are all public)');
+    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G \n Domain names: /ramen /kaomoji /games /aaryan (they are all public)');
   }
 
 });
