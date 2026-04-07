@@ -2,11 +2,15 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const storageRoutes = require('./storageRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
   console.log('Request Method: ' + request.method);
-
+// 👇 ADD THIS
+if (request.url.startsWith('/storage')) {
+  return storageRoutes.handle(request, response);
+}
   if (request.url === '/about' && request.method === 'GET') {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   response.end(`<!DOCTYPE html>
