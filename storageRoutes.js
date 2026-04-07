@@ -20,7 +20,8 @@ function isAuthorized(req) {
   if (!auth.startsWith('Basic ')) return false;
 
   const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-  const password = decoded.split(':')[1];
+  const colonIndex = decoded.indexOf(':');
+  const password = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
 
   return password === STORAGE_PASSWORD;
 }
@@ -29,11 +30,21 @@ function requireAuth(req, res) {
   if (isAuthorized(req)) return true;
 
   res.writeHead(401, {
+    'Content-Type': 'text/plain; charset=utf-8',
     'WWW-Authenticate': 'Basic realm="Storage"'
   });
-
   res.end('Storage password required');
   return false;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
 }
 
 function listFilesHtml() {
@@ -45,7 +56,7 @@ function listFilesHtml() {
     const enc = encodeURIComponent(f);
     return `
       <div style="margin-bottom:10px;">
-        <b>${f}</b><br>
+        <b>${escapeHtml(f)}</b><br>
         <a href="/storage/files/${enc}">View</a> |
         <a href="/storage/download/${enc}">Download</a>
       </div>
@@ -54,10 +65,10 @@ function listFilesHtml() {
 }
 
 function handle(req, res) {
-  if (!requireAuth(req, res)) return;
-
   if (req.url === '/storage' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    if (!requireAuth(req, res)) return;
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(`
       <h1>💾 Aaryan Storage</h1>
 
@@ -71,19 +82,39 @@ function handle(req, res) {
       <script>
         async function upload() {
           const file = document.getElementById('f').files[0];
-          if (!file) return;
+          const status = document.getElementById('status');
 
-          document.getElementById('status').textContent = 'Uploading...';
+          if (!file) {
+            status.textContent = 'Pick a file first.';
+            return;
+          }
 
-          const res = await fetch('/storage/upload', {
-            method: 'POST',
-            headers: {
-              'X-File-Name': file.name
-            },
-            body: file
-          });
+          status.textContent = 'Uploading...';
 
-          location.reload();
+          try {
+            const res = await fetch('/storage/upload', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'X-File-Name': encodeURIComponent(file.name),
+                'Content-Type': 'application/octet-stream'
+              },
+              body: file
+            });
+
+            const text = await res.text();
+            console.log('Upload response:', res.status, text);
+
+            if (!res.ok) {
+              status.textContent = 'Upload failed: ' + text;
+              return;
+            }
+
+            status.textContent = 'Upload complete.';
+            location.reload();
+          } catch (error) {
+            status.textContent = 'Upload error: ' + error.message;
+          }
         }
       </script>
     `);
@@ -91,44 +122,72 @@ function handle(req, res) {
   }
 
   if (req.url === '/storage/upload' && req.method === 'POST') {
+    if (!requireAuth(req, res)) return;
+
     const name = sanitizeFileName(
       decodeURIComponent(req.headers['x-file-name'] || 'file')
     );
-
     const filePath = path.join(STORAGE_DIR, name);
-
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+
+    req.on('data', chunk => {
+      chunks.push(chunk);
+    });
+
     req.on('end', () => {
-      fs.writeFileSync(filePath, Buffer.concat(chunks));
-      res.end(JSON.stringify({ ok: true }));
+      try {
+        fs.writeFileSync(filePath, Buffer.concat(chunks));
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: true, file: name }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: error.message }));
+      }
+    });
+
+    req.on('error', error => {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: error.message }));
     });
 
     return;
   }
 
-  if (req.url.startsWith('/storage/files/')) {
-    const name = sanitizeFileName(
-      decodeURIComponent(req.url.split('/').pop())
-    );
+  if (req.url.startsWith('/storage/files/') && req.method === 'GET') {
+    if (!requireAuth(req, res)) return;
 
-    fs.createReadStream(path.join(STORAGE_DIR, name)).pipe(res);
+    const name = sanitizeFileName(decodeURIComponent(req.url.split('/').pop()));
+    const filePath = path.join(STORAGE_DIR, name);
+
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('File not found');
+      return;
+    }
+
+    fs.createReadStream(filePath).pipe(res);
     return;
   }
 
-  if (req.url.startsWith('/storage/download/')) {
-    const name = sanitizeFileName(
-      decodeURIComponent(req.url.split('/').pop())
-    );
+  if (req.url.startsWith('/storage/download/') && req.method === 'GET') {
+    if (!requireAuth(req, res)) return;
 
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${name}"`
-    );
+    const name = sanitizeFileName(decodeURIComponent(req.url.split('/').pop()));
+    const filePath = path.join(STORAGE_DIR, name);
 
-    fs.createReadStream(path.join(STORAGE_DIR, name)).pipe(res);
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('File not found');
+      return;
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    fs.createReadStream(filePath).pipe(res);
     return;
   }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Storage route not found');
 }
 
 module.exports = { handle };
