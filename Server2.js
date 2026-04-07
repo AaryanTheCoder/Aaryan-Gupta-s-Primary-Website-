@@ -745,6 +745,20 @@ function filterKaomoji() {
       }
     });
   }
+      else if (request.url === '/Selfie.JPG' && request.method === 'GET') {
+  const filePath = path.join(__dirname, 'Selfie.JPG');
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('Selfie not found');
+      return;
+    }
+
+    response.writeHead(200, { 'Content-Type': 'image/jpeg' });
+    response.end(data);
+  });
+}
   else if (request.url === '/games/pong.py' && request.method === 'GET') {
     const filePath = path.join(__dirname, 'games', 'pong.py');
     fs.readFile(filePath, (err, data) => {
