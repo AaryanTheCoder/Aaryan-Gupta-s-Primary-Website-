@@ -748,6 +748,11 @@ if (
     <div class="footer-note">
       Built by <strong>Aaryan Gupta</strong> — thanks for visiting my website.
     </div>
+    <div style="margin-top: 30px; text-align: center;">
+  <img src="/Selfie.jpg" alt="My Photo"
+       style="max-width: 220px; border-radius: 20px;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
+</div>
   </div>
 </body>
 </html>`);
