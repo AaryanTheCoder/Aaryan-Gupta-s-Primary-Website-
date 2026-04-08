@@ -509,8 +509,248 @@ if (
       .pipe(response);
   }
   else {
-    response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    response.end('Home page: try /about, /contact, + 2 random hidden one! \n Made by Aaryan G \n Domain names: /ramen /kaomoji /games /aaryan (they are all public)');
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    response.end(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aaryan Gupta | Home</title>
+  <style>
+    :root {
+      --bg-1: #07111f;
+      --bg-2: #14243d;
+      --card: rgba(255, 255, 255, 0.10);
+      --card-border: rgba(255, 255, 255, 0.16);
+      --text: #f7fbff;
+      --muted: #d2e1f0;
+      --accent: #8ed8ff;
+      --accent-2: #c4a8ff;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(142, 216, 255, 0.22), transparent 30%),
+        radial-gradient(circle at top right, rgba(196, 168, 255, 0.20), transparent 28%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 56px;
+    }
+
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 28px;
+      padding: 34px 30px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      right: -60px;
+      bottom: -80px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(142, 216, 255, 0.18), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.11);
+      border: 1px solid rgba(255,255,255,0.16);
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-size: clamp(2.2rem, 5vw, 4.1rem);
+      line-height: 1.05;
+    }
+
+    .highlight {
+      background: linear-gradient(90deg, var(--accent), #ffffff, var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .lead {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 1.06rem;
+      line-height: 1.8;
+      margin: 0;
+    }
+
+    .section-title {
+      margin: 30px 0 14px;
+      font-size: 1.3rem;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      margin-top: 8px;
+    }
+
+    .widget {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .widget:hover {
+      transform: translateY(-6px);
+      border-color: rgba(142, 216, 255, 0.5);
+      background: rgba(255, 255, 255, 0.13);
+    }
+
+    .route {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.14);
+      color: var(--accent);
+      font-weight: bold;
+      font-size: 0.95rem;
+      margin-bottom: 14px;
+    }
+
+    .widget h2 {
+      margin: 0 0 10px;
+      font-size: 1.35rem;
+      color: #ffffff;
+    }
+
+    .widget p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 0.98rem;
+    }
+
+    .footer-note {
+      margin-top: 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    @media (max-width: 780px) {
+      .card-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding: 24px 20px;
+      }
+
+      .page {
+        width: min(100% - 20px, 100%);
+        padding-top: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">Welcome to my website</div>
+      <h1>A tiny bit about me — <span class="highlight">this website contains my projects</span></h1>
+      <p class="lead">
+        Hi, I'm Aaryan Gupta. This website is a collection of projects, pages, and fun experiments I’ve built — from my personal profile page to games, kaomoji tools, and more. Click any widget below to explore the different parts of the site.
+      </p>
+    </section>
+
+    <h2 class="section-title">Explore the site</h2>
+
+    <section class="card-grid">
+      <a class="widget" href="/about">
+        <div class="route">/about</div>
+        <h2>About Me</h2>
+        <p>Learn more about who I am, my school life, achievements, interests, sports, and community service.</p>
+      </a>
+
+      <a class="widget" href="/contact">
+        <div class="route">/contact</div>
+        <h2>Contact</h2>
+        <p>Need to reach me? This page gives you my contact email so you can get in touch easily.</p>
+      </a>
+
+      <a class="widget" href="/ramen">
+        <div class="route">/ramen</div>
+        <h2>Ramen Page</h2>
+        <p>A playful hidden-style page with a fun neon noodle menu and some creative flavor.</p>
+      </a>
+
+      <a class="widget" href="/kaomoji">
+        <div class="route">/kaomoji</div>
+        <h2>Kaomoji Project</h2>
+        <p>Explore my kaomoji project, complete with interactive features and Gemini-powered functionality.</p>
+      </a>
+
+      <a class="widget" href="/games">
+        <div class="route">/games</div>
+        <h2>Games</h2>
+        <p>Check out my Near Impossible Pong project and download the Python version to run locally.</p>
+      </a>
+
+      <a class="widget" href="/aaryan">
+        <div class="route">/aaryan</div>
+        <h2>Photo Page</h2>
+        <p>A simple page that displays a photo, as part of the website’s personal and creative side.</p>
+      </a>
+
+      <a class="widget" href="/storage">
+        <div class="route">/storage</div>
+        <h2>Storage</h2>
+        <p>Access the storage section of the site for upload and file-related features handled by the server.</p>
+      </a>
+    </section>
+
+    <div class="footer-note">
+      Built by <strong>Aaryan Gupta</strong> — thanks for visiting my website.
+    </div>
+  </div>
+</body>
+</html>`);
   }
 
 });
