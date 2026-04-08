@@ -1,4 +1,6 @@
 const fs = require('fs');
+
+const mime = require('mime-types');
 const path = require('path');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
@@ -638,6 +640,53 @@ function handle(req, res) {
       return;
     }
 
+    const stat = fs.statSync(filePath);
+    const contentType = mime.lookup(filePath) || 'application/octet-stream';
+    const range = req.headers.range;
+
+    if (range) {
+      const match = /bytes=(\d*)-(\d*)/.exec(range);
+
+      if (!match) {
+        res.writeHead(416, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Range': `bytes */${stat.size}`
+        });
+        res.end('Invalid range');
+        return;
+      }
+
+      let start = match[1] ? parseInt(match[1], 10) : 0;
+      let end = match[2] ? parseInt(match[2], 10) : stat.size - 1;
+
+      if (Number.isNaN(start) || start < 0) start = 0;
+      if (Number.isNaN(end) || end >= stat.size) end = stat.size - 1;
+      if (start > end || start >= stat.size) {
+        res.writeHead(416, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Range': `bytes */${stat.size}`
+        });
+        res.end('Requested range not satisfiable');
+        return;
+      }
+
+      res.writeHead(206, {
+        'Content-Type': contentType,
+        'Content-Length': end - start + 1,
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Accept-Ranges': 'bytes'
+      });
+
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': stat.size,
+      'Accept-Ranges': 'bytes'
+    });
+
     fs.createReadStream(filePath).pipe(res);
     return;
   }
@@ -654,7 +703,16 @@ function handle(req, res) {
       return;
     }
 
-    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    const stat = fs.statSync(filePath);
+    const contentType = mime.lookup(filePath) || 'application/octet-stream';
+
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': stat.size,
+      'Content-Disposition': `attachment; filename="${name}"`,
+      'Accept-Ranges': 'bytes'
+    });
+
     fs.createReadStream(filePath).pipe(res);
     return;
   }
