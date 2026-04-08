@@ -81,6 +81,7 @@ function listFilesHtml() {
             <div class="file-actions">
               <a href="/storage/files/${enc}">View</a>
               <a href="/storage/download/${enc}">Download</a>
+              <button class="danger" onclick="deleteFile('${enc}')">Delete</button>
             </div>
           </div>
         `;
@@ -333,6 +334,20 @@ function handle(req, res) {
       font-weight: bold;
     }
 
+    .file-actions button {
+      border: none;
+      cursor: pointer;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-weight: bold;
+      color: #08111f;
+      background: linear-gradient(135deg, var(--accent), #ffffff);
+    }
+
+    .file-actions button.danger {
+      background: linear-gradient(135deg, #ff9aa7, #ff6b6b);
+    }
+
     .empty-state h3 {
       margin: 12px 0 8px;
     }
@@ -559,6 +574,27 @@ function handle(req, res) {
 
       xhr.send(file);
     }
+
+    function deleteFile(encodedName) {
+      const prettyName = decodeURIComponent(encodedName || '');
+      if (!encodedName) return;
+      if (!confirm('Delete "' + prettyName + '"? This cannot be undone.')) return;
+
+      status.textContent = 'Deleting ' + prettyName + '...';
+      fetch('/storage/delete/' + encodedName, { method: 'POST', credentials: 'include' })
+        .then(async (r) => {
+          const data = await r.json().catch(() => ({}));
+          if (r.ok) {
+            status.textContent = 'Deleted ' + prettyName + '.';
+            setTimeout(() => location.reload(), 400);
+          } else {
+            status.textContent = 'Delete failed: ' + (data.error || ('HTTP ' + r.status));
+          }
+        })
+        .catch(() => {
+          status.textContent = 'Delete error. Please try again.';
+        });
+    }
   </script>
 </body>
 </html>`);
@@ -625,6 +661,37 @@ function handle(req, res) {
 
     req.pipe(writeStream);
 
+    return;
+  }
+
+  // Delete a file
+  if ((req.url.startsWith('/storage/delete/') && (req.method === 'POST' || req.method === 'DELETE'))) {
+    if (!requireAuth(req, res)) return;
+
+    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
+    const filePath = path.join(STORAGE_DIR, name);
+
+    try {
+      if (!fs.existsSync(filePath)) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: 'File not found' }));
+        return;
+      }
+
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: 'Not a file' }));
+        return;
+      }
+
+      fs.unlinkSync(filePath);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, deleted: name }));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: error.message }));
+    }
     return;
   }
 
