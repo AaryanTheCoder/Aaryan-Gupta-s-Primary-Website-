@@ -401,11 +401,11 @@ function handle(req, res) {
       <h2 class="section-title">Upload a file</h2>
       <div class="upload-panel">
         <div class="upload-controls">
-          <input type="file" id="f">
-          <button onclick="upload()">Upload file</button>
+          <input type="file" id="f" multiple>
+          <button onclick="upload()">Upload files</button>
         </div>
 
-        <div class="file-meta" id="fileMeta">No file selected yet.</div>
+        <div class="file-meta" id="fileMeta">No files selected yet.</div>
         <div class="file-meta" id="transferMeta">No upload in progress.</div>
 
         <div class="progress-wrap" id="progressWrap">
@@ -439,14 +439,16 @@ function handle(req, res) {
     const progressPercent = document.getElementById('progressPercent');
 
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) {
-        fileMeta.textContent = 'No file selected yet.';
+      const files = fileInput.files;
+      if (!files.length) {
+        fileMeta.textContent = 'No files selected yet.';
         transferMeta.textContent = 'No upload in progress.';
         return;
       }
 
-      fileMeta.textContent = 'Selected: ' + file.name + ' (' + formatBytes(file.size) + ')';
+      const totalSize = Array.from(files).reduce((sum, f) => sum + f.size, 0);
+      const fileNames = Array.from(files).map(f => f.name).join(', ');
+      fileMeta.textContent = 'Selected ' + files.length + ' file(s): ' + fileNames + ' (' + formatBytes(totalSize) + ' total)';
       transferMeta.textContent = 'Ready to upload.';
     });
 
@@ -492,87 +494,109 @@ function handle(req, res) {
     }
 
     function upload() {
-      const file = fileInput.files[0];
+      const files = fileInput.files;
 
-      if (!file) {
-        status.textContent = 'Pick a file first.';
+      if (!files.length) {
+        status.textContent = 'Pick files first.';
         transferMeta.textContent = 'No upload in progress.';
         progressWrap.classList.remove('show');
         return;
       }
 
-      status.textContent = 'Preparing upload...';
-      transferMeta.textContent = 'Starting upload for ' + file.name + ' (' + formatBytes(file.size) + ').';
-      progressWrap.classList.add('show');
-      setProgress(0, 'Starting upload...');
-
-      const xhr = new XMLHttpRequest();
+      const fileArray = Array.from(files);
+      const totalSize = fileArray.reduce((sum, f) => sum + f.size, 0);
+      let uploadedSize = 0;
+      let failedCount = 0;
       const startedAt = Date.now();
-      let lastLoaded = 0;
-      let lastTimestamp = startedAt;
-      let smoothedSpeed = 0;
 
-      xhr.open('POST', '/storage/upload');
-      xhr.withCredentials = true;
-      xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      status.textContent = 'Starting upload of ' + fileArray.length + ' file(s)...';
+      progressWrap.classList.add('show');
+      setProgress(0, 'Uploading file 1 of ' + fileArray.length + '...');
 
-      xhr.upload.onprogress = function (event) {
-        if (!event.lengthComputable) {
-          setProgress(0, 'Uploading...');
-          transferMeta.textContent = 'Uploading...';
-          return;
+      async function uploadFile(file, index) {
+        return new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          let lastLoaded = 0;
+          let lastTimestamp = startedAt;
+          let smoothedSpeed = 0;
+
+          xhr.open('POST', '/storage/upload');
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+          xhr.upload.onprogress = function (event) {
+            if (!event.lengthComputable) return;
+
+            const now = Date.now();
+            const loaded = event.loaded;
+            const total = event.total;
+            const deltaBytes = loaded - lastLoaded;
+            const deltaSeconds = Math.max((now - lastTimestamp) / 1000, 0.001);
+            const instantSpeed = deltaBytes / deltaSeconds;
+
+            smoothedSpeed = smoothedSpeed === 0
+              ? (uploadedSize + loaded) / Math.max((now - startedAt) / 1000, 0.001)
+              : (smoothedSpeed * 0.75) + (instantSpeed * 0.25);
+
+            const currentOverallLoaded = uploadedSize + loaded;
+            const overallPercent = Math.round((currentOverallLoaded / totalSize) * 100);
+            const remainingBytes = totalSize - currentOverallLoaded;
+            const etaSeconds = smoothedSpeed > 0 ? remainingBytes / smoothedSpeed : Infinity;
+
+            setProgress(overallPercent, 'Uploading file ' + (index + 1) + ' of ' + fileArray.length + ': ' + file.name + '...');
+            transferMeta.textContent =
+              formatBytes(currentOverallLoaded) + ' / ' + formatBytes(totalSize) +
+              ' • ' + formatSpeed(smoothedSpeed) +
+              ' • ' + formatDuration(etaSeconds);
+
+            lastLoaded = loaded;
+            lastTimestamp = now;
+          };
+
+          xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              uploadedSize += file.size;
+              resolve({ ok: true });
+            } else {
+              failedCount++;
+              status.textContent = 'Failed to upload ' + file.name + ': ' + xhr.responseText;
+              resolve({ ok: false });
+            }
+          };
+
+          xhr.onerror = function () {
+            failedCount++;
+            status.textContent = 'Error uploading ' + file.name + '. Continuing with next file...';
+            resolve({ ok: false });
+          };
+
+          xhr.send(file);
+        });
+      }
+
+      (async () => {
+        for (let i = 0; i < fileArray.length; i++) {
+          await uploadFile(fileArray[i], i);
         }
 
-        const now = Date.now();
-        const loaded = event.loaded;
-        const total = event.total;
-        const percent = Math.round((loaded / total) * 100);
-        const elapsedSeconds = Math.max((now - startedAt) / 1000, 0.001);
-        const averageSpeed = loaded / elapsedSeconds;
-
-        const deltaBytes = loaded - lastLoaded;
-        const deltaSeconds = Math.max((now - lastTimestamp) / 1000, 0.001);
-        const instantSpeed = deltaBytes / deltaSeconds;
-
-        smoothedSpeed = smoothedSpeed === 0
-          ? averageSpeed
-          : (smoothedSpeed * 0.75) + (instantSpeed * 0.25);
-
-        const remainingBytes = total - loaded;
-        const etaSeconds = smoothedSpeed > 0 ? remainingBytes / smoothedSpeed : Infinity;
-
-        setProgress(percent, 'Uploading ' + file.name + '...');
-        transferMeta.textContent =
-          formatBytes(loaded) + ' / ' + formatBytes(total) +
-          ' • ' + formatSpeed(smoothedSpeed) +
-          ' • ' + formatDuration(etaSeconds);
-
-        lastLoaded = loaded;
-        lastTimestamp = now;
-      };
-
-      xhr.onload = function () {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        const successCount = fileArray.length - failedCount;
+        if (failedCount === 0) {
           setProgress(100, 'Upload complete');
-          status.textContent = 'Upload complete.';
-          transferMeta.textContent = formatBytes(file.size) + ' uploaded successfully and saved to storage.';
+          status.textContent = 'All ' + successCount + ' file(s) uploaded successfully.';
+          transferMeta.textContent = formatBytes(totalSize) + ' uploaded successfully and saved to storage.';
           setTimeout(() => location.reload(), 700);
-          return;
+        } else if (successCount === 0) {
+          setProgress(0, 'Upload failed');
+          status.textContent = 'Failed to upload all ' + fileArray.length + ' file(s).';
+          transferMeta.textContent = 'All uploads failed.';
+        } else {
+          setProgress(100, 'Completed with errors');
+          status.textContent = 'Uploaded ' + successCount + ' of ' + fileArray.length + ' file(s). ' + failedCount + ' failed.';
+          transferMeta.textContent = successCount + ' file(s) saved. ' + failedCount + ' failed.';
+          setTimeout(() => location.reload(), 1400);
         }
-
-        status.textContent = 'Upload failed: ' + xhr.responseText;
-        transferMeta.textContent = 'Upload failed before completion.';
-        setProgress(0, 'Upload failed');
-      };
-
-      xhr.onerror = function () {
-        status.textContent = 'Upload error. Please try again.';
-        transferMeta.textContent = 'A network error interrupted the upload.';
-        setProgress(0, 'Upload error');
-      };
-
-      xhr.send(file);
+      })();
     }
 
     function deleteFile(encodedName) {
