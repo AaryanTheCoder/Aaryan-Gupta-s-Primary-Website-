@@ -455,6 +455,19 @@ if (
       response.end(data);
     });
   }
+  // Serve Google Search Console verification file at the exact root path
+  else if (request.url === '/google39fdc9cf51b98b51.html' && request.method === 'GET') {
+    const filePath = path.join(__dirname, 'google39fdc9cf51b98b51.html');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('Verification file not found');
+        return;
+      }
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(data);
+    });
+  }
   else if (request.url === '/games' && request.method === 'GET') {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     response.end(`
@@ -753,6 +766,9 @@ if (
        style="max-width: 220px; border-radius: 20px;
               box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
 </div>
+    <div style="text-align:center; margin-top: 10px;">
+      <a href="/google39fdc9cf51b98b51.html" style="font-size:9px; color:#9fb6d6; opacity:0.7; text-decoration:none;">google verification</a>
+    </div>
   </div>
 </body>
 </html>`);
