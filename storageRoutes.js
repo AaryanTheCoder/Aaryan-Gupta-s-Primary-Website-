@@ -15,20 +15,6 @@ function sanitizeFileName(fileName) {
   return base.replace(/[^a-zA-Z0-9._ -]/g, '_') || `upload-${Date.now()}`;
 }
 
-// Allow safe nested relative paths like "folder/sub/file.txt" while
-// preventing path traversal and normalizing separators.
-function sanitizeRelativePath(p) {
-  let rel = String(p || '').replace(/\\/g, '/');
-  // Strip leading slashes and collapse .. and . segments
-  rel = rel.replace(/^\/+/, '');
-  const parts = rel.split('/').filter(Boolean).map(sanitizeFileName);
-  const safe = parts.join('/');
-  // Prevent navigating above STORAGE_DIR
-  const full = path.resolve(STORAGE_DIR, safe);
-  if (!full.startsWith(path.resolve(STORAGE_DIR))) return '';
-  return safe;
-}
-
 function isAuthorized(req) {
   if (!STORAGE_PASSWORD) return false;
 
@@ -71,12 +57,10 @@ function safeDecode(value) {
   }
 }
 
-function listFilesHtml(currentRelPath = '') {
-  const baseDir = path.resolve(STORAGE_DIR, sanitizeRelativePath(currentRelPath));
-  const inRoot = baseDir === path.resolve(STORAGE_DIR);
-  const entries = fs.readdirSync(baseDir, { withFileTypes: true }).filter(d => !d.name.startsWith('.upload-'));
+function listFilesHtml() {
+  const files = fs.readdirSync(STORAGE_DIR).filter(name => !name.startsWith('.upload-'));
 
-  if (!entries.length) {
+  if (!files.length) {
     return `
       <div class="empty-state">
         <div class="empty-icon">📂</div>
@@ -87,38 +71,29 @@ function listFilesHtml(currentRelPath = '') {
   }
 
   return `
-    ${!inRoot ? `<p><a href="/storage?path=${encodeURIComponent(escapeHtml(path.dirname(currentRelPath)))}">⬅ Back</a></p>` : ''}
     <div class="file-grid">
-      ${entries.map(d => {
-        const name = d.name;
-        const rel = currentRelPath ? currentRelPath.replace(/\/$/, '') + '/' + name : name;
-        const enc = encodeURIComponent(rel);
-        const icon = d.isDirectory() ? '📁' : '📄';
-        const actions = d.isDirectory()
-          ? `<a href="/storage?path=${enc}">Open</a>`
-          : `<a href="/storage/files/${enc}">View</a><a href="/storage/download/${enc}">Download</a>`;
+      ${files.map(f => {
+        const enc = encodeURIComponent(f);
         return `
           <div class="file-card">
-            <div class="file-icon">${icon}</div>
-            <div class="file-name">${escapeHtml(name)}</div>
+            <div class="file-icon">📄</div>
+            <div class="file-name">${escapeHtml(f)}</div>
             <div class="file-actions">
-              ${actions}
-              <button class="danger" onclick="deletePath('${enc}')">Delete</button>
+              <a href="/storage/files/${enc}">View</a>
+              <a href="/storage/download/${enc}">Download</a>
+              <button class="danger" onclick="deleteFile('${enc}')">Delete</button>
             </div>
-          </div>`;
+          </div>
+        `;
       }).join('')}
     </div>
   `;
 }
 
 function handle(req, res) {
-  if (req.url.startsWith('/storage') && req.method === 'GET' && (req.url === '/storage' || req.url.startsWith('/storage?'))) {
+  if (req.url === '/storage' && req.method === 'GET') {
     if (!requireAuth(req, res)) return;
-    let currentRelPath = '';
-    try {
-      const u = new URL(req.url, 'http://local');
-      currentRelPath = sanitizeRelativePath(safeDecode(u.searchParams.get('path')));
-    } catch {}
+
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(`<!DOCTYPE html>
 <html lang="en">
@@ -423,14 +398,14 @@ function handle(req, res) {
     </section>
 
     <section class="section">
-      <h2 class="section-title">Upload files or folders</h2>
+      <h2 class="section-title">Upload a file</h2>
       <div class="upload-panel">
         <div class="upload-controls">
-          <input type="file" id="f" multiple webkitdirectory directory>
-          <button onclick="upload()">Upload</button>
+          <input type="file" id="f">
+          <button onclick="upload()">Upload file</button>
         </div>
 
-        <div class="file-meta" id="fileMeta">No files selected yet.</div>
+        <div class="file-meta" id="fileMeta">No file selected yet.</div>
         <div class="file-meta" id="transferMeta">No upload in progress.</div>
 
         <div class="progress-wrap" id="progressWrap">
@@ -448,8 +423,8 @@ function handle(req, res) {
     </section>
 
     <section class="section">
-      <h2 class="section-title">Your files${currentRelPath ? ' — ' + escapeHtml(currentRelPath) : ''}</h2>
-      ${listFilesHtml(currentRelPath)}
+      <h2 class="section-title">Your files</h2>
+      ${listFilesHtml()}
     </section>
   </div>
 
@@ -464,15 +439,15 @@ function handle(req, res) {
     const progressPercent = document.getElementById('progressPercent');
 
     fileInput.addEventListener('change', () => {
-      const files = Array.from(fileInput.files || []);
-      if (!files.length) {
-        fileMeta.textContent = 'No files selected yet.';
+      const file = fileInput.files[0];
+      if (!file) {
+        fileMeta.textContent = 'No file selected yet.';
         transferMeta.textContent = 'No upload in progress.';
         return;
       }
-      const total = files.reduce((s, f) => s + (f.size || 0), 0);
-      fileMeta.textContent = 'Selected ' + files.length + ' item(s) • ' + formatBytes(total);
-      transferMeta.textContent = 'Ready to upload. Folder selection is supported.';
+
+      fileMeta.textContent = 'Selected: ' + file.name + ' (' + formatBytes(file.size) + ')';
+      transferMeta.textContent = 'Ready to upload.';
     });
 
     function formatBytes(bytes) {
@@ -517,99 +492,96 @@ function handle(req, res) {
     }
 
     function upload() {
-      const files = Array.from(fileInput.files || []);
-      if (!files.length) {
-        status.textContent = 'Pick file(s) or a folder first.';
+      const file = fileInput.files[0];
+
+      if (!file) {
+        status.textContent = 'Pick a file first.';
         transferMeta.textContent = 'No upload in progress.';
         progressWrap.classList.remove('show');
         return;
       }
 
+      status.textContent = 'Preparing upload...';
+      transferMeta.textContent = 'Starting upload for ' + file.name + ' (' + formatBytes(file.size) + ').';
       progressWrap.classList.add('show');
-      const totalBytes = files.reduce((s, f) => s + (f.size || 0), 0);
-      let uploadedBytes = 0;
-      let index = 0;
+      setProgress(0, 'Starting upload...');
 
-      function uploadNext() {
-        if (index >= files.length) {
-          setProgress(100, 'All uploads complete');
-          status.textContent = 'All uploads complete.';
-          transferMeta.textContent = formatBytes(totalBytes) + ' uploaded successfully.';
+      const xhr = new XMLHttpRequest();
+      const startedAt = Date.now();
+      let lastLoaded = 0;
+      let lastTimestamp = startedAt;
+      let smoothedSpeed = 0;
+
+      xhr.open('POST', '/storage/upload');
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+      xhr.upload.onprogress = function (event) {
+        if (!event.lengthComputable) {
+          setProgress(0, 'Uploading...');
+          transferMeta.textContent = 'Uploading...';
+          return;
+        }
+
+        const now = Date.now();
+        const loaded = event.loaded;
+        const total = event.total;
+        const percent = Math.round((loaded / total) * 100);
+        const elapsedSeconds = Math.max((now - startedAt) / 1000, 0.001);
+        const averageSpeed = loaded / elapsedSeconds;
+
+        const deltaBytes = loaded - lastLoaded;
+        const deltaSeconds = Math.max((now - lastTimestamp) / 1000, 0.001);
+        const instantSpeed = deltaBytes / deltaSeconds;
+
+        smoothedSpeed = smoothedSpeed === 0
+          ? averageSpeed
+          : (smoothedSpeed * 0.75) + (instantSpeed * 0.25);
+
+        const remainingBytes = total - loaded;
+        const etaSeconds = smoothedSpeed > 0 ? remainingBytes / smoothedSpeed : Infinity;
+
+        setProgress(percent, 'Uploading ' + file.name + '...');
+        transferMeta.textContent =
+          formatBytes(loaded) + ' / ' + formatBytes(total) +
+          ' • ' + formatSpeed(smoothedSpeed) +
+          ' • ' + formatDuration(etaSeconds);
+
+        lastLoaded = loaded;
+        lastTimestamp = now;
+      };
+
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setProgress(100, 'Upload complete');
+          status.textContent = 'Upload complete.';
+          transferMeta.textContent = formatBytes(file.size) + ' uploaded successfully and saved to storage.';
           setTimeout(() => location.reload(), 700);
           return;
         }
 
-        const file = files[index];
-        const xhr = new XMLHttpRequest();
-        const startedAt = Date.now();
-        let lastLoaded = 0;
-        let lastTimestamp = startedAt;
-        let smoothedSpeed = 0;
+        status.textContent = 'Upload failed: ' + xhr.responseText;
+        transferMeta.textContent = 'Upload failed before completion.';
+        setProgress(0, 'Upload failed');
+      };
 
-        xhr.open('POST', '/storage/upload');
-        xhr.withCredentials = true;
-        const rel = file.webkitRelativePath || file.name;
-        xhr.setRequestHeader('X-File-Path', encodeURIComponent(rel));
-        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.onerror = function () {
+        status.textContent = 'Upload error. Please try again.';
+        transferMeta.textContent = 'A network error interrupted the upload.';
+        setProgress(0, 'Upload error');
+      };
 
-        setProgress(Math.round((uploadedBytes / totalBytes) * 100), 'Uploading ' + (index + 1) + '/' + files.length + ': ' + file.name + '...');
-
-        xhr.upload.onprogress = function (event) {
-          if (!event.lengthComputable) {
-            progressText.textContent = 'Uploading ' + (index + 1) + '/' + files.length + ': ' + file.name + '...';
-            return;
-          }
-          const now = Date.now();
-          const loaded = event.loaded;
-          const deltaBytes = loaded - lastLoaded;
-          uploadedBytes += Math.max(0, deltaBytes);
-
-          const percentTotal = Math.round((uploadedBytes / totalBytes) * 100);
-          const elapsedSeconds = Math.max((now - startedAt) / 1000, 0.001);
-          const averageSpeed = loaded / elapsedSeconds;
-          const deltaSeconds = Math.max((now - lastTimestamp) / 1000, 0.001);
-          const instantSpeed = deltaBytes / deltaSeconds;
-          smoothedSpeed = smoothedSpeed === 0 ? averageSpeed : (smoothedSpeed * 0.75) + (instantSpeed * 0.25);
-          const remainingBytes = totalBytes - uploadedBytes;
-          const etaSeconds = smoothedSpeed > 0 ? remainingBytes / smoothedSpeed : Infinity;
-          setProgress(percentTotal, 'Uploading ' + (index + 1) + '/' + files.length + ': ' + file.name + '...');
-          transferMeta.textContent = formatBytes(uploadedBytes) + ' / ' + formatBytes(totalBytes) + ' • ' + formatSpeed(smoothedSpeed) + ' • ' + formatDuration(etaSeconds);
-          lastLoaded = loaded;
-          lastTimestamp = now;
-        };
-
-        xhr.onload = function () {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            index += 1;
-            uploadNext();
-            return;
-          }
-          status.textContent = 'Upload failed: ' + xhr.responseText;
-          transferMeta.textContent = 'Upload failed on ' + file.name + '.';
-          setProgress(Math.round((uploadedBytes / totalBytes) * 100), 'Upload failed');
-        };
-
-        xhr.onerror = function () {
-          status.textContent = 'Upload error. Please try again.';
-          transferMeta.textContent = 'A network error interrupted the upload.';
-          setProgress(Math.round((uploadedBytes / totalBytes) * 100), 'Upload error');
-        };
-
-        xhr.send(file);
-      }
-
-      status.textContent = 'Preparing upload...';
-      transferMeta.textContent = 'Uploading ' + files.length + ' item(s).';
-      uploadNext();
+      xhr.send(file);
     }
 
-    function deletePath(encodedRel) {
-      const prettyName = decodeURIComponent(encodedRel || '');
-      if (!encodedRel) return;
+    function deleteFile(encodedName) {
+      const prettyName = decodeURIComponent(encodedName || '');
+      if (!encodedName) return;
       if (!confirm('Delete "' + prettyName + '"? This cannot be undone.')) return;
 
       status.textContent = 'Deleting ' + prettyName + '...';
-      fetch('/storage/delete/' + encodedRel, { method: 'POST', credentials: 'include' })
+      fetch('/storage/delete/' + encodedName, { method: 'POST', credentials: 'include' })
         .then(async (r) => {
           const data = await r.json().catch(() => ({}));
           if (r.ok) {
@@ -632,9 +604,10 @@ function handle(req, res) {
   if (req.url === '/storage/upload' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
 
-    const headerPath = safeDecode(req.headers['x-file-path'] || req.headers['x-file-name'] || 'file');
-    const relPath = sanitizeRelativePath(headerPath);
-    const filePath = path.resolve(STORAGE_DIR, relPath || sanitizeFileName('file'));
+    const name = sanitizeFileName(
+      safeDecode(req.headers['x-file-name'] || 'file')
+    );
+    const filePath = path.join(STORAGE_DIR, name);
     const tempPath = path.join(
       STORAGE_DIR,
       `.upload-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`
@@ -677,12 +650,10 @@ function handle(req, res) {
       if (finished) return;
 
       try {
-        const dir = path.dirname(filePath);
-        fs.mkdirSync(dir, { recursive: true });
         fs.renameSync(tempPath, filePath);
         finished = true;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: true, file: relPath }));
+        res.end(JSON.stringify({ ok: true, file: name }));
       } catch (error) {
         sendError(500, error.message);
       }
@@ -693,12 +664,12 @@ function handle(req, res) {
     return;
   }
 
-  // Delete a file or directory (recursive)
+  // Delete a file
   if ((req.url.startsWith('/storage/delete/') && (req.method === 'POST' || req.method === 'DELETE'))) {
     if (!requireAuth(req, res)) return;
-    const raw = safeDecode(req.url.split('/').pop());
-    const rel = sanitizeRelativePath(raw);
-    const filePath = path.resolve(STORAGE_DIR, rel);
+
+    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
+    const filePath = path.join(STORAGE_DIR, name);
 
     try {
       if (!fs.existsSync(filePath)) {
@@ -706,14 +677,17 @@ function handle(req, res) {
         res.end(JSON.stringify({ ok: false, error: 'File not found' }));
         return;
       }
+
       const stat = fs.statSync(filePath);
-      if (stat.isDirectory()) {
-        fs.rmSync(filePath, { recursive: true, force: false });
-      } else {
-        fs.unlinkSync(filePath);
+      if (!stat.isFile()) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: 'Not a file' }));
+        return;
       }
+
+      fs.unlinkSync(filePath);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, deleted: rel }));
+      res.end(JSON.stringify({ ok: true, deleted: name }));
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, error: error.message }));
@@ -723,9 +697,9 @@ function handle(req, res) {
 
   if (req.url.startsWith('/storage/files/') && req.method === 'GET') {
     if (!requireAuth(req, res)) return;
-    const raw = safeDecode(req.url.split('/').pop());
-    const rel = sanitizeRelativePath(raw);
-    const filePath = path.resolve(STORAGE_DIR, rel);
+
+    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
+    const filePath = path.join(STORAGE_DIR, name);
 
     if (!fs.existsSync(filePath)) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -786,9 +760,9 @@ function handle(req, res) {
 
   if (req.url.startsWith('/storage/download/') && req.method === 'GET') {
     if (!requireAuth(req, res)) return;
-    const raw = safeDecode(req.url.split('/').pop());
-    const rel = sanitizeRelativePath(raw);
-    const filePath = path.resolve(STORAGE_DIR, rel);
+
+    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
+    const filePath = path.join(STORAGE_DIR, name);
 
     if (!fs.existsSync(filePath)) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -802,7 +776,7 @@ function handle(req, res) {
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': stat.size,
-      'Content-Disposition': `attachment; filename="${path.basename(rel)}"`,
+      'Content-Disposition': `attachment; filename="${name}"`,
       'Accept-Ranges': 'bytes'
     });
 
