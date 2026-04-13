@@ -4,12 +4,17 @@ const path = require('path');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // API key has been set as an environment variable in Azure for Security, Allowing Users of Kaomoji Website to Ask Gemini Questions
 const storageRoutes = require('./storageRoutes');
 const kaomojiRoutes = require('./kaomoji');
+const sandboxRoutes = require('./sandboxRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
   console.log('Request Method: ' + request.method); // The console (I think the Azure One,) Will report all requests, like if they requested a specific subsite /kaomoji for example and if they GET or POST (like when uploading)
 if (request.url.startsWith('/storage')) {
   return storageRoutes.handle(request, response); // If they request / storage takes them to the storageRoutes.js File 
+}
+
+if (request.url.startsWith('/sandbox')) {
+  return sandboxRoutes.handle(request, response);
 }
 
 if (
