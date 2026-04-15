@@ -5,6 +5,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // API key has been set as an
 const storageRoutes = require('./storageRoutes');
 const kaomojiRoutes = require('./kaomoji');
 const sandboxRoutes = require('./sandboxRoutes');
+const cloudConsoleRoutes = require('./cloudConsoleRoutes');
+const geminiRoutes = require('./geminiRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -25,6 +27,15 @@ if (
 ) {
   return kaomojiRoutes.handle(request, response, { fs, path, GEMINI_API_KEY });
 }
+
+if (request.url === '/cloudconsole' || request.url.startsWith('/api/cloudconsole')) {
+  return cloudConsoleRoutes.handle(request, response);
+}
+
+if (request.url === '/gemini' || request.url === '/api/gemini') {
+  return geminiRoutes.handle(request, response, GEMINI_API_KEY);
+}
+
   if (request.url === '/about' && request.method === 'GET') { // This is an About Page About me (HTML) Things I could add: Abiity to edit my about page without changing code, This would mean making a full passoword based Editor (Like my own digital Canva!)
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });// Could add Socials 
   response.end(`<!DOCTYPE html> 
@@ -773,7 +784,7 @@ if (
       Built by <strong>Aaryan Gupta</strong> — thanks for visiting my website.
     </div>
     <div style="margin-top: 30px; text-align: center;">
-  <img src="/Selfie.jpg" alt="My Photo"
+  <img src="/Selfie.JPG" alt="My Photo"
        style="max-width: 220px; border-radius: 20px;
               box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
 </div>
