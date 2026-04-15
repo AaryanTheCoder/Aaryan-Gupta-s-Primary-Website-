@@ -521,8 +521,7 @@ if (
     response.end('<!DOCTYPE html><title>Aaryan</title><img src=/aaryan/photo alt=Aaryan width=240>');
   }
   else if (request.url === '/aaryan/photo' && request.method === 'GET') {
-    const photoFile = path.join(__dirname, 'Photo on 24-3-26 at 10.30 AM.jpg');
-    fs.createReadStream(photoFile)
+    const photoFile = path.join(__dirname, 'Photo on 24-3-26 at 10.30 AM.jpg');    response.writeHead(200, { 'Content-Type': 'image/jpeg' });    fs.createReadStream(photoFile)
       .on('error', () => { response.writeHead(404, {'Content-Type':'text/plain; charset=utf-8'}); response.end('Photo not found'); })
       .pipe(response);
   }
