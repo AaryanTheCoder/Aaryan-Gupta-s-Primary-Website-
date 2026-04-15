@@ -13,7 +13,7 @@ if (request.url.startsWith('/storage')) {
   return storageRoutes.handle(request, response); // If they request / storage takes them to the storageRoutes.js File 
 }
 
-if (request.url.startsWith('/sandbox')) {
+if (request.url === '/sandbox' && request.method === 'GET') { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
   return sandboxRoutes.handle(request, response);
 }
 
@@ -761,6 +761,12 @@ if (
         <div class="route">/storage</div>
         <h2>Storage</h2>
         <p>Access the storage section of the site for upload and file-related features handled by the server.</p>
+      </a>
+
+      <a class="widget" href="/sandbox">
+        <div class="route">/sandbox</div>
+        <h2>Sandbox</h2>
+        <p>My personal playground for testing and experimenting with new code and features without affecting the main site.</p>
       </a>
     </section>
 
