@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aaryan Market Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/simulator/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-kicker">Paper Trading Lab</div>
+          <h1>Aaryan Market Simulator</h1>
+          <p>Investopedia-inspired paper trading with saved server-side portfolios, options, research, and custom games.</p>
+        </div>
+
+        <section class="sidebar-section">
+          <div class="section-label">Accounts</div>
+          <select id="contextSelect" class="context-select"></select>
+          <button id="resetAccountBtn" class="ghost-button wide">Reset Account</button>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="section-label">Watchlist</div>
+          <div id="watchlist" class="watchlist"></div>
+        </section>
+
+        <section class="sidebar-section provider-block">
+          <div class="section-label">Feed Status</div>
+          <div id="providerBadges" class="provider-badges"></div>
+          <p class="micro-copy">This build works without market-data keys by falling back to simulator-generated pricing. Add real keys in env vars to upgrade quotes and research.</p>
+        </section>
+      </aside>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <div>
+            <div class="eyebrow">Simulation Workspace</div>
+            <h2 id="accountHeadline">Personal Account</h2>
+          </div>
+          <div class="topbar-actions">
+            <div class="market-search">
+              <input id="symbolInput" type="text" autocomplete="off" placeholder="Research a symbol like AAPL or SPY" />
+              <button id="loadSymbolBtn" class="primary-button">Load</button>
+            </div>
+            <button id="toggleWatchlistBtn" class="ghost-button">Add to Watchlist</button>
+          </div>
+        </header>
+
+        <nav class="tabs">
+          <button class="tab is-active" data-tab="portfolio">Portfolio</button>
+          <button class="tab" data-tab="trade">Trade</button>
+          <button class="tab" data-tab="research">Research</button>
+          <button class="tab" data-tab="games">Games</button>
+        </nav>
+
+        <section class="hero-strip">
+          <div class="hero-card">
+            <span>Equity</span>
+            <strong id="metricEquity">$0</strong>
+            <small id="metricReturn">0.00%</small>
+          </div>
+          <div class="hero-card">
+            <span>Cash</span>
+            <strong id="metricCash">$0</strong>
+            <small id="metricMarketValue">$0 invested</small>
+          </div>
+          <div class="hero-card">
+            <span>Open P&amp;L</span>
+            <strong id="metricUnrealized">$0</strong>
+            <small id="metricDailyPnl">$0 today</small>
+          </div>
+          <div class="hero-card">
+            <span>Risk Stats</span>
+            <strong id="metricWinRate">0%</strong>
+            <small id="metricDrawdown">0% max drawdown</small>
+          </div>
+        </section>
+
+        <section id="portfolioTab" class="tab-panel is-active">
+          <div class="panel-grid">
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Performance</div>
+                  <h3>Equity Curve</h3>
+                </div>
+              </div>
+              <div id="equityChart" class="chart-surface"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Allocation</div>
+                  <h3>Exposure Mix</h3>
+                </div>
+              </div>
+              <div id="allocationList" class="allocation-list"></div>
+            </article>
+          </div>
+
+          <div class="panel-grid">
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Holdings</div>
+                  <h3>Stock Positions</h3>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Symbol</th>
+                      <th>Side</th>
+                      <th>Qty</th>
+                      <th>Avg Cost</th>
+                      <th>Last</th>
+                      <th>Value</th>
+                      <th>Open P&amp;L</th>
+                    </tr>
+                  </thead>
+                  <tbody id="stockPositionsBody"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Derivatives</div>
+                  <h3>Option Positions</h3>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Contract</th>
+                      <th>Qty</th>
+                      <th>Avg Cost</th>
+                      <th>Mark</th>
+                      <th>Value</th>
+                      <th>Open P&amp;L</th>
+                    </tr>
+                  </thead>
+                  <tbody id="optionPositionsBody"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+
+          <div class="panel-grid">
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Order Blotter</div>
+                  <h3>Open And Recent Orders</h3>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Created</th>
+                      <th>Asset</th>
+                      <th>Action</th>
+                      <th>Type</th>
+                      <th>Qty</th>
+                      <th>Status</th>
+                      <th>Price</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="ordersBody"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Activity</div>
+                  <h3>Recent Events</h3>
+                </div>
+              </div>
+              <div id="activityFeed" class="activity-feed"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="tradeTab" class="tab-panel">
+          <div class="panel-grid trade-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Execution</div>
+                  <h3>Order Ticket</h3>
+                </div>
+              </div>
+
+              <form id="orderForm" class="order-form">
+                <label>
+                  Asset
+                  <select name="assetClass" id="assetClassSelect">
+                    <option value="stock">Stock / ETF</option>
+                    <option value="option">Option</option>
+                  </select>
+                </label>
+
+                <label>
+                  Symbol
+                  <input name="symbol" id="tradeSymbolInput" type="text" placeholder="AAPL" />
+                </label>
+
+                <label id="optionContractWrap" class="hidden">
+                  Option Contract
+                  <select name="contractSymbol" id="optionContractSelect"></select>
+                </label>
+
+                <div class="form-row">
+                  <label>
+                    Action
+                    <select name="action" id="actionSelect"></select>
+                  </label>
+                  <label>
+                    Order Type
+                    <select name="orderType" id="orderTypeSelect">
+                      <option value="market">Market</option>
+                      <option value="limit">Limit</option>
+                      <option value="stop">Stop</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="form-row">
+                  <label>
+                    Quantity
+                    <input name="qty" id="qtyInput" type="number" min="1" step="1" value="1" />
+                  </label>
+                  <label id="priceInputWrap">
+                    Trigger Price
+                    <input name="price" id="priceInput" type="number" min="0" step="0.01" placeholder="Optional" />
+                  </label>
+                </div>
+
+                <div class="ticket-preview" id="ticketPreview"></div>
+
+                <div class="form-actions">
+                  <button type="submit" class="primary-button wide">Place Order</button>
+                  <button type="button" id="refreshTradeResearchBtn" class="ghost-button wide">Refresh Symbol Data</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Trade Lens</div>
+                  <h3 id="tradeLensTitle">Selected Symbol</h3>
+                </div>
+              </div>
+              <div id="tradeLensContent" class="trade-lens"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="researchTab" class="tab-panel">
+          <div class="panel-grid">
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Research</div>
+                  <h3 id="researchTitle">AAPL</h3>
+                </div>
+                <div class="timeframe-row">
+                  <button class="timeframe is-active" data-timeframe="1D">1D</button>
+                  <button class="timeframe" data-timeframe="1W">1W</button>
+                  <button class="timeframe" data-timeframe="1M">1M</button>
+                  <button class="timeframe" data-timeframe="3M">3M</button>
+                  <button class="timeframe" data-timeframe="1Y">1Y</button>
+                </div>
+              </div>
+              <div id="researchSnapshot" class="research-snapshot"></div>
+              <div id="researchChart" class="chart-surface tall"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Company</div>
+                  <h3>Profile</h3>
+                </div>
+              </div>
+              <div id="profileCard" class="profile-card"></div>
+            </article>
+          </div>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <div class="panel-kicker">Options</div>
+                <h3>Option Chain</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Contract</th>
+                    <th>Type</th>
+                    <th>Expiry</th>
+                    <th>Strike</th>
+                    <th>Bid</th>
+                    <th>Ask</th>
+                    <th>Mid</th>
+                    <th>IV</th>
+                    <th>Delta</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="optionChainBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="gamesTab" class="tab-panel">
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Create</div>
+                  <h3>New Trading Game</h3>
+                </div>
+              </div>
+              <form id="createGameForm" class="game-form">
+                <label>
+                  Game Name
+                  <input name="name" type="text" placeholder="Spring Trading League" />
+                </label>
+                <label>
+                  Description
+                  <textarea name="description" rows="4" placeholder="Friendly competition with realistic rules."></textarea>
+                </label>
+                <div class="form-row">
+                  <label>
+                    Starting Cash
+                    <input name="startingCash" type="number" min="1000" max="1000000" step="1000" value="100000" />
+                  </label>
+                  <label>
+                    Commission
+                    <input name="commission" type="number" min="0" step="0.01" value="0" />
+                  </label>
+                </div>
+                <div class="checkbox-row">
+                  <label><input type="checkbox" name="allowShort" checked /> Allow shorting</label>
+                  <label><input type="checkbox" name="allowOptions" checked /> Allow options</label>
+                  <label><input type="checkbox" name="isPrivate" /> Private game</label>
+                </div>
+                <label>
+                  Game Password
+                  <input name="password" type="text" placeholder="Only needed for private games" />
+                </label>
+                <button type="submit" class="primary-button wide">Create Game</button>
+              </form>
+            </article>
+
+            <article class="panel panel-wide">
+              <div class="panel-heading">
+                <div>
+                  <div class="panel-kicker">Games</div>
+                  <h3>Join And Compare</h3>
+                </div>
+              </div>
+              <div id="gamesList" class="games-list"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toastHost" class="toast-host"></div>
+    <script src="/simulator/app.js"></script>
+  </body>
+</html>

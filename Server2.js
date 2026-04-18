@@ -7,6 +7,7 @@ const kaomojiRoutes = require('./kaomoji');
 const sandboxRoutes = require('./sandboxRoutes');
 const cloudConsoleRoutes = require('./cloudConsoleRoutes');
 const geminiRoutes = require('./geminiRoutes');
+const simulatorRoutes = require('./simulatorRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -30,6 +31,10 @@ if (
 
 if (request.url === '/cloudconsole' || request.url.startsWith('/api/cloudconsole')) {
   return cloudConsoleRoutes.handle(request, response);
+}
+
+if (request.url === '/simulator' || request.url.startsWith('/simulator/')) {
+  return simulatorRoutes.handle(request, response);
 }
 
 if (request.url === '/gemini' || request.url === '/api/gemini') {
@@ -777,6 +782,12 @@ if (request.url === '/gemini' || request.url === '/api/gemini') {
         <div class="route">/sandbox</div>
         <h2>Sandbox</h2>
         <p>My personal playground for testing and experimenting with new code and features without affecting the main site.</p>
+      </a>
+
+      <a class="widget" href="/simulator">
+        <div class="route">/simulator</div>
+        <h2>Stock Simulator</h2>
+        <p>A full paper-trading simulator with portfolio tracking, research, charts, stock and options trades, and custom game modes.</p>
       </a>
     </section>
 
