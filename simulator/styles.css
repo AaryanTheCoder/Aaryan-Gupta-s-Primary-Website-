@@ -611,11 +611,42 @@ thead th {
   flex-wrap: wrap;
 }
 
+.research-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .timeframe {
   padding: 8px 12px;
   color: var(--muted);
   background: rgba(19, 34, 48, 0.88);
   border: 1px solid var(--line);
+}
+
+.research-numbers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.number-card {
+  min-height: 78px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(7, 17, 27, 0.72);
+  border: 1px solid rgba(145, 183, 206, 0.1);
+}
+
+.number-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.number-card strong {
+  font-size: 0.95rem;
 }
 
 .profile-card h4,
@@ -704,6 +735,10 @@ thead th {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .research-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .screener-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -740,7 +775,8 @@ thead th {
 
   .hero-strip,
   .form-row,
-  .form-actions {
+  .form-actions,
+  .research-numbers {
     grid-template-columns: 1fr;
   }
 

@@ -61,7 +61,10 @@
     ticketPreview: document.getElementById('ticketPreview'),
     refreshTradeResearchBtn: document.getElementById('refreshTradeResearchBtn'),
     researchTitle: document.getElementById('researchTitle'),
+    researchTradeStockBtn: document.getElementById('researchTradeStockBtn'),
+    researchTradeOptionsBtn: document.getElementById('researchTradeOptionsBtn'),
     researchSnapshot: document.getElementById('researchSnapshot'),
+    researchNumbers: document.getElementById('researchNumbers'),
     researchChart: document.getElementById('researchChart'),
     profileCard: document.getElementById('profileCard'),
     optionChainBody: document.getElementById('optionChainBody'),
@@ -188,6 +191,22 @@
         <text x="${padding}" y="${height - 12}" fill="rgba(243,248,251,0.5)" font-size="16">${money(min)}</text>
       </svg>
     `;
+  }
+
+  function chartReturn(points) {
+    const closes = (points || []).map(point => Number(point.close ?? point.value ?? 0)).filter(value => Number.isFinite(value) && value > 0);
+    if (closes.length < 2) {
+      return { start: 0, end: 0, change: 0, percentChange: 0 };
+    }
+    const start = closes[0];
+    const end = closes[closes.length - 1];
+    const change = end - start;
+    return {
+      start,
+      end,
+      change,
+      percentChange: start ? (change / start) * 100 : 0,
+    };
   }
 
   function renderProviderBadges() {
@@ -369,7 +388,7 @@
     state.screener.preset = payload.preset || state.screener.preset;
     state.screener.page = payload.page || state.screener.page;
 
-    dom.screenerSummary.textContent = `${payload.total || 0} matches · ${payload.universeSize || state.bootstrap?.researchUniverseSize || 0} symbol universe`;
+    dom.screenerSummary.textContent = `${payload.total || 0} matches · ${payload.universeSize || state.bootstrap?.researchUniverseSize || 0} symbol universe · ${payload.dataMode || 'catalog'}`;
     dom.screenerExplainer.textContent = payload.explanation || '';
     dom.screenerCount.textContent = `${state.screener.rows.length} shown of ${state.screener.total}`;
     dom.loadMoreScreenerBtn.classList.toggle('hidden', !state.screener.hasMore);
@@ -454,13 +473,35 @@
   function renderResearch() {
     const research = state.research;
     if (!research) return;
+    const period = chartReturn(research.chart);
+    const quote = research.quote;
+    const periodLabel = `${state.timeframe} return`;
+    const range52 = quote.fiftyTwoWeekLow && quote.fiftyTwoWeekHigh
+      ? `${money(quote.fiftyTwoWeekLow)} - ${money(quote.fiftyTwoWeekHigh)}`
+      : 'Limited';
+
     dom.researchTitle.textContent = `${research.symbol} · ${research.quote.name}`;
+    dom.researchTradeOptionsBtn.disabled = !research.optionsEligible || !research.optionChain.length;
+    dom.researchTradeOptionsBtn.classList.toggle('disabled', dom.researchTradeOptionsBtn.disabled);
     dom.researchSnapshot.innerHTML = `
-      <div class="metric-row"><strong>${money(research.quote.price)}</strong><span class="${relativeClass(research.quote.change)}">${signedMoney(research.quote.change)} · ${percent(research.quote.percentChange)}</span></div>
-      <div class="metric-row"><span>Open ${money(research.quote.open)}</span><span>High ${money(research.quote.high)}</span><span>Low ${money(research.quote.low)}</span><span>Volume ${Number(research.quote.volume || 0).toLocaleString()}</span></div>
-      <div class="metric-row"><span>Quote source: ${research.quote.source}</span><span>${research.optionsEligible ? 'Options eligible' : 'No options for this symbol'}</span></div>
+      <div class="metric-row"><strong>${money(quote.price)}</strong><span class="${relativeClass(quote.change)}">${signedMoney(quote.change)} · ${percent(quote.percentChange)} today</span></div>
+      <div class="metric-row"><span>${periodLabel}</span><span class="${relativeClass(period.change)}">${signedMoney(period.change)} · ${percent(period.percentChange)}</span></div>
+      <div class="metric-row"><span>Chart start ${money(period.start)}</span><span>Chart end ${money(period.end)}</span></div>
+      <div class="metric-row"><span>Quote source: ${quote.source}</span><span>${research.optionsEligible ? 'Options eligible' : 'No options for this symbol'}</span></div>
     `;
-    dom.researchChart.innerHTML = buildLineChart(research.chart.map(point => ({ value: point.close })), research.quote.change >= 0 ? '#7ee787' : '#ff7b72');
+    dom.researchNumbers.innerHTML = `
+      <div class="number-card"><span>Open</span><strong>${money(quote.open)}</strong></div>
+      <div class="number-card"><span>High</span><strong>${money(quote.high)}</strong></div>
+      <div class="number-card"><span>Low</span><strong>${money(quote.low)}</strong></div>
+      <div class="number-card"><span>Prev Close</span><strong>${money(quote.previousClose)}</strong></div>
+      <div class="number-card"><span>Bid</span><strong>${money(quote.bid)}</strong></div>
+      <div class="number-card"><span>Ask</span><strong>${money(quote.ask)}</strong></div>
+      <div class="number-card"><span>Volume</span><strong>${compactNumber(quote.volume)}</strong></div>
+      <div class="number-card"><span>Market Cap</span><strong>${quote.marketCap ? compactNumber(quote.marketCap) : 'Limited'}</strong></div>
+      <div class="number-card"><span>52W Range</span><strong>${range52}</strong></div>
+      <div class="number-card"><span>Market</span><strong>${quote.isMarketOpen ? 'Open' : 'Closed/Delayed'}</strong></div>
+    `;
+    dom.researchChart.innerHTML = buildLineChart(research.chart.map(point => ({ value: point.close })), period.change >= 0 ? '#7ee787' : '#ff7b72');
     dom.profileCard.innerHTML = `
       <h4>${research.profile.name}</h4>
       <p>${research.profile.description || 'Profile data is limited for this symbol in the current feed mode.'}</p>
@@ -669,6 +710,14 @@
     updateTradeLens();
   }
 
+  async function openTradeTicket(assetClass, symbol = state.selectedSymbol) {
+    await loadResearch(symbol);
+    dom.assetClassSelect.value = assetClass;
+    dom.tradeSymbolInput.value = state.selectedSymbol;
+    syncOrderActions();
+    renderTabs('trade');
+  }
+
   async function bootstrap(context = 'personal') {
     const payload = await request(`/simulator/api/bootstrap?context=${encodeURIComponent(context)}`);
     state.bootstrap = payload;
@@ -704,6 +753,18 @@
     } catch (error) {
       toast('Research failed', error.message);
     }
+  });
+
+  dom.researchTradeStockBtn.addEventListener('click', () => {
+    openTradeTicket('stock').catch(error => toast('Trade setup failed', error.message));
+  });
+
+  dom.researchTradeOptionsBtn.addEventListener('click', () => {
+    if (dom.researchTradeOptionsBtn.disabled) {
+      toast('Options unavailable', 'This symbol does not currently have a loaded options chain.');
+      return;
+    }
+    openTradeTicket('option').catch(error => toast('Trade setup failed', error.message));
   });
 
   dom.toggleWatchlistBtn.addEventListener('click', async () => {

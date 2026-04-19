@@ -498,12 +498,18 @@ function avgVolumeEstimate(symbol, volume) {
   return Math.max(50000, Math.round(volume * (0.7 + seededRandom(`${symbol}:avg-volume`) * 0.9)));
 }
 
-function enrichScreenerRow(meta, quote) {
-  const avgVolume = avgVolumeEstimate(meta.symbol, quote.volume || 0);
-  const relativeVolume = avgVolume ? roundTo((quote.volume || 0) / avgVolume, 2) : 1;
+function enrichScreenerRow(meta, quote, overlay = {}) {
+  const overlayPrice = toNumber(overlay.price, 0);
+  const overlayVolume = toNumber(overlay.volume, 0);
+  const price = overlayPrice > 0 ? overlayPrice : quote.price;
+  const volume = Math.round(overlayVolume > 0 ? overlayVolume : (quote.volume || 0));
+  const percentChange = roundTo(toNumber(overlay.percentChange, quote.percentChange || 0));
+  const change = roundTo(toNumber(overlay.change, quote.change || 0));
+  const avgVolume = avgVolumeEstimate(meta.symbol, volume || 0);
+  const relativeVolume = avgVolume ? roundTo((volume || 0) / avgVolume, 2) : 1;
   const volatilityScore = roundTo((((quote.high || quote.price) - (quote.low || quote.price)) / Math.max(quote.price || 1, 1)) * 100, 2);
-  const liquidityScore = Math.log10(Math.max(quote.volume || 1, 10));
-  const trendScore = roundTo((Math.abs(quote.percentChange || 0) * 1.8) + (relativeVolume * 10) + (liquidityScore * 1.25) + volatilityScore, 2);
+  const liquidityScore = Math.log10(Math.max(volume || 1, 10));
+  const trendScore = roundTo((Math.abs(percentChange || 0) * 1.8) + (relativeVolume * 10) + (liquidityScore * 1.25) + volatilityScore, 2);
 
   return {
     symbol: meta.symbol,
@@ -512,20 +518,102 @@ function enrichScreenerRow(meta, quote) {
     exchange: meta.exchange,
     assetType: meta.assetType,
     country: meta.country,
-    price: quote.price,
+    price: roundTo(price),
     previousClose: quote.previousClose,
-    change: quote.change,
-    percentChange: quote.percentChange,
+    change,
+    percentChange,
     high: quote.high,
     low: quote.low,
-    volume: quote.volume,
+    volume,
+    tradeCount: Math.round(toNumber(overlay.tradeCount, 0)),
     marketCap: quote.marketCap || 0,
-    source: quote.source,
+    source: overlay.source ? `${overlay.source}/${quote.source}` : quote.source,
+    rankSource: overlay.source || quote.source,
+    providerRank: overlay.providerRank || 9999,
     relativeVolume,
     volatilityScore,
     trendScore,
     optionsEligible: optionsEligible(meta),
   };
+}
+
+function alpacaHeaders() {
+  return {
+    'APCA-API-KEY-ID': ALPACA_API_KEY,
+    'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+  };
+}
+
+function normalizeProviderSymbol(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 16);
+}
+
+function fieldNumber(item, fields, fallback = 0) {
+  for (const field of fields) {
+    const value = item?.[field];
+    if (value !== undefined && value !== null && value !== '') {
+      const normalized = typeof value === 'string' ? value.replace(/[%,$,]/g, '') : value;
+      return toNumber(normalized, fallback);
+    }
+  }
+  return fallback;
+}
+
+function normalizeAlpacaMostActives(payload) {
+  const rows = payload.most_actives || payload.mostActives || payload.data || payload.results || [];
+  return (Array.isArray(rows) ? rows : []).map((item, index) => ({
+    symbol: normalizeProviderSymbol(item.symbol || item.ticker || item.S),
+    volume: fieldNumber(item, ['volume', 'v']),
+    tradeCount: fieldNumber(item, ['trade_count', 'tradeCount', 'trades', 't']),
+    providerRank: index + 1,
+    source: 'alpaca-most-active',
+  })).filter(item => item.symbol);
+}
+
+function normalizeAlpacaMoverRows(rows, direction) {
+  return (Array.isArray(rows) ? rows : []).map((item, index) => ({
+    symbol: normalizeProviderSymbol(item.symbol || item.ticker || item.S),
+    price: fieldNumber(item, ['price', 'close', 'last', 'p']),
+    change: fieldNumber(item, ['change', 'change_amount', 'changeAmount']),
+    percentChange: fieldNumber(item, ['percent_change', 'percentChange', 'change_percent', 'changePercent', 'pct_change']),
+    volume: fieldNumber(item, ['volume', 'v']),
+    providerRank: index + 1,
+    source: `alpaca-${direction}`,
+  })).filter(item => item.symbol);
+}
+
+function normalizeAlpacaMovers(payload) {
+  return {
+    gainers: normalizeAlpacaMoverRows(payload.gainers || payload.top_gainers || payload.topGainers || [], 'gainers'),
+    losers: normalizeAlpacaMoverRows(payload.losers || payload.top_losers || payload.topLosers || [], 'losers'),
+    lastUpdated: payload.last_updated || payload.lastUpdated || '',
+  };
+}
+
+async function getAlpacaMostActives(top = 100, by = 'volume') {
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) return [];
+  return withCache('alpaca-most-actives', [top, by], 60_000, async () => {
+    const payload = await httpsJson({
+      hostname: 'data.alpaca.markets',
+      path: `/v1beta1/screener/stocks/most-actives?top=${encodeURIComponent(top)}&by=${encodeURIComponent(by)}`,
+      method: 'GET',
+      headers: alpacaHeaders(),
+    });
+    return normalizeAlpacaMostActives(payload);
+  }).catch(() => []);
+}
+
+async function getAlpacaMovers(top = 50) {
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) return { gainers: [], losers: [], lastUpdated: '' };
+  return withCache('alpaca-movers', [top], 60_000, async () => {
+    const payload = await httpsJson({
+      hostname: 'data.alpaca.markets',
+      path: `/v1beta1/screener/stocks/movers?top=${encodeURIComponent(top)}`,
+      method: 'GET',
+      headers: alpacaHeaders(),
+    });
+    return normalizeAlpacaMovers(payload);
+  }).catch(() => ({ gainers: [], losers: [], lastUpdated: '' }));
 }
 
 function presetDefaults(preset) {
@@ -542,6 +630,12 @@ function presetDefaults(preset) {
       return { sortBy: 'marketCap', direction: 'desc', explanation: 'Large Cap ranks by estimated market capitalization.' };
     case 'options-ready':
       return { sortBy: 'trendScore', direction: 'desc', explanation: 'Options Ready shows U.S. stocks and ETFs that can load an option chain.' };
+    case 'us':
+      return { sortBy: 'trendScore', direction: 'desc', explanation: 'US filters the research universe to U.S. stocks and ETFs.' };
+    case 'singapore':
+      return { sortBy: 'trendScore', direction: 'desc', explanation: 'Singapore filters the research universe to SGX stocks, REITs, and ETFs.' };
+    case 'etfs':
+      return { sortBy: 'trendScore', direction: 'desc', explanation: 'ETFs filters the research universe to exchange-traded funds.' };
     default:
       return { sortBy: 'trendScore', direction: 'desc', explanation: 'Trending blends price move, relative volume, liquidity, and intraday range.' };
   }
@@ -555,6 +649,47 @@ function compareScreenerRows(left, right, sortBy, direction) {
     return a.localeCompare(b) * order;
   }
   return ((a || 0) - (b || 0)) * order;
+}
+
+async function providerRowsForPreset(preset) {
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
+    return null;
+  }
+
+  if (preset === 'most-active') {
+    const rows = await getAlpacaMostActives(100, 'volume');
+    return rows.length
+      ? { rows, explanation: 'Most Active is ranked from Alpaca\'s live screener endpoint by current U.S. trading volume.' }
+      : null;
+  }
+
+  if (preset === 'top-gainers' || preset === 'top-losers') {
+    const movers = await getAlpacaMovers(50);
+    const rows = preset === 'top-gainers' ? movers.gainers : movers.losers;
+    const direction = preset === 'top-gainers' ? 'gainers' : 'losers';
+    return rows.length
+      ? { rows, explanation: `Top ${direction[0].toUpperCase()}${direction.slice(1)} is ranked from Alpaca's live market movers endpoint.` }
+      : null;
+  }
+
+  if (preset === 'trending') {
+    const [actives, movers] = await Promise.all([
+      getAlpacaMostActives(100, 'volume'),
+      getAlpacaMovers(50),
+    ]);
+    const combined = new Map();
+    [...actives, ...movers.gainers, ...movers.losers].forEach(item => {
+      if (!combined.has(item.symbol)) {
+        combined.set(item.symbol, { ...item, source: item.source || 'alpaca-screener' });
+      }
+    });
+    const rows = [...combined.values()];
+    return rows.length
+      ? { rows, explanation: 'Trending blends Alpaca most-active and market-mover symbols with quote movement, relative volume, liquidity, and range.' }
+      : null;
+  }
+
+  return null;
 }
 
 async function buildScreenerPayload(params = {}) {
@@ -572,7 +707,13 @@ async function buildScreenerPayload(params = {}) {
   const direction = safeText(params.direction || defaults.direction, 8).toLowerCase() === 'asc' ? 'asc' : 'desc';
   const optionsOnly = params.optionsOnly === 'true' || params.optionsOnly === true;
 
-  let candidates = RESEARCH_UNIVERSE.filter(meta => {
+  const providerSource = await providerRowsForPreset(preset);
+  const providerOverlay = new Map((providerSource?.rows || []).map(item => [item.symbol, item]));
+  const sourceUniverse = providerSource?.rows?.length
+    ? providerSource.rows.map(item => symbolMeta(item.symbol))
+    : RESEARCH_UNIVERSE;
+
+  let candidates = sourceUniverse.filter(meta => {
     const matchesSearch = !search || meta.symbol.toUpperCase().includes(search) || meta.name.toUpperCase().includes(search);
     const matchesSector = sector === 'all' || meta.sector === sector;
     const matchesExchange = exchange === 'all' || meta.exchange === exchange;
@@ -592,8 +733,13 @@ async function buildScreenerPayload(params = {}) {
   }
 
   const baselineRows = candidates
-    .map(meta => enrichScreenerRow(meta, generateMockQuote(meta.symbol)))
-    .sort((left, right) => compareScreenerRows(left, right, sortBy, direction) || left.symbol.localeCompare(right.symbol));
+    .map(meta => enrichScreenerRow(meta, generateMockQuote(meta.symbol), providerOverlay.get(meta.symbol)))
+    .sort((left, right) => {
+      if (providerSource?.rows?.length && requestedSortBy === 'preset') {
+        return (left.providerRank - right.providerRank) || left.symbol.localeCompare(right.symbol);
+      }
+      return compareScreenerRows(left, right, sortBy, direction) || left.symbol.localeCompare(right.symbol);
+    });
 
   const start = (page - 1) * pageSize;
   const baselinePage = baselineRows.slice(start, start + pageSize);
@@ -601,7 +747,7 @@ async function buildScreenerPayload(params = {}) {
   const quoteMap = new Map(visibleQuotes.map(quote => [quote.symbol, quote]));
   const rows = baselinePage.map(row => {
     const meta = symbolMeta(row.symbol);
-    return enrichScreenerRow(meta, quoteMap.get(row.symbol) || generateMockQuote(row.symbol));
+    return enrichScreenerRow(meta, quoteMap.get(row.symbol) || generateMockQuote(row.symbol), providerOverlay.get(row.symbol));
   });
 
   return {
@@ -614,7 +760,8 @@ async function buildScreenerPayload(params = {}) {
     total: baselineRows.length,
     universeSize: RESEARCH_UNIVERSE.length,
     hasMore: start + pageSize < baselineRows.length,
-    explanation: defaults.explanation,
+    explanation: providerSource?.explanation || defaults.explanation,
+    dataMode: providerSource?.rows?.length ? 'alpaca-screener' : (TWELVEDATA_API_KEY ? 'twelvedata-catalog' : 'mock-catalog'),
     rows,
     filters: {
       presets: [
@@ -683,6 +830,8 @@ function generateMockQuote(symbol) {
     source: 'mock',
     isMarketOpen: true,
     delayed: true,
+    fiftyTwoWeekLow: roundTo(last * (0.62 + seededRandom(`${symbol}:52wlow`) * 0.14)),
+    fiftyTwoWeekHigh: roundTo(last * (1.12 + seededRandom(`${symbol}:52whigh`) * 0.38)),
   };
 }
 
