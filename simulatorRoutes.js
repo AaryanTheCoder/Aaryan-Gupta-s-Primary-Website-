@@ -37,28 +37,164 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
 };
 
-const POPULAR_SYMBOLS = [
-  { symbol: 'AAPL', name: 'Apple', sector: 'Technology', exchange: 'NASDAQ' },
-  { symbol: 'MSFT', name: 'Microsoft', sector: 'Technology', exchange: 'NASDAQ' },
-  { symbol: 'NVDA', name: 'NVIDIA', sector: 'Technology', exchange: 'NASDAQ' },
-  { symbol: 'AMZN', name: 'Amazon', sector: 'Consumer Cyclical', exchange: 'NASDAQ' },
-  { symbol: 'META', name: 'Meta', sector: 'Technology', exchange: 'NASDAQ' },
-  { symbol: 'GOOGL', name: 'Alphabet', sector: 'Communication Services', exchange: 'NASDAQ' },
-  { symbol: 'TSLA', name: 'Tesla', sector: 'Consumer Cyclical', exchange: 'NASDAQ' },
-  { symbol: 'AMD', name: 'AMD', sector: 'Technology', exchange: 'NASDAQ' },
-  { symbol: 'NFLX', name: 'Netflix', sector: 'Communication Services', exchange: 'NASDAQ' },
-  { symbol: 'JPM', name: 'JPMorgan Chase', sector: 'Financial Services', exchange: 'NYSE' },
-  { symbol: 'BAC', name: 'Bank of America', sector: 'Financial Services', exchange: 'NYSE' },
-  { symbol: 'V', name: 'Visa', sector: 'Financial Services', exchange: 'NYSE' },
-  { symbol: 'WMT', name: 'Walmart', sector: 'Consumer Defensive', exchange: 'NYSE' },
-  { symbol: 'XOM', name: 'Exxon Mobil', sector: 'Energy', exchange: 'NYSE' },
-  { symbol: 'UNH', name: 'UnitedHealth', sector: 'Healthcare', exchange: 'NYSE' },
-  { symbol: 'PLTR', name: 'Palantir', sector: 'Technology', exchange: 'NYSE' },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', sector: 'ETF', exchange: 'NYSE Arca' },
-  { symbol: 'QQQ', name: 'Invesco QQQ', sector: 'ETF', exchange: 'NASDAQ' },
-  { symbol: 'IWM', name: 'iShares Russell 2000 ETF', sector: 'ETF', exchange: 'NYSE Arca' },
-  { symbol: 'D05.SI', name: 'DBS Group', sector: 'Financial Services', exchange: 'SGX' },
-];
+const SYMBOL_CATALOG_TEXT = `
+AAPL|Apple|Technology|NASDAQ|stock|US
+MSFT|Microsoft|Technology|NASDAQ|stock|US
+NVDA|NVIDIA|Technology|NASDAQ|stock|US
+AMZN|Amazon|Consumer Cyclical|NASDAQ|stock|US
+META|Meta Platforms|Technology|NASDAQ|stock|US
+GOOGL|Alphabet Class A|Communication Services|NASDAQ|stock|US
+GOOG|Alphabet Class C|Communication Services|NASDAQ|stock|US
+TSLA|Tesla|Consumer Cyclical|NASDAQ|stock|US
+AMD|AMD|Technology|NASDAQ|stock|US
+NFLX|Netflix|Communication Services|NASDAQ|stock|US
+PLTR|Palantir|Technology|NYSE|stock|US
+AVGO|Broadcom|Technology|NASDAQ|stock|US
+ORCL|Oracle|Technology|NYSE|stock|US
+IBM|IBM|Technology|NYSE|stock|US
+CRM|Salesforce|Technology|NYSE|stock|US
+ADBE|Adobe|Technology|NASDAQ|stock|US
+INTC|Intel|Technology|NASDAQ|stock|US
+QCOM|Qualcomm|Technology|NASDAQ|stock|US
+TXN|Texas Instruments|Technology|NASDAQ|stock|US
+MU|Micron|Technology|NASDAQ|stock|US
+CSCO|Cisco|Technology|NASDAQ|stock|US
+NOW|ServiceNow|Technology|NYSE|stock|US
+PANW|Palo Alto Networks|Technology|NASDAQ|stock|US
+CRWD|CrowdStrike|Technology|NASDAQ|stock|US
+SNOW|Snowflake|Technology|NYSE|stock|US
+SHOP|Shopify|Technology|NASDAQ|stock|US
+UBER|Uber|Technology|NYSE|stock|US
+ABNB|Airbnb|Consumer Cyclical|NASDAQ|stock|US
+PYPL|PayPal|Technology|NASDAQ|stock|US
+SQ|Block|Technology|NYSE|stock|US
+JPM|JPMorgan Chase|Financial Services|NYSE|stock|US
+BAC|Bank of America|Financial Services|NYSE|stock|US
+WFC|Wells Fargo|Financial Services|NYSE|stock|US
+C|Citigroup|Financial Services|NYSE|stock|US
+GS|Goldman Sachs|Financial Services|NYSE|stock|US
+MS|Morgan Stanley|Financial Services|NYSE|stock|US
+V|Visa|Financial Services|NYSE|stock|US
+MA|Mastercard|Financial Services|NYSE|stock|US
+AXP|American Express|Financial Services|NYSE|stock|US
+BLK|BlackRock|Financial Services|NYSE|stock|US
+SCHW|Charles Schwab|Financial Services|NYSE|stock|US
+UNH|UnitedHealth|Healthcare|NYSE|stock|US
+JNJ|Johnson & Johnson|Healthcare|NYSE|stock|US
+PFE|Pfizer|Healthcare|NYSE|stock|US
+MRK|Merck|Healthcare|NYSE|stock|US
+ABBV|AbbVie|Healthcare|NYSE|stock|US
+LLY|Eli Lilly|Healthcare|NYSE|stock|US
+TMO|Thermo Fisher Scientific|Healthcare|NYSE|stock|US
+ISRG|Intuitive Surgical|Healthcare|NASDAQ|stock|US
+DHR|Danaher|Healthcare|NYSE|stock|US
+CVS|CVS Health|Healthcare|NYSE|stock|US
+AMGN|Amgen|Healthcare|NASDAQ|stock|US
+GILD|Gilead Sciences|Healthcare|NASDAQ|stock|US
+WMT|Walmart|Consumer Defensive|NYSE|stock|US
+COST|Costco|Consumer Defensive|NASDAQ|stock|US
+HD|Home Depot|Consumer Cyclical|NYSE|stock|US
+LOW|Lowe's|Consumer Cyclical|NYSE|stock|US
+MCD|McDonald's|Consumer Cyclical|NYSE|stock|US
+SBUX|Starbucks|Consumer Cyclical|NASDAQ|stock|US
+NKE|Nike|Consumer Cyclical|NYSE|stock|US
+TGT|Target|Consumer Defensive|NYSE|stock|US
+DIS|Disney|Communication Services|NYSE|stock|US
+CMG|Chipotle|Consumer Cyclical|NYSE|stock|US
+KO|Coca-Cola|Consumer Defensive|NYSE|stock|US
+PEP|PepsiCo|Consumer Defensive|NASDAQ|stock|US
+PG|Procter & Gamble|Consumer Defensive|NYSE|stock|US
+CL|Colgate-Palmolive|Consumer Defensive|NYSE|stock|US
+XOM|Exxon Mobil|Energy|NYSE|stock|US
+CVX|Chevron|Energy|NYSE|stock|US
+COP|ConocoPhillips|Energy|NYSE|stock|US
+SLB|Schlumberger|Energy|NYSE|stock|US
+CAT|Caterpillar|Industrials|NYSE|stock|US
+DE|Deere|Industrials|NYSE|stock|US
+GE|GE Aerospace|Industrials|NYSE|stock|US
+BA|Boeing|Industrials|NYSE|stock|US
+HON|Honeywell|Industrials|NASDAQ|stock|US
+UPS|UPS|Industrials|NYSE|stock|US
+UNP|Union Pacific|Industrials|NYSE|stock|US
+LMT|Lockheed Martin|Industrials|NYSE|stock|US
+RTX|RTX|Industrials|NYSE|stock|US
+NOC|Northrop Grumman|Industrials|NYSE|stock|US
+TMUS|T-Mobile|Communication Services|NASDAQ|stock|US
+VZ|Verizon|Communication Services|NYSE|stock|US
+T|AT&T|Communication Services|NYSE|stock|US
+CMCSA|Comcast|Communication Services|NASDAQ|stock|US
+CHTR|Charter Communications|Communication Services|NASDAQ|stock|US
+NEE|NextEra Energy|Utilities|NYSE|stock|US
+DUK|Duke Energy|Utilities|NYSE|stock|US
+SO|Southern Company|Utilities|NYSE|stock|US
+SPY|SPDR S&P 500 ETF|ETF|NYSE Arca|etf|US
+QQQ|Invesco QQQ|ETF|NASDAQ|etf|US
+DIA|SPDR Dow Jones Industrial Average ETF|ETF|NYSE Arca|etf|US
+IWM|iShares Russell 2000 ETF|ETF|NYSE Arca|etf|US
+VOO|Vanguard S&P 500 ETF|ETF|NYSE Arca|etf|US
+VTI|Vanguard Total Stock Market ETF|ETF|NYSE Arca|etf|US
+SCHD|Schwab U.S. Dividend Equity ETF|ETF|NYSE Arca|etf|US
+XLK|Technology Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+XLF|Financial Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+XLE|Energy Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+XLV|Health Care Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+XLI|Industrial Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+XLY|Consumer Discretionary Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+XLP|Consumer Staples Select Sector SPDR Fund|ETF|NYSE Arca|etf|US
+TLT|iShares 20+ Year Treasury Bond ETF|ETF|NASDAQ|etf|US
+GLD|SPDR Gold Shares|ETF|NYSE Arca|etf|US
+SLV|iShares Silver Trust|ETF|NYSE Arca|etf|US
+ARKK|ARK Innovation ETF|ETF|NYSE Arca|etf|US
+SMH|VanEck Semiconductor ETF|ETF|NASDAQ|etf|US
+SOXX|iShares Semiconductor ETF|ETF|NASDAQ|etf|US
+HYG|iShares iBoxx High Yield Corporate Bond ETF|ETF|NYSE Arca|etf|US
+LQD|iShares iBoxx Investment Grade Corporate Bond ETF|ETF|NYSE Arca|etf|US
+D05.SI|DBS Group|Financial Services|SGX|stock|SG
+U11.SI|United Overseas Bank|Financial Services|SGX|stock|SG
+O39.SI|OCBC Bank|Financial Services|SGX|stock|SG
+Z74.SI|Singapore Telecommunications|Communication Services|SGX|stock|SG
+C6L.SI|Singapore Airlines|Industrials|SGX|stock|SG
+S68.SI|Singapore Exchange|Financial Services|SGX|stock|SG
+BN4.SI|Keppel|Industrials|SGX|stock|SG
+U96.SI|Sembcorp Industries|Utilities|SGX|stock|SG
+Y92.SI|Thai Beverage|Consumer Defensive|SGX|stock|SG
+G13.SI|Genting Singapore|Consumer Cyclical|SGX|stock|SG
+F34.SI|Wilmar International|Consumer Defensive|SGX|stock|SG
+S58.SI|SATS|Industrials|SGX|stock|SG
+AAJ.SI|AEM Holdings|Technology|SGX|stock|SG
+M35.SI|Venture Corporation|Technology|SGX|stock|SG
+BS6.SI|Yangzijiang Shipbuilding|Industrials|SGX|stock|SG
+CC3.SI|StarHub|Communication Services|SGX|stock|SG
+OV8.SI|Sheng Siong|Consumer Defensive|SGX|stock|SG
+1B1.SI|Raffles Medical|Healthcare|SGX|stock|SG
+SK3.SI|ST Engineering|Industrials|SGX|stock|SG
+S51.SI|Seatrium|Industrials|SGX|stock|SG
+9CI.SI|CapitaLand Investment|Real Estate|SGX|stock|SG
+Q0F.SI|City Developments|Real Estate|SGX|stock|SG
+U14.SI|UOL Group|Real Estate|SGX|stock|SG
+CLR.SI|iFAST Corporation|Financial Services|SGX|stock|SG
+C38U.SI|CapitaLand Integrated Commercial Trust|REIT|SGX|reit|SG
+A17U.SI|CapitaLand Ascendas REIT|REIT|SGX|reit|SG
+ME8U.SI|Mapletree Industrial Trust|REIT|SGX|reit|SG
+M44U.SI|Mapletree Logistics Trust|REIT|SGX|reit|SG
+N2IU.SI|Mapletree Pan Asia Commercial Trust|REIT|SGX|reit|SG
+AJBU.SI|Keppel DC REIT|REIT|SGX|reit|SG
+T82U.SI|Suntec REIT|REIT|SGX|reit|SG
+BUOU.SI|Frasers Logistics & Commercial Trust|REIT|SGX|reit|SG
+J69U.SI|ESR-LOGOS REIT|REIT|SGX|reit|SG
+ES3.SI|STI ETF|ETF|SGX|etf|SG
+G3B.SI|Nikko AM STI ETF|ETF|SGX|etf|SG
+MBH.SI|Nikko AM SGD Investment Grade Corporate Bond ETF|ETF|SGX|etf|SG
+`;
+
+const RESEARCH_UNIVERSE = [...new Map(
+  SYMBOL_CATALOG_TEXT.trim().split('\n').map(line => {
+    const [symbol, name, sector, exchange, assetType, country] = line.split('|');
+    return [symbol, { symbol, name, sector, exchange, assetType, country }];
+  })
+).values()];
+
+const POPULAR_SYMBOLS = RESEARCH_UNIVERSE.slice(0, 24);
 
 const cache = new Map();
 
@@ -346,8 +482,170 @@ function httpsJson(options) {
 
 function symbolMeta(symbol) {
   const upper = String(symbol || '').toUpperCase();
-  const match = POPULAR_SYMBOLS.find(item => item.symbol.toUpperCase() === upper);
-  return match || { symbol: upper, name: upper, sector: 'Unknown', exchange: 'US' };
+  const match = RESEARCH_UNIVERSE.find(item => item.symbol.toUpperCase() === upper);
+  return match || { symbol: upper, name: upper, sector: 'Unknown', exchange: 'US', assetType: 'stock', country: 'US' };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function optionsEligible(meta) {
+  return meta.country === 'US' && (meta.assetType === 'stock' || meta.assetType === 'etf');
+}
+
+function avgVolumeEstimate(symbol, volume) {
+  return Math.max(50000, Math.round(volume * (0.7 + seededRandom(`${symbol}:avg-volume`) * 0.9)));
+}
+
+function enrichScreenerRow(meta, quote) {
+  const avgVolume = avgVolumeEstimate(meta.symbol, quote.volume || 0);
+  const relativeVolume = avgVolume ? roundTo((quote.volume || 0) / avgVolume, 2) : 1;
+  const volatilityScore = roundTo((((quote.high || quote.price) - (quote.low || quote.price)) / Math.max(quote.price || 1, 1)) * 100, 2);
+  const liquidityScore = Math.log10(Math.max(quote.volume || 1, 10));
+  const trendScore = roundTo((Math.abs(quote.percentChange || 0) * 1.8) + (relativeVolume * 10) + (liquidityScore * 1.25) + volatilityScore, 2);
+
+  return {
+    symbol: meta.symbol,
+    name: meta.name,
+    sector: meta.sector,
+    exchange: meta.exchange,
+    assetType: meta.assetType,
+    country: meta.country,
+    price: quote.price,
+    previousClose: quote.previousClose,
+    change: quote.change,
+    percentChange: quote.percentChange,
+    high: quote.high,
+    low: quote.low,
+    volume: quote.volume,
+    marketCap: quote.marketCap || 0,
+    source: quote.source,
+    relativeVolume,
+    volatilityScore,
+    trendScore,
+    optionsEligible: optionsEligible(meta),
+  };
+}
+
+function presetDefaults(preset) {
+  switch (preset) {
+    case 'most-active':
+      return { sortBy: 'volume', direction: 'desc', explanation: 'Most Active ranks stocks by current trading volume.' };
+    case 'top-gainers':
+      return { sortBy: 'percentChange', direction: 'desc', explanation: 'Top Gainers ranks the filtered list by percentage change.' };
+    case 'top-losers':
+      return { sortBy: 'percentChange', direction: 'asc', explanation: 'Top Losers ranks the filtered list by percentage change ascending.' };
+    case 'most-volatile':
+      return { sortBy: 'volatilityScore', direction: 'desc', explanation: 'Most Volatile ranks by intraday high-low range relative to price.' };
+    case 'large-cap':
+      return { sortBy: 'marketCap', direction: 'desc', explanation: 'Large Cap ranks by estimated market capitalization.' };
+    case 'options-ready':
+      return { sortBy: 'trendScore', direction: 'desc', explanation: 'Options Ready shows U.S. stocks and ETFs that can load an option chain.' };
+    default:
+      return { sortBy: 'trendScore', direction: 'desc', explanation: 'Trending blends price move, relative volume, liquidity, and intraday range.' };
+  }
+}
+
+function compareScreenerRows(left, right, sortBy, direction) {
+  const order = direction === 'asc' ? 1 : -1;
+  const a = left[sortBy];
+  const b = right[sortBy];
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a.localeCompare(b) * order;
+  }
+  return ((a || 0) - (b || 0)) * order;
+}
+
+async function buildScreenerPayload(params = {}) {
+  const preset = safeText(params.preset || 'trending', 32).toLowerCase();
+  const search = safeText(params.search || '', 80).toUpperCase();
+  const sector = safeText(params.sector || 'all', 80);
+  const exchange = safeText(params.exchange || 'all', 80);
+  const country = safeText(params.country || 'all', 24);
+  const assetType = safeText(params.assetType || 'all', 24);
+  const page = clamp(Math.floor(toNumber(params.page, 1)), 1, 20);
+  const pageSize = clamp(Math.floor(toNumber(params.pageSize, 20)), 10, 40);
+  const defaults = presetDefaults(preset);
+  const requestedSortBy = safeText(params.sortBy || 'preset', 32);
+  const sortBy = requestedSortBy === 'preset' ? defaults.sortBy : requestedSortBy;
+  const direction = safeText(params.direction || defaults.direction, 8).toLowerCase() === 'asc' ? 'asc' : 'desc';
+  const optionsOnly = params.optionsOnly === 'true' || params.optionsOnly === true;
+
+  let candidates = RESEARCH_UNIVERSE.filter(meta => {
+    const matchesSearch = !search || meta.symbol.toUpperCase().includes(search) || meta.name.toUpperCase().includes(search);
+    const matchesSector = sector === 'all' || meta.sector === sector;
+    const matchesExchange = exchange === 'all' || meta.exchange === exchange;
+    const matchesCountry = country === 'all' || meta.country === country;
+    const matchesAssetType = assetType === 'all' || meta.assetType === assetType;
+    return matchesSearch && matchesSector && matchesExchange && matchesCountry && matchesAssetType;
+  });
+
+  if (preset === 'options-ready' || optionsOnly) {
+    candidates = candidates.filter(optionsEligible);
+  } else if (preset === 'us') {
+    candidates = candidates.filter(meta => meta.country === 'US');
+  } else if (preset === 'singapore') {
+    candidates = candidates.filter(meta => meta.country === 'SG');
+  } else if (preset === 'etfs') {
+    candidates = candidates.filter(meta => meta.assetType === 'etf');
+  }
+
+  const baselineRows = candidates
+    .map(meta => enrichScreenerRow(meta, generateMockQuote(meta.symbol)))
+    .sort((left, right) => compareScreenerRows(left, right, sortBy, direction) || left.symbol.localeCompare(right.symbol));
+
+  const start = (page - 1) * pageSize;
+  const baselinePage = baselineRows.slice(start, start + pageSize);
+  const visibleQuotes = await getQuotes(baselinePage.map(row => row.symbol));
+  const quoteMap = new Map(visibleQuotes.map(quote => [quote.symbol, quote]));
+  const rows = baselinePage.map(row => {
+    const meta = symbolMeta(row.symbol);
+    return enrichScreenerRow(meta, quoteMap.get(row.symbol) || generateMockQuote(row.symbol));
+  });
+
+  return {
+    preset,
+    search,
+    sortBy,
+    direction,
+    page,
+    pageSize,
+    total: baselineRows.length,
+    universeSize: RESEARCH_UNIVERSE.length,
+    hasMore: start + pageSize < baselineRows.length,
+    explanation: defaults.explanation,
+    rows,
+    filters: {
+      presets: [
+        { value: 'trending', label: 'Trending' },
+        { value: 'most-active', label: 'Most Active' },
+        { value: 'top-gainers', label: 'Top Gainers' },
+        { value: 'top-losers', label: 'Top Losers' },
+        { value: 'most-volatile', label: 'Most Volatile' },
+        { value: 'large-cap', label: 'Large Cap' },
+        { value: 'options-ready', label: 'Options Ready' },
+        { value: 'us', label: 'US' },
+        { value: 'singapore', label: 'Singapore' },
+        { value: 'etfs', label: 'ETFs' },
+      ],
+      sectors: [...new Set(RESEARCH_UNIVERSE.map(item => item.sector))].sort(),
+      exchanges: [...new Set(RESEARCH_UNIVERSE.map(item => item.exchange))].sort(),
+      countries: [...new Set(RESEARCH_UNIVERSE.map(item => item.country))].sort(),
+      assetTypes: [...new Set(RESEARCH_UNIVERSE.map(item => item.assetType))].sort(),
+      sortOptions: [
+        { value: 'preset', label: 'Preset ranking' },
+        { value: 'trendScore', label: 'Trend Score' },
+        { value: 'volume', label: 'Volume' },
+        { value: 'percentChange', label: '% Change' },
+        { value: 'volatilityScore', label: 'Volatility' },
+        { value: 'relativeVolume', label: 'Relative Volume' },
+        { value: 'marketCap', label: 'Market Cap' },
+        { value: 'price', label: 'Price' },
+        { value: 'name', label: 'Name' },
+      ],
+    },
+  };
 }
 
 function seededRandom(seed) {
@@ -689,11 +987,12 @@ async function getOptionChain(symbol, quote) {
 
 async function buildResearchPayload(symbol, timeframe = '1M') {
   const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+  const meta = symbolMeta(normalizedSymbol);
   const quote = await getQuote(normalizedSymbol);
   const [profile, chart, optionChain] = await Promise.all([
     getProfileInfo(normalizedSymbol),
     getChart(normalizedSymbol, timeframe),
-    getOptionChain(normalizedSymbol, quote),
+    optionsEligible(meta) ? getOptionChain(normalizedSymbol, quote) : Promise.resolve([]),
   ]);
 
   return {
@@ -702,6 +1001,7 @@ async function buildResearchPayload(symbol, timeframe = '1M') {
     profile,
     chart,
     optionChain,
+    optionsEligible: optionsEligible(meta),
     availableTimeframes: ['1D', '1W', '1M', '3M', '1Y'],
   };
 }
@@ -1021,6 +1321,10 @@ async function placeOrder(account, body) {
       }
     }
   } else {
+    if (!optionsEligible(symbolMeta(order.underlyingSymbol))) {
+      rejectOrder(account, order, 'Options are only supported for U.S. stocks and ETFs.');
+      return order;
+    }
     const quote = await getQuote(order.underlyingSymbol);
     const optionChain = await getOptionChain(order.underlyingSymbol, quote);
     const contract = optionChain.find(item => item.contractSymbol === order.contractSymbol);
@@ -1172,6 +1476,7 @@ async function buildBootstrapPayload(profile, contextId) {
   const contexts = listContexts(profile, gamesData);
   const resolved = resolveAccount(profile, contextId) || resolveAccount(profile, 'personal');
   const watchlistQuotes = await getQuotes(profile.watchlist);
+  const screenerPreview = await buildScreenerPayload({ preset: 'trending', page: 1, pageSize: 20 });
   const accountSnapshot = await buildAccountSnapshot(resolved.account, contexts);
 
   const discoverGames = gamesData.games
@@ -1199,6 +1504,8 @@ async function buildBootstrapPayload(profile, contextId) {
       gatedBy: 'STORAGE_PASSWORD basic auth',
     },
     universe: POPULAR_SYMBOLS,
+    researchUniverseSize: RESEARCH_UNIVERSE.length,
+    screenerPreview,
     watchlistQuotes,
     selectedContext: resolved.contextId,
     contexts,
@@ -1279,6 +1586,23 @@ async function handleApi(req, res, profile) {
     const symbol = safeText(url.searchParams.get('symbol') || 'AAPL', 24);
     const timeframe = safeText(url.searchParams.get('timeframe') || '1M', 8);
     const payload = await buildResearchPayload(symbol, timeframe);
+    return json(res, 200, { ok: true, ...payload });
+  }
+
+  if (pathname === '/simulator/api/screener' && req.method === 'GET') {
+    const payload = await buildScreenerPayload({
+      preset: url.searchParams.get('preset'),
+      search: url.searchParams.get('search'),
+      sector: url.searchParams.get('sector'),
+      exchange: url.searchParams.get('exchange'),
+      country: url.searchParams.get('country'),
+      assetType: url.searchParams.get('assetType'),
+      sortBy: url.searchParams.get('sortBy'),
+      direction: url.searchParams.get('direction'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+      optionsOnly: url.searchParams.get('optionsOnly'),
+    });
     return json(res, 200, { ok: true, ...payload });
   }
 

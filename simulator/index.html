@@ -271,6 +271,82 @@
         </section>
 
         <section id="researchTab" class="tab-panel">
+          <article class="panel panel-full screener-panel">
+            <div class="panel-heading">
+              <div>
+                <div class="panel-kicker">Market Screener</div>
+                <h3>Discover Stocks And ETFs</h3>
+              </div>
+              <div class="screener-summary" id="screenerSummary">Loading universe...</div>
+            </div>
+
+            <div id="screenerPresetRow" class="screener-presets"></div>
+
+            <div class="screener-filters">
+              <label>
+                Search
+                <input id="screenerSearch" type="text" placeholder="AAPL, DBS, ETF, sector..." />
+              </label>
+              <label>
+                Sector
+                <select id="screenerSector"></select>
+              </label>
+              <label>
+                Exchange
+                <select id="screenerExchange"></select>
+              </label>
+              <label>
+                Country
+                <select id="screenerCountry"></select>
+              </label>
+              <label>
+                Asset Type
+                <select id="screenerAssetType"></select>
+              </label>
+              <label>
+                Sort
+                <select id="screenerSort"></select>
+              </label>
+              <label>
+                Direction
+                <select id="screenerDirection">
+                  <option value="desc">High to Low</option>
+                  <option value="asc">Low to High</option>
+                </select>
+              </label>
+              <label class="checkbox-control">
+                <input id="screenerOptionsOnly" type="checkbox" />
+                Options only
+              </label>
+            </div>
+
+            <div class="screener-explainer" id="screenerExplainer"></div>
+
+            <div class="table-wrap screener-table-wrap">
+              <table class="screener-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>% Chg</th>
+                    <th>Volume</th>
+                    <th>Rel Vol</th>
+                    <th>Trend</th>
+                    <th>Source</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="screenerBody"></tbody>
+              </table>
+            </div>
+
+            <div class="screener-footer">
+              <span id="screenerCount">0 results</span>
+              <button id="loadMoreScreenerBtn" type="button" class="ghost-button">Load More</button>
+            </div>
+          </article>
+
           <div class="panel-grid">
             <article class="panel panel-wide">
               <div class="panel-heading">

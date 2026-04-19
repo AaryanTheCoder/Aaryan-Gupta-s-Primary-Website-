@@ -2,6 +2,15 @@
   const state = {
     bootstrap: null,
     research: null,
+    screener: {
+      preset: 'trending',
+      rows: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      hasMore: false,
+      filters: null,
+    },
     context: 'personal',
     selectedSymbol: 'AAPL',
     timeframe: '1M',
@@ -56,6 +65,20 @@
     researchChart: document.getElementById('researchChart'),
     profileCard: document.getElementById('profileCard'),
     optionChainBody: document.getElementById('optionChainBody'),
+    screenerPresetRow: document.getElementById('screenerPresetRow'),
+    screenerSearch: document.getElementById('screenerSearch'),
+    screenerSector: document.getElementById('screenerSector'),
+    screenerExchange: document.getElementById('screenerExchange'),
+    screenerCountry: document.getElementById('screenerCountry'),
+    screenerAssetType: document.getElementById('screenerAssetType'),
+    screenerSort: document.getElementById('screenerSort'),
+    screenerDirection: document.getElementById('screenerDirection'),
+    screenerOptionsOnly: document.getElementById('screenerOptionsOnly'),
+    screenerBody: document.getElementById('screenerBody'),
+    screenerSummary: document.getElementById('screenerSummary'),
+    screenerExplainer: document.getElementById('screenerExplainer'),
+    screenerCount: document.getElementById('screenerCount'),
+    loadMoreScreenerBtn: document.getElementById('loadMoreScreenerBtn'),
     createGameForm: document.getElementById('createGameForm'),
     gamesList: document.getElementById('gamesList'),
     resetAccountBtn: document.getElementById('resetAccountBtn'),
@@ -83,6 +106,21 @@
 
   function relativeClass(value) {
     return Number(value || 0) >= 0 ? 'positive' : 'negative';
+  }
+
+  function compactNumber(value) {
+    return new Intl.NumberFormat('en-US', {
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(Number(value || 0));
+  }
+
+  function fillSelect(select, values, current, allLabel) {
+    select.innerHTML = [
+      `<option value="all">${allLabel}</option>`,
+      ...values.map(value => `<option value="${value}">${value}</option>`),
+    ].join('');
+    select.value = current || 'all';
   }
 
   async function request(path, options = {}) {
@@ -285,6 +323,134 @@
     `).join('') : '<div class="trade-lens"><p>Activity will appear here after you start trading.</p></div>';
   }
 
+  function renderScreenerControls(payload) {
+    if (!payload.filters) return;
+    state.screener.filters = payload.filters;
+
+    dom.screenerPresetRow.innerHTML = payload.filters.presets.map(preset => `
+      <button type="button" class="screener-preset ${preset.value === state.screener.preset ? 'is-active' : ''}" data-preset="${preset.value}">
+        ${preset.label}
+      </button>
+    `).join('');
+
+    fillSelect(dom.screenerSector, payload.filters.sectors, dom.screenerSector.value || 'all', 'All sectors');
+    fillSelect(dom.screenerExchange, payload.filters.exchanges, dom.screenerExchange.value || 'all', 'All exchanges');
+    fillSelect(dom.screenerCountry, payload.filters.countries, dom.screenerCountry.value || 'all', 'All countries');
+    fillSelect(dom.screenerAssetType, payload.filters.assetTypes, dom.screenerAssetType.value || 'all', 'All asset types');
+
+    const currentSort = dom.screenerSort.value || 'preset';
+    dom.screenerSort.innerHTML = payload.filters.sortOptions.map(option => `
+      <option value="${option.value}">${option.label}</option>
+    `).join('');
+    dom.screenerSort.value = payload.filters.sortOptions.some(option => option.value === currentSort) ? currentSort : 'preset';
+
+    [...dom.screenerPresetRow.querySelectorAll('.screener-preset')].forEach(button => {
+      button.addEventListener('click', () => {
+        state.screener.preset = button.dataset.preset;
+        state.screener.page = 1;
+        dom.screenerSort.value = 'preset';
+        loadScreener();
+      });
+    });
+  }
+
+  function renderScreener(payload, append = false) {
+    if (!append) {
+      state.screener.rows = [];
+      state.screener.page = payload.page || 1;
+      renderScreenerControls(payload);
+    }
+
+    const knownSymbols = new Set(state.screener.rows.map(row => row.symbol));
+    const nextRows = (payload.rows || []).filter(row => !knownSymbols.has(row.symbol));
+    state.screener.rows = append ? [...state.screener.rows, ...nextRows] : nextRows;
+    state.screener.total = payload.total || 0;
+    state.screener.hasMore = Boolean(payload.hasMore);
+    state.screener.preset = payload.preset || state.screener.preset;
+    state.screener.page = payload.page || state.screener.page;
+
+    dom.screenerSummary.textContent = `${payload.total || 0} matches · ${payload.universeSize || state.bootstrap?.researchUniverseSize || 0} symbol universe`;
+    dom.screenerExplainer.textContent = payload.explanation || '';
+    dom.screenerCount.textContent = `${state.screener.rows.length} shown of ${state.screener.total}`;
+    dom.loadMoreScreenerBtn.classList.toggle('hidden', !state.screener.hasMore);
+
+    dom.screenerBody.innerHTML = state.screener.rows.length ? state.screener.rows.map(row => `
+      <tr>
+        <td>
+          <button type="button" class="symbol-link view-symbol" data-symbol="${row.symbol}">${row.symbol}</button>
+          <div class="row-sub">${row.exchange} · ${row.country}</div>
+        </td>
+        <td>
+          <strong>${row.name}</strong>
+          <div class="row-sub">${row.sector} · ${row.assetType.toUpperCase()}</div>
+        </td>
+        <td>${money(row.price)}</td>
+        <td class="${relativeClass(row.percentChange)}">${percent(row.percentChange)}</td>
+        <td>${compactNumber(row.volume)}</td>
+        <td>${Number(row.relativeVolume || 0).toFixed(2)}x</td>
+        <td>${Number(row.trendScore || 0).toFixed(1)}</td>
+        <td><span class="source-pill">${row.source}${row.optionsEligible ? ' · options' : ''}</span></td>
+        <td>
+          <div class="row-actions">
+            <button type="button" class="ghost-button compact view-symbol" data-symbol="${row.symbol}">View</button>
+            <button type="button" class="ghost-button compact trade-stock" data-symbol="${row.symbol}">Stock</button>
+            <button type="button" class="ghost-button compact trade-options ${row.optionsEligible ? '' : 'disabled'}" data-symbol="${row.symbol}" ${row.optionsEligible ? '' : 'disabled'}>Options</button>
+          </div>
+        </td>
+      </tr>
+    `).join('') : '<tr><td colspan="9">No symbols match these filters.</td></tr>';
+
+    [...dom.screenerBody.querySelectorAll('.view-symbol')].forEach(button => {
+      button.addEventListener('click', async () => {
+        await loadResearch(button.dataset.symbol);
+      });
+    });
+
+    [...dom.screenerBody.querySelectorAll('.trade-stock')].forEach(button => {
+      button.addEventListener('click', async () => {
+        await loadResearch(button.dataset.symbol);
+        dom.assetClassSelect.value = 'stock';
+        dom.tradeSymbolInput.value = button.dataset.symbol;
+        syncOrderActions();
+        renderTabs('trade');
+      });
+    });
+
+    [...dom.screenerBody.querySelectorAll('.trade-options')].forEach(button => {
+      button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        await loadResearch(button.dataset.symbol);
+        dom.assetClassSelect.value = 'option';
+        dom.tradeSymbolInput.value = button.dataset.symbol;
+        syncOrderActions();
+        renderTabs('trade');
+      });
+    });
+  }
+
+  function screenerQuery(page = 1) {
+    const params = new URLSearchParams({
+      preset: state.screener.preset,
+      search: dom.screenerSearch.value.trim(),
+      sector: dom.screenerSector.value || 'all',
+      exchange: dom.screenerExchange.value || 'all',
+      country: dom.screenerCountry.value || 'all',
+      assetType: dom.screenerAssetType.value || 'all',
+      sortBy: dom.screenerSort.value || 'preset',
+      direction: dom.screenerDirection.value || 'desc',
+      optionsOnly: String(dom.screenerOptionsOnly.checked),
+      page: String(page),
+      pageSize: String(state.screener.pageSize),
+    });
+    return params.toString();
+  }
+
+  async function loadScreener({ append = false } = {}) {
+    const page = append ? state.screener.page + 1 : 1;
+    const payload = await request(`/simulator/api/screener?${screenerQuery(page)}`);
+    renderScreener(payload, append);
+  }
+
   function renderResearch() {
     const research = state.research;
     if (!research) return;
@@ -292,6 +458,7 @@
     dom.researchSnapshot.innerHTML = `
       <div class="metric-row"><strong>${money(research.quote.price)}</strong><span class="${relativeClass(research.quote.change)}">${signedMoney(research.quote.change)} · ${percent(research.quote.percentChange)}</span></div>
       <div class="metric-row"><span>Open ${money(research.quote.open)}</span><span>High ${money(research.quote.high)}</span><span>Low ${money(research.quote.low)}</span><span>Volume ${Number(research.quote.volume || 0).toLocaleString()}</span></div>
+      <div class="metric-row"><span>Quote source: ${research.quote.source}</span><span>${research.optionsEligible ? 'Options eligible' : 'No options for this symbol'}</span></div>
     `;
     dom.researchChart.innerHTML = buildLineChart(research.chart.map(point => ({ value: point.close })), research.quote.change >= 0 ? '#7ee787' : '#ff7b72');
     dom.profileCard.innerHTML = `
@@ -306,7 +473,7 @@
         <span>Data source: ${research.profile.source}</span>
       </div>
     `;
-    dom.optionChainBody.innerHTML = research.optionChain.slice(0, 40).map(contract => `
+    dom.optionChainBody.innerHTML = research.optionChain.length ? research.optionChain.slice(0, 40).map(contract => `
       <tr>
         <td>${contract.contractSymbol}</td>
         <td>${contract.type}</td>
@@ -319,7 +486,7 @@
         <td>${Number(contract.greeks?.delta || 0).toFixed(3)}</td>
         <td><button class="ghost-button use-contract" data-contract="${contract.contractSymbol}">Trade</button></td>
       </tr>
-    `).join('');
+    `).join('') : '<tr><td colspan="10">No options chain is available for this symbol. U.S. stocks and ETFs can load options.</td></tr>';
 
     [...dom.optionChainBody.querySelectorAll('.use-contract')].forEach(button => {
       button.addEventListener('click', () => {
@@ -355,9 +522,9 @@
   function populateOptionContracts() {
     const symbol = dom.tradeSymbolInput.value.trim().toUpperCase() || state.selectedSymbol;
     const contracts = (state.research?.optionChain || []).filter(item => item.underlyingSymbol === symbol);
-    dom.optionContractSelect.innerHTML = contracts.map(contract => `
+    dom.optionContractSelect.innerHTML = contracts.length ? contracts.map(contract => `
       <option value="${contract.contractSymbol}">${contract.type.toUpperCase()} ${contract.expiration} ${money(contract.strike)} · ${money(contract.mid)}</option>
-    `).join('');
+    `).join('') : '<option value="">No option contracts available</option>';
   }
 
   function syncOrderActions() {
@@ -512,6 +679,9 @@
     renderHero();
     renderPortfolio();
     renderGames();
+    if (payload.screenerPreview) {
+      renderScreener(payload.screenerPreview, false);
+    }
     updateTicketPreview();
   }
 
@@ -559,6 +729,32 @@
     }
   });
 
+  let screenerSearchTimer = null;
+  dom.screenerSearch.addEventListener('input', () => {
+    clearTimeout(screenerSearchTimer);
+    screenerSearchTimer = setTimeout(() => {
+      loadScreener().catch(error => toast('Screener failed', error.message));
+    }, 300);
+  });
+
+  [
+    dom.screenerSector,
+    dom.screenerExchange,
+    dom.screenerCountry,
+    dom.screenerAssetType,
+    dom.screenerSort,
+    dom.screenerDirection,
+    dom.screenerOptionsOnly,
+  ].forEach(control => {
+    control.addEventListener('change', () => {
+      loadScreener().catch(error => toast('Screener failed', error.message));
+    });
+  });
+
+  dom.loadMoreScreenerBtn.addEventListener('click', () => {
+    loadScreener({ append: true }).catch(error => toast('Load more failed', error.message));
+  });
+
   dom.assetClassSelect.addEventListener('change', syncOrderActions);
   dom.tradeSymbolInput.addEventListener('input', updateTicketPreview);
   dom.qtyInput.addEventListener('input', updateTicketPreview);
@@ -596,6 +792,10 @@
     if (assetClass === 'option') {
       payload.contractSymbol = dom.optionContractSelect.value;
       payload.underlyingSymbol = payload.symbol;
+      if (!payload.contractSymbol) {
+        toast('Order failed', 'No option contract is available for this symbol.');
+        return;
+      }
     }
     if (orderType === 'limit') {
       payload.limitPrice = Number(dom.priceInput.value || 0);
