@@ -760,6 +760,18 @@ if (request.url === '/gemini' || request.url === '/api/gemini') {
         <p>Explore my kaomoji project, complete with interactive features and Gemini-powered functionality.</p>
       </a>
 
+      <a class="widget" href="/gemini">
+        <div class="route">/gemini</div>
+        <h2>Gemini Chat</h2>
+        <p>Ask Gemini questions from a dedicated page connected through the server API.</p>
+      </a>
+
+      <a class="widget" href="/cloudconsole">
+        <div class="route">/cloudconsole</div>
+        <h2>Cloud Console</h2>
+        <p>Open the browser-based cloud console page for command-style experiments and tools.</p>
+      </a>
+
       <a class="widget" href="/games">
         <div class="route">/games</div>
         <h2>Games</h2>
