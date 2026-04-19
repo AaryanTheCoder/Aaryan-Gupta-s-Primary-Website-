@@ -250,6 +250,114 @@ const FUNDAMENTAL_OVERRIDES = {
   ADBE: { marketCap: 98_810_000_000, peRatio: 14.24, epsTtm: 17.19, employees: 31_360, technicalRating: 'Sell' },
 };
 
+const PROFILE_OVERRIDES = {
+  NVDA: {
+    description: 'NVIDIA designs GPUs, AI accelerators, networking hardware, and software platforms used across data centers, gaming, robotics, and autonomous systems.',
+    industry: 'Semiconductors',
+    website: 'https://www.nvidia.com/',
+  },
+  AAPL: {
+    description: 'Apple designs consumer hardware, operating systems, and services, with major businesses in iPhone, Mac, iPad, wearables, and digital subscriptions.',
+    industry: 'Consumer Electronics',
+    website: 'https://www.apple.com/',
+  },
+  MSFT: {
+    description: 'Microsoft develops enterprise software, cloud infrastructure, developer platforms, productivity tools, gaming services, and AI products.',
+    industry: 'Software Infrastructure',
+    website: 'https://www.microsoft.com/',
+  },
+  AMZN: {
+    description: 'Amazon operates global e-commerce, logistics, digital advertising, devices, and AWS cloud infrastructure services.',
+    industry: 'Internet Retail & Cloud',
+    website: 'https://www.amazon.com/',
+  },
+  GOOGL: {
+    description: 'Alphabet operates Google Search, YouTube, Android, cloud services, advertising products, and a portfolio of AI-driven technology businesses.',
+    industry: 'Internet Content & Information',
+    website: 'https://abc.xyz/',
+  },
+  GOOG: {
+    description: 'Alphabet operates Google Search, YouTube, Android, cloud services, advertising products, and a portfolio of AI-driven technology businesses.',
+    industry: 'Internet Content & Information',
+    website: 'https://abc.xyz/',
+  },
+  META: {
+    description: 'Meta Platforms runs social and messaging products including Facebook, Instagram, WhatsApp, and Messenger, while also investing in AI and mixed reality.',
+    industry: 'Internet Content & Information',
+    website: 'https://about.meta.com/',
+  },
+  TSLA: {
+    description: 'Tesla builds electric vehicles, battery systems, charging infrastructure, energy storage products, and autonomous driving software.',
+    industry: 'Auto Manufacturers',
+    website: 'https://www.tesla.com/',
+  },
+  AVGO: {
+    description: 'Broadcom develops semiconductor components and infrastructure software for networking, wireless, broadband, storage, and enterprise systems.',
+    industry: 'Semiconductors',
+    website: 'https://www.broadcom.com/',
+  },
+  AMD: {
+    description: 'AMD designs CPUs, GPUs, adaptive computing products, and data-center chips used in PCs, servers, gaming consoles, and AI workloads.',
+    industry: 'Semiconductors',
+    website: 'https://www.amd.com/',
+  },
+  NFLX: {
+    description: 'Netflix operates a global subscription streaming service focused on licensed and original film, television, and interactive entertainment.',
+    industry: 'Entertainment',
+    website: 'https://www.netflix.com/',
+  },
+  JPM: {
+    description: 'JPMorgan Chase provides consumer banking, investment banking, markets, asset management, and payment services globally.',
+    industry: 'Banks - Diversified',
+    website: 'https://www.jpmorganchase.com/',
+  },
+  BAC: {
+    description: 'Bank of America provides consumer banking, wealth management, lending, markets, and corporate banking services.',
+    industry: 'Banks - Diversified',
+    website: 'https://www.bankofamerica.com/',
+  },
+  WMT: {
+    description: 'Walmart operates large-scale retail, grocery, marketplace, fulfillment, and membership businesses across stores and digital channels.',
+    industry: 'Discount Stores',
+    website: 'https://www.walmart.com/',
+  },
+  COST: {
+    description: 'Costco operates membership warehouse clubs focused on high-volume retail, grocery, and private-label consumer products.',
+    industry: 'Discount Stores',
+    website: 'https://www.costco.com/',
+  },
+  ORCL: {
+    description: 'Oracle provides databases, enterprise applications, cloud infrastructure, and mission-critical software platforms for businesses and governments.',
+    industry: 'Software Infrastructure',
+    website: 'https://www.oracle.com/',
+  },
+  PLTR: {
+    description: 'Palantir builds data integration, analytics, and operational software platforms used by government agencies and commercial enterprises.',
+    industry: 'Software - Application',
+    website: 'https://www.palantir.com/',
+  },
+  XOM: {
+    description: 'Exxon Mobil is an integrated energy company involved in upstream production, refining, chemicals, and global fuel distribution.',
+    industry: 'Oil & Gas Integrated',
+    website: 'https://corporate.exxonmobil.com/',
+  },
+  CVX: {
+    description: 'Chevron is an integrated energy company with operations spanning upstream oil and gas, refining, chemicals, and fuels distribution.',
+    industry: 'Oil & Gas Integrated',
+    website: 'https://www.chevron.com/',
+  },
+  SPY: {
+    description: 'SPY is an ETF designed to track the S&P 500, giving broad exposure to large-cap U.S. equities.',
+    industry: 'Large Blend ETF',
+    website: 'https://www.ssga.com/',
+  },
+  QQQ: {
+    description: 'QQQ is an ETF designed to track the Nasdaq-100, concentrating exposure in large non-financial growth and technology-oriented companies.',
+    industry: 'Large Growth ETF',
+    website: 'https://www.invesco.com/',
+  },
+};
+
 const cache = new Map();
 
 function getMime(filePath) {
@@ -557,6 +665,15 @@ function technicalRatingFromChange(percentChange) {
   if (percentChange <= -3) return 'Strong Sell';
   if (percentChange <= -0.75) return 'Sell';
   return 'Neutral';
+}
+
+function generatedProfileFallback(meta) {
+  const assetLabel = meta.assetType === 'etf'
+    ? 'exchange-traded fund'
+    : meta.assetType === 'reit'
+      ? 'real estate investment trust'
+      : 'public company';
+  return `${meta.name} is a ${assetLabel} tracked in the simulator universe. It trades on ${meta.exchange} and is grouped under ${meta.sector}. Live profile text depends on the connected market-data plan, so this fallback summarizes the security classification and market listing.`;
 }
 
 function clamp(value, min, max) {
@@ -994,32 +1111,55 @@ async function getQuotes(symbols) {
 }
 
 function chartIntervalForTimeframe(timeframe) {
+  const customMatch = String(timeframe || '').match(/^CUSTOM:(\d{1,3})$/i);
+  if (customMatch) {
+    const days = clamp(Math.round(toNumber(customMatch[1], 30)), 2, 365);
+    if (days <= 3) {
+      return { interval: '15min', outputsize: Math.min(104, days * 26), span: days };
+    }
+    if (days <= 14) {
+      return { interval: '1h', outputsize: Math.min(120, days * 8), span: days };
+    }
+    if (days <= 180) {
+      return { interval: '1day', outputsize: days, span: days };
+    }
+    return { interval: '1week', outputsize: Math.max(12, Math.ceil(days / 7)), span: days };
+  }
+
   switch (timeframe) {
     case '1D':
-      return { interval: '15min', outputsize: 26 };
+      return { interval: '15min', outputsize: 26, span: 1 };
     case '1W':
-      return { interval: '1h', outputsize: 40 };
+      return { interval: '1h', outputsize: 40, span: 7 };
     case '1M':
-      return { interval: '1day', outputsize: 30 };
+      return { interval: '1day', outputsize: 30, span: 30 };
     case '3M':
-      return { interval: '1day', outputsize: 90 };
+      return { interval: '1day', outputsize: 90, span: 90 };
     case '1Y':
-      return { interval: '1week', outputsize: 52 };
+      return { interval: '1week', outputsize: 52, span: 365 };
     default:
-      return { interval: '1day', outputsize: 60 };
+      return { interval: '1day', outputsize: 60, span: 60 };
   }
 }
 
 function buildMockChart(symbol, timeframe) {
   const points = [];
   const quote = generateMockQuote(symbol);
-  const count = timeframe === '1D' ? 26 : timeframe === '1W' ? 40 : timeframe === '3M' ? 90 : timeframe === '1Y' ? 52 : 30;
+  const config = chartIntervalForTimeframe(timeframe);
+  const count = config.outputsize;
+  const stepMs = config.interval === '15min'
+    ? 15 * 60 * 1000
+    : config.interval === '1h'
+      ? 60 * 60 * 1000
+      : config.interval === '1week'
+        ? 7 * 24 * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
   let current = quote.previousClose || quote.price;
   for (let index = count - 1; index >= 0; index -= 1) {
     const noise = (seededRandom(`${symbol}:${timeframe}:${index}`) - 0.5) * current * 0.03;
     current = Math.max(1, current + noise);
     points.push({
-      datetime: new Date(Date.now() - index * 60 * 60 * 1000).toISOString(),
+      datetime: new Date(Date.now() - index * stepMs).toISOString(),
       close: roundTo(current),
       open: roundTo(current - noise * 0.4),
       high: roundTo(current * 1.01),
@@ -1059,13 +1199,17 @@ async function getChart(symbol, timeframe) {
 
 async function getProfileInfo(symbol) {
   const meta = symbolMeta(symbol);
+  const profileOverride = PROFILE_OVERRIDES[meta.symbol] || {};
   const fallback = {
     symbol: meta.symbol,
     name: meta.name,
     exchange: meta.exchange,
     sector: meta.sector,
-    industry: meta.sector,
-    description: `${meta.name} is being tracked in the simulator research workspace. Attach a supported market-data key to upgrade this panel with live fundamentals and company profile information.`,
+    industry: profileOverride.industry || meta.sector,
+    description: profileOverride.description || generatedProfileFallback(meta),
+    website: profileOverride.website || '',
+    country: meta.country || '',
+    employees: FUNDAMENTAL_OVERRIDES[meta.symbol]?.employees || 0,
     source: 'mock',
   };
 
@@ -1088,11 +1232,11 @@ async function getProfileInfo(symbol) {
       name: data.name || meta.name,
       exchange: data.exchange || meta.exchange,
       sector: data.sector || meta.sector,
-      industry: data.industry || meta.sector,
+      industry: data.industry || fallback.industry,
       description: data.description || fallback.description,
-      website: data.website || '',
-      country: data.country || '',
-      employees: data.full_time_employees || 0,
+      website: data.website || fallback.website,
+      country: data.country || fallback.country,
+      employees: data.full_time_employees || fallback.employees,
       source: 'twelvedata',
     };
   }).catch(() => fallback);
@@ -1849,7 +1993,7 @@ async function handleApi(req, res, profile) {
 
   if (pathname === '/simulator/api/research' && req.method === 'GET') {
     const symbol = safeText(url.searchParams.get('symbol') || 'AAPL', 24);
-    const timeframe = safeText(url.searchParams.get('timeframe') || '1M', 8);
+    const timeframe = safeText(url.searchParams.get('timeframe') || '1M', 16);
     const payload = await buildResearchPayload(symbol, timeframe);
     return json(res, 200, { ok: true, ...payload });
   }

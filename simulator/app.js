@@ -209,6 +209,25 @@
     };
   }
 
+  function timeframeLabel(value) {
+    if (String(value).startsWith('CUSTOM:')) {
+      const days = Number(String(value).split(':')[1] || 30);
+      return `${days}D`;
+    }
+    return value;
+  }
+
+  function applyActiveTimeframeButton(activeValue) {
+    dom.timeframes.forEach(button => {
+      const isCustom = button.dataset.timeframe === 'custom';
+      const active = isCustom ? String(activeValue).startsWith('CUSTOM:') : button.dataset.timeframe === activeValue;
+      button.classList.toggle('is-active', active);
+      if (isCustom) {
+        button.textContent = String(activeValue).startsWith('CUSTOM:') ? `Custom ${timeframeLabel(activeValue)}` : 'Custom';
+      }
+    });
+  }
+
   function renderProviderBadges() {
     const providers = state.bootstrap.providers;
     dom.providerBadges.innerHTML = [
@@ -495,7 +514,7 @@
     if (!research) return;
     const period = chartReturn(research.chart);
     const quote = research.quote;
-    const periodLabel = `${state.timeframe} return`;
+    const periodLabel = `${timeframeLabel(state.timeframe)} return`;
     const range52 = quote.fiftyTwoWeekLow && quote.fiftyTwoWeekHigh
       ? `${money(quote.fiftyTwoWeekLow)} - ${money(quote.fiftyTwoWeekHigh)}`
       : 'Limited';
@@ -764,8 +783,20 @@
 
   dom.timeframes.forEach(button => {
     button.addEventListener('click', async () => {
-      state.timeframe = button.dataset.timeframe;
-      dom.timeframes.forEach(item => item.classList.toggle('is-active', item === button));
+      if (button.dataset.timeframe === 'custom') {
+        const currentDays = String(state.timeframe).startsWith('CUSTOM:') ? Number(String(state.timeframe).split(':')[1] || 45) : 45;
+        const raw = window.prompt('Custom chart range in days (2-365):', String(currentDays));
+        if (!raw) return;
+        const days = Math.max(2, Math.min(365, Number(raw)));
+        if (!Number.isFinite(days)) {
+          toast('Invalid range', 'Enter a number of days between 2 and 365.');
+          return;
+        }
+        state.timeframe = `CUSTOM:${Math.round(days)}`;
+      } else {
+        state.timeframe = button.dataset.timeframe;
+      }
+      applyActiveTimeframeButton(state.timeframe);
       await loadResearch(state.selectedSymbol);
     });
   });
@@ -946,6 +977,7 @@
     try {
       await bootstrap('personal');
       await loadResearch('AAPL');
+      applyActiveTimeframeButton(state.timeframe);
       syncOrderActions();
     } catch (error) {
       toast('Simulator failed to load', error.message);
