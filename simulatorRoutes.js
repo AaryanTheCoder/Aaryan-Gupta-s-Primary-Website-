@@ -194,7 +194,61 @@ const RESEARCH_UNIVERSE = [...new Map(
   })
 ).values()];
 
+const RESEARCH_UNIVERSE_BY_SYMBOL = new Map(RESEARCH_UNIVERSE.map(item => [item.symbol.toUpperCase(), item]));
 const POPULAR_SYMBOLS = RESEARCH_UNIVERSE.slice(0, 24);
+
+const FUNDAMENTAL_OVERRIDES = {
+  NVDA: { marketCap: 4_900_000_000_000, peRatio: 41.15, epsTtm: 4.93, employees: 42_000, technicalRating: 'Buy' },
+  GOOG: { marketCap: 4_120_000_000_000, peRatio: 31.41, epsTtm: 10.91, employees: 190_820, technicalRating: 'Buy' },
+  GOOGL: { marketCap: 4_120_000_000_000, peRatio: 31.41, epsTtm: 10.91, employees: 190_820, technicalRating: 'Buy' },
+  AAPL: { marketCap: 3_970_000_000_000, peRatio: 34.19, epsTtm: 7.93, employees: 166_000, technicalRating: 'Strong Buy' },
+  MSFT: { marketCap: 3_140_000_000_000, peRatio: 26.45, epsTtm: 16.05, employees: 228_000, technicalRating: 'Neutral' },
+  AMZN: { marketCap: 2_690_000_000_000, peRatio: 34.93, epsTtm: 7.29, employees: 1_580_000, technicalRating: 'Buy' },
+  AVGO: { marketCap: 1_920_000_000_000, peRatio: 79.30, epsTtm: 5.28, employees: 33_000, technicalRating: 'Strong Buy' },
+  META: { marketCap: 1_740_000_000_000, peRatio: 29.31, epsTtm: 23.96, employees: 78_860, technicalRating: 'Buy' },
+  TSLA: { marketCap: 1_500_000_000_000, peRatio: 372.32, epsTtm: 1.18, employees: 134_780, technicalRating: 'Buy' },
+  WMT: { marketCap: 1_020_000_000_000, peRatio: 46.71, epsTtm: 2.74, employees: 2_100_000, technicalRating: 'Strong Buy' },
+  LLY: { marketCap: 875_880_000_000, peRatio: 41.04, epsTtm: 22.62, employees: 50_000, technicalRating: 'Neutral' },
+  JPM: { marketCap: 836_860_000_000, peRatio: 14.86, epsTtm: 20.91, employees: 318_510, technicalRating: 'Strong Buy' },
+  XOM: { marketCap: 610_180_000_000, peRatio: 21.87, epsTtm: 6.69, employees: 58_000, technicalRating: 'Sell' },
+  V: { marketCap: 604_240_000_000, peRatio: 30.04, epsTtm: 10.68, employees: 34_100, technicalRating: 'Neutral' },
+  JNJ: { marketCap: 564_050_000_000, peRatio: 27.08, epsTtm: 0, employees: 140_800, technicalRating: 'Sell' },
+  MU: { marketCap: 513_200_000_000, peRatio: 21.48, epsTtm: 21.44, employees: 53_000, technicalRating: 'Buy' },
+  ORCL: { marketCap: 503_480_000_000, peRatio: 31.43, epsTtm: 5.69, employees: 162_000, technicalRating: 'Neutral' },
+  MA: { marketCap: 464_900_000_000, peRatio: 31.55, epsTtm: 16.55, employees: 39_800, technicalRating: 'Neutral' },
+  AMD: { marketCap: 453_870_000_000, peRatio: 105.26, epsTtm: 2.67, employees: 31_000, technicalRating: 'Buy' },
+  COST: { marketCap: 443_600_000_000, peRatio: 52.00, epsTtm: 19.26, employees: 341_000, technicalRating: 'Buy' },
+  NFLX: { marketCap: 410_860_000_000, peRatio: 31.43, epsTtm: 3.16, employees: 16_000, technicalRating: 'Sell' },
+  BAC: { marketCap: 386_890_000_000, peRatio: 13.37, epsTtm: 4.09, employees: 213_000, technicalRating: 'Buy' },
+  CAT: { marketCap: 369_740_000_000, peRatio: 42.21, epsTtm: 18.91, employees: 118_000, technicalRating: 'Strong Buy' },
+  ABBV: { marketCap: 368_570_000_000, peRatio: 88.24, epsTtm: 2.36, employees: 57_000, technicalRating: 'Sell' },
+  CVX: { marketCap: 367_130_000_000, peRatio: 27.68, epsTtm: 6.67, employees: 43_040, technicalRating: 'Sell' },
+  PLTR: { marketCap: 350_120_000_000, peRatio: 231.34, epsTtm: 0.68, employees: 4_430, technicalRating: 'Buy' },
+  HD: { marketCap: 348_010_000_000, peRatio: 24.54, epsTtm: 14.26, employees: 472_400, technicalRating: 'Buy' },
+  INTC: { marketCap: 343_940_000_000, peRatio: 0, epsTtm: -0.08, employees: 85_100, technicalRating: 'Buy' },
+  PG: { marketCap: 341_470_000_000, peRatio: 21.77, epsTtm: 6.90, employees: 109_000, technicalRating: 'Buy' },
+  CSCO: { marketCap: 340_680_000_000, peRatio: 30.34, epsTtm: 2.87, employees: 86_200, technicalRating: 'Strong Buy' },
+  KO: { marketCap: 326_000_000_000, peRatio: 24.93, epsTtm: 3.05, employees: 65_900, technicalRating: 'Sell' },
+  GE: { marketCap: 317_760_000_000, peRatio: 37.37, epsTtm: 8.20, employees: 57_000, technicalRating: 'Neutral' },
+  MS: { marketCap: 299_820_000_000, peRatio: 17.11, epsTtm: 11.17, employees: 83_000, technicalRating: 'Buy' },
+  UNH: { marketCap: 294_660_000_000, peRatio: 24.60, epsTtm: 13.26, employees: 390_000, technicalRating: 'Strong Buy' },
+  MRK: { marketCap: 294_390_000_000, peRatio: 16.37, epsTtm: 7.29, employees: 75_000, technicalRating: 'Buy' },
+  RTX: { marketCap: 264_380_000_000, peRatio: 39.58, epsTtm: 5.02, employees: 180_000, technicalRating: 'Sell' },
+  WFC: { marketCap: 249_460_000_000, peRatio: 12.58, epsTtm: 6.56, employees: 205_000, technicalRating: 'Sell' },
+  IBM: { marketCap: 237_760_000_000, peRatio: 22.74, epsTtm: 11.34, employees: 286_800, technicalRating: 'Neutral' },
+  AXP: { marketCap: 227_470_000_000, peRatio: 21.56, epsTtm: 15.41, employees: 76_800, technicalRating: 'Buy' },
+  MCD: { marketCap: 221_190_000_000, peRatio: 26.05, epsTtm: 12.00, employees: 150_000, technicalRating: 'Buy' },
+  TMUS: { marketCap: 217_810_000_000, peRatio: 20.36, epsTtm: 9.73, employees: 75_000, technicalRating: 'Sell' },
+  PEP: { marketCap: 215_500_000_000, peRatio: 24.76, epsTtm: 6.38, employees: 306_000, technicalRating: 'Buy' },
+  TXN: { marketCap: 209_240_000_000, peRatio: 42.20, epsTtm: 5.47, employees: 33_000, technicalRating: 'Strong Buy' },
+  VZ: { marketCap: 196_330_000_000, peRatio: 11.47, epsTtm: 4.06, employees: 89_900, technicalRating: 'Sell' },
+  TMO: { marketCap: 195_700_000_000, peRatio: 29.69, epsTtm: 17.76, employees: 125_000, technicalRating: 'Buy' },
+  NEE: { marketCap: 191_810_000_000, peRatio: 27.87, epsTtm: 3.31, employees: 17_400, technicalRating: 'Neutral' },
+  AMGN: { marketCap: 191_530_000_000, peRatio: 24.96, epsTtm: 14.33, employees: 31_500, technicalRating: 'Strong Buy' },
+  DIS: { marketCap: 188_290_000_000, peRatio: 15.66, epsTtm: 6.81, employees: 231_000, technicalRating: 'Strong Buy' },
+  T: { marketCap: 185_130_000_000, peRatio: 8.69, epsTtm: 3.05, employees: 133_030, technicalRating: 'Sell' },
+  ADBE: { marketCap: 98_810_000_000, peRatio: 14.24, epsTtm: 17.19, employees: 31_360, technicalRating: 'Sell' },
+};
 
 const cache = new Map();
 
@@ -482,8 +536,27 @@ function httpsJson(options) {
 
 function symbolMeta(symbol) {
   const upper = String(symbol || '').toUpperCase();
-  const match = RESEARCH_UNIVERSE.find(item => item.symbol.toUpperCase() === upper);
+  const match = RESEARCH_UNIVERSE_BY_SYMBOL.get(upper);
   return match || { symbol: upper, name: upper, sector: 'Unknown', exchange: 'US', assetType: 'stock', country: 'US' };
+}
+
+function fundamentalForSymbol(symbol, quote = {}) {
+  const upper = String(symbol || '').toUpperCase();
+  const override = FUNDAMENTAL_OVERRIDES[upper] || {};
+  const marketCap = toNumber(quote.marketCap, 0) || override.marketCap || Math.round((toNumber(quote.price, 100) || 100) * (500_000_000 + seededRandom(`${upper}:shares`) * 9_000_000_000));
+  const epsTtm = toNumber(quote.epsTtm, 0) || override.epsTtm || roundTo((seededRandom(`${upper}:eps`) * 18) - 1, 2);
+  const peRatio = toNumber(quote.peRatio, 0) || override.peRatio || (epsTtm > 0 ? roundTo((toNumber(quote.price, 100) || 100) / epsTtm, 2) : 0);
+  const employees = Math.round(toNumber(quote.employees, 0) || override.employees || (1_000 + seededRandom(`${upper}:employees`) * 280_000));
+  const technicalRating = quote.technicalRating || override.technicalRating || technicalRatingFromChange(toNumber(quote.percentChange, 0));
+  return { marketCap, peRatio, epsTtm, employees, technicalRating };
+}
+
+function technicalRatingFromChange(percentChange) {
+  if (percentChange >= 3) return 'Strong Buy';
+  if (percentChange >= 0.75) return 'Buy';
+  if (percentChange <= -3) return 'Strong Sell';
+  if (percentChange <= -0.75) return 'Sell';
+  return 'Neutral';
 }
 
 function clamp(value, min, max) {
@@ -505,6 +578,8 @@ function enrichScreenerRow(meta, quote, overlay = {}) {
   const volume = Math.round(overlayVolume > 0 ? overlayVolume : (quote.volume || 0));
   const percentChange = roundTo(toNumber(overlay.percentChange, quote.percentChange || 0));
   const change = roundTo(toNumber(overlay.change, quote.change || 0));
+  const displayName = overlay.name || quote.name || meta.name || meta.symbol;
+  const fundamentals = fundamentalForSymbol(meta.symbol, { ...quote, price, percentChange });
   const avgVolume = avgVolumeEstimate(meta.symbol, volume || 0);
   const relativeVolume = avgVolume ? roundTo((volume || 0) / avgVolume, 2) : 1;
   const volatilityScore = roundTo((((quote.high || quote.price) - (quote.low || quote.price)) / Math.max(quote.price || 1, 1)) * 100, 2);
@@ -513,7 +588,7 @@ function enrichScreenerRow(meta, quote, overlay = {}) {
 
   return {
     symbol: meta.symbol,
-    name: meta.name,
+    name: displayName,
     sector: meta.sector,
     exchange: meta.exchange,
     assetType: meta.assetType,
@@ -526,7 +601,12 @@ function enrichScreenerRow(meta, quote, overlay = {}) {
     low: quote.low,
     volume,
     tradeCount: Math.round(toNumber(overlay.tradeCount, 0)),
-    marketCap: quote.marketCap || 0,
+    dollarVolume: roundTo(price * volume, 0),
+    marketCap: fundamentals.marketCap,
+    peRatio: fundamentals.peRatio,
+    epsTtm: fundamentals.epsTtm,
+    employees: fundamentals.employees,
+    technicalRating: fundamentals.technicalRating,
     source: overlay.source ? `${overlay.source}/${quote.source}` : quote.source,
     rankSource: overlay.source || quote.source,
     providerRank: overlay.providerRank || 9999,
@@ -563,6 +643,7 @@ function normalizeAlpacaMostActives(payload) {
   const rows = payload.most_actives || payload.mostActives || payload.data || payload.results || [];
   return (Array.isArray(rows) ? rows : []).map((item, index) => ({
     symbol: normalizeProviderSymbol(item.symbol || item.ticker || item.S),
+    name: safeText(item.name || item.description || item.company_name || '', 120),
     volume: fieldNumber(item, ['volume', 'v']),
     tradeCount: fieldNumber(item, ['trade_count', 'tradeCount', 'trades', 't']),
     providerRank: index + 1,
@@ -573,6 +654,7 @@ function normalizeAlpacaMostActives(payload) {
 function normalizeAlpacaMoverRows(rows, direction) {
   return (Array.isArray(rows) ? rows : []).map((item, index) => ({
     symbol: normalizeProviderSymbol(item.symbol || item.ticker || item.S),
+    name: safeText(item.name || item.description || item.company_name || '', 120),
     price: fieldNumber(item, ['price', 'close', 'last', 'p']),
     change: fieldNumber(item, ['change', 'change_amount', 'changeAmount']),
     percentChange: fieldNumber(item, ['percent_change', 'percentChange', 'change_percent', 'changePercent', 'pct_change']),
@@ -627,7 +709,8 @@ function presetDefaults(preset) {
     case 'most-volatile':
       return { sortBy: 'volatilityScore', direction: 'desc', explanation: 'Most Volatile ranks by intraday high-low range relative to price.' };
     case 'large-cap':
-      return { sortBy: 'marketCap', direction: 'desc', explanation: 'Large Cap ranks by estimated market capitalization.' };
+    case 'most-capitalized':
+      return { sortBy: 'marketCap', direction: 'desc', explanation: 'Most Capitalized ranks companies by market capitalization, using provider fields where available and simulator fundamentals otherwise.' };
     case 'options-ready':
       return { sortBy: 'trendScore', direction: 'desc', explanation: 'Options Ready shows U.S. stocks and ETFs that can load an option chain.' };
     case 'us':
@@ -770,7 +853,7 @@ async function buildScreenerPayload(params = {}) {
         { value: 'top-gainers', label: 'Top Gainers' },
         { value: 'top-losers', label: 'Top Losers' },
         { value: 'most-volatile', label: 'Most Volatile' },
-        { value: 'large-cap', label: 'Large Cap' },
+        { value: 'most-capitalized', label: 'Most Capitalized' },
         { value: 'options-ready', label: 'Options Ready' },
         { value: 'us', label: 'US' },
         { value: 'singapore', label: 'Singapore' },
@@ -784,10 +867,14 @@ async function buildScreenerPayload(params = {}) {
         { value: 'preset', label: 'Preset ranking' },
         { value: 'trendScore', label: 'Trend Score' },
         { value: 'volume', label: 'Volume' },
+        { value: 'dollarVolume', label: 'Volume * Price' },
         { value: 'percentChange', label: '% Change' },
         { value: 'volatilityScore', label: 'Volatility' },
         { value: 'relativeVolume', label: 'Relative Volume' },
         { value: 'marketCap', label: 'Market Cap' },
+        { value: 'peRatio', label: 'P/E' },
+        { value: 'epsTtm', label: 'EPS (TTM)' },
+        { value: 'employees', label: 'Employees' },
         { value: 'price', label: 'Price' },
         { value: 'name', label: 'Name' },
       ],
@@ -811,6 +898,7 @@ function generateMockQuote(symbol) {
   const low = roundTo(Math.min(last, previousClose) * (1 - seededRandom(`${symbol}:low`) * 0.015));
   const bid = roundTo(last * 0.999);
   const ask = roundTo(last * 1.001);
+  const fundamentals = fundamentalForSymbol(meta.symbol, { price: last, percentChange: previousClose ? roundTo((change / previousClose) * 100, 2) : 0 });
   return {
     symbol: meta.symbol,
     name: meta.name,
@@ -824,7 +912,11 @@ function generateMockQuote(symbol) {
     volume: Math.round(800000 + seededRandom(`${symbol}:volume`) * 8000000),
     bid,
     ask,
-    marketCap: Math.round((last * (500000000 + seededRandom(`${symbol}:shares`) * 9000000000))),
+    marketCap: fundamentals.marketCap,
+    peRatio: fundamentals.peRatio,
+    epsTtm: fundamentals.epsTtm,
+    employees: fundamentals.employees,
+    technicalRating: fundamentals.technicalRating,
     exchange: meta.exchange,
     sector: meta.sector,
     source: 'mock',
@@ -832,6 +924,18 @@ function generateMockQuote(symbol) {
     delayed: true,
     fiftyTwoWeekLow: roundTo(last * (0.62 + seededRandom(`${symbol}:52wlow`) * 0.14)),
     fiftyTwoWeekHigh: roundTo(last * (1.12 + seededRandom(`${symbol}:52whigh`) * 0.38)),
+  };
+}
+
+function withFundamentals(symbol, quote) {
+  const fundamentals = fundamentalForSymbol(symbol, quote);
+  return {
+    ...quote,
+    marketCap: toNumber(quote.marketCap, 0) || fundamentals.marketCap,
+    peRatio: toNumber(quote.peRatio, 0) || fundamentals.peRatio,
+    epsTtm: toNumber(quote.epsTtm, 0) || fundamentals.epsTtm,
+    employees: Math.round(toNumber(quote.employees, 0) || fundamentals.employees),
+    technicalRating: quote.technicalRating || fundamentals.technicalRating,
   };
 }
 
@@ -867,6 +971,10 @@ async function getTwelveDataQuote(symbol) {
       delayed: false,
       fiftyTwoWeekLow: roundTo(data.fifty_two_week?.low || 0),
       fiftyTwoWeekHigh: roundTo(data.fifty_two_week?.high || 0),
+      marketCap: roundTo(data.market_cap || data.marketCap || 0, 0),
+      peRatio: roundTo(data.pe || data.pe_ratio || data.peRatio || 0),
+      epsTtm: roundTo(data.eps || data.eps_ttm || data.epsTtm || 0),
+      employees: Math.round(toNumber(data.employees || data.full_time_employees, 0)),
     };
   });
 }
@@ -874,9 +982,9 @@ async function getTwelveDataQuote(symbol) {
 async function getQuote(symbol) {
   try {
     const quote = await getTwelveDataQuote(symbol);
-    if (quote && quote.price > 0) return quote;
+    if (quote && quote.price > 0) return withFundamentals(symbol, quote);
   } catch {}
-  return generateMockQuote(symbol);
+  return withFundamentals(symbol, generateMockQuote(symbol));
 }
 
 async function getQuotes(symbols) {
@@ -1143,11 +1251,19 @@ async function buildResearchPayload(symbol, timeframe = '1M') {
     getChart(normalizedSymbol, timeframe),
     optionsEligible(meta) ? getOptionChain(normalizedSymbol, quote) : Promise.resolve([]),
   ]);
+  const enrichedProfile = {
+    ...profile,
+    name: profile.name && profile.name !== normalizedSymbol ? profile.name : (quote.name || profile.name || normalizedSymbol),
+    exchange: profile.exchange || quote.exchange || meta.exchange,
+    sector: profile.sector && profile.sector !== 'Unknown' ? profile.sector : (quote.sector || meta.sector),
+    industry: profile.industry && profile.industry !== 'Unknown' ? profile.industry : (quote.sector || meta.sector),
+    employees: profile.employees || quote.employees || 0,
+  };
 
   return {
     symbol: normalizedSymbol,
     quote,
-    profile,
+    profile: enrichedProfile,
     chart,
     optionChain,
     optionsEligible: optionsEligible(meta),

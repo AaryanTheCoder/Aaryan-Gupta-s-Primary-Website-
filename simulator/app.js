@@ -405,7 +405,13 @@
         </td>
         <td>${money(row.price)}</td>
         <td class="${relativeClass(row.percentChange)}">${percent(row.percentChange)}</td>
+        <td>${row.technicalRating || 'Neutral'}</td>
         <td>${compactNumber(row.volume)}</td>
+        <td>${compactNumber(row.dollarVolume)}</td>
+        <td>${compactNumber(row.marketCap)}</td>
+        <td>${row.peRatio ? Number(row.peRatio).toFixed(2) : '-'}</td>
+        <td>${row.epsTtm ? money(row.epsTtm) : '-'}</td>
+        <td>${row.employees ? compactNumber(row.employees) : '-'}</td>
         <td>${Number(row.relativeVolume || 0).toFixed(2)}x</td>
         <td>${Number(row.trendScore || 0).toFixed(1)}</td>
         <td><span class="source-pill">${row.source}${row.optionsEligible ? ' · options' : ''}</span></td>
@@ -417,32 +423,46 @@
           </div>
         </td>
       </tr>
-    `).join('') : '<tr><td colspan="9">No symbols match these filters.</td></tr>';
+    `).join('') : '<tr><td colspan="14">No symbols match these filters.</td></tr>';
 
     [...dom.screenerBody.querySelectorAll('.view-symbol')].forEach(button => {
       button.addEventListener('click', async () => {
-        await loadResearch(button.dataset.symbol);
+        try {
+          await loadResearch(button.dataset.symbol);
+          renderTabs('research');
+          dom.researchTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) {
+          toast('Research failed', error.message);
+        }
       });
     });
 
     [...dom.screenerBody.querySelectorAll('.trade-stock')].forEach(button => {
       button.addEventListener('click', async () => {
-        await loadResearch(button.dataset.symbol);
-        dom.assetClassSelect.value = 'stock';
-        dom.tradeSymbolInput.value = button.dataset.symbol;
-        syncOrderActions();
-        renderTabs('trade');
+        try {
+          await loadResearch(button.dataset.symbol);
+          dom.assetClassSelect.value = 'stock';
+          dom.tradeSymbolInput.value = button.dataset.symbol;
+          syncOrderActions();
+          renderTabs('trade');
+        } catch (error) {
+          toast('Trade setup failed', error.message);
+        }
       });
     });
 
     [...dom.screenerBody.querySelectorAll('.trade-options')].forEach(button => {
       button.addEventListener('click', async () => {
         if (button.disabled) return;
-        await loadResearch(button.dataset.symbol);
-        dom.assetClassSelect.value = 'option';
-        dom.tradeSymbolInput.value = button.dataset.symbol;
-        syncOrderActions();
-        renderTabs('trade');
+        try {
+          await loadResearch(button.dataset.symbol);
+          dom.assetClassSelect.value = 'option';
+          dom.tradeSymbolInput.value = button.dataset.symbol;
+          syncOrderActions();
+          renderTabs('trade');
+        } catch (error) {
+          toast('Trade setup failed', error.message);
+        }
       });
     });
   }
@@ -498,6 +518,10 @@
       <div class="number-card"><span>Ask</span><strong>${money(quote.ask)}</strong></div>
       <div class="number-card"><span>Volume</span><strong>${compactNumber(quote.volume)}</strong></div>
       <div class="number-card"><span>Market Cap</span><strong>${quote.marketCap ? compactNumber(quote.marketCap) : 'Limited'}</strong></div>
+      <div class="number-card"><span>Technical Rating</span><strong>${quote.technicalRating || 'Neutral'}</strong></div>
+      <div class="number-card"><span>P/E</span><strong>${quote.peRatio ? Number(quote.peRatio).toFixed(2) : 'Limited'}</strong></div>
+      <div class="number-card"><span>EPS (TTM)</span><strong>${quote.epsTtm ? money(quote.epsTtm) : 'Limited'}</strong></div>
+      <div class="number-card"><span>Employees</span><strong>${quote.employees ? compactNumber(quote.employees) : 'Limited'}</strong></div>
       <div class="number-card"><span>52W Range</span><strong>${range52}</strong></div>
       <div class="number-card"><span>Market</span><strong>${quote.isMarketOpen ? 'Open' : 'Closed/Delayed'}</strong></div>
     `;
