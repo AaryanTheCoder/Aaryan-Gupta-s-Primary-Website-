@@ -1,5 +1,4 @@
 const fs = require('fs');
-
 const mime = require('mime-types');
 const path = require('path');
 
@@ -10,9 +9,43 @@ if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
 }
 
-function sanitizeFileName(fileName) {
-  const base = path.basename(String(fileName || '').trim());
-  return base.replace(/[^a-zA-Z0-9._ -]/g, '_') || `upload-${Date.now()}`;
+function sanitizePathSegment(segment, fallback = 'item') {
+  const base = path.basename(String(segment || '').trim());
+  const cleaned = base.replace(/[^a-zA-Z0-9._ -]/g, '_').replace(/^\.+$/, '');
+  return cleaned || fallback;
+}
+
+function sanitizeRelativePath(input, options = {}) {
+  const { allowEmpty = false, fallback = `upload-${Date.now()}` } = options;
+  const raw = safeDecode(input || '').replace(/\\/g, '/');
+  const parts = raw
+    .split('/')
+    .map(part => part.trim())
+    .filter(part => part && part !== '.' && part !== '..')
+    .map((part, index) => sanitizePathSegment(part, `${fallback}-${index + 1}`));
+
+  if (!parts.length) {
+    return allowEmpty ? '' : sanitizePathSegment(fallback, fallback);
+  }
+
+  return parts.join('/');
+}
+
+function resolveStoragePath(relativePath, options = {}) {
+  const cleanedRelativePath = sanitizeRelativePath(relativePath, options);
+  const absolutePath = cleanedRelativePath
+    ? path.resolve(STORAGE_DIR, cleanedRelativePath)
+    : path.resolve(STORAGE_DIR);
+  const rootPath = path.resolve(STORAGE_DIR);
+
+  if (absolutePath !== rootPath && !absolutePath.startsWith(rootPath + path.sep)) {
+    return null;
+  }
+
+  return {
+    relativePath: cleanedRelativePath,
+    absolutePath
+  };
 }
 
 function isAuthorized(req) {
@@ -57,31 +90,135 @@ function safeDecode(value) {
   }
 }
 
-function listFilesHtml() {
-  const files = fs.readdirSync(STORAGE_DIR).filter(name => !name.startsWith('.upload-'));
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = 0;
 
-  if (!files.length) {
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = value >= 100 || unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function countVisibleChildren(directoryPath) {
+  try {
+    return fs.readdirSync(directoryPath).filter(name => !name.startsWith('.upload-')).length;
+  } catch {
+    return 0;
+  }
+}
+
+function getDirectoryEntries(relativeDirectory) {
+  const resolved = resolveStoragePath(relativeDirectory, { allowEmpty: true });
+  if (!resolved || !fs.existsSync(resolved.absolutePath)) return null;
+
+  const stat = fs.statSync(resolved.absolutePath);
+  if (!stat.isDirectory()) return null;
+
+  return fs.readdirSync(resolved.absolutePath, { withFileTypes: true })
+    .filter(entry => !entry.name.startsWith('.upload-'))
+    .map(entry => {
+      const entryRelativePath = resolved.relativePath
+        ? `${resolved.relativePath}/${entry.name}`
+        : entry.name;
+      const entryAbsolutePath = path.join(resolved.absolutePath, entry.name);
+      const entryStat = fs.statSync(entryAbsolutePath);
+      const isDirectory = entry.isDirectory();
+
+      return {
+        name: entry.name,
+        relativePath: entryRelativePath,
+        isDirectory,
+        itemCount: isDirectory ? countVisibleChildren(entryAbsolutePath) : 0,
+        size: isDirectory ? 0 : entryStat.size
+      };
+    })
+    .sort((left, right) => {
+      if (left.isDirectory !== right.isDirectory) {
+        return left.isDirectory ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    });
+}
+
+function buildStorageLink(relativePath) {
+  return relativePath ? `/storage?path=${encodeURIComponent(relativePath)}` : '/storage';
+}
+
+function buildBreadcrumbsHtml(relativeDirectory) {
+  if (!relativeDirectory) {
+    return '<div class="breadcrumbs"><span>Root</span></div>';
+  }
+
+  const parts = relativeDirectory.split('/');
+  let accumulated = '';
+  const crumbs = [`<a href="/storage">Root</a>`];
+
+  for (const part of parts) {
+    accumulated = accumulated ? `${accumulated}/${part}` : part;
+    crumbs.push(`<a href="${buildStorageLink(accumulated)}">${escapeHtml(part)}</a>`);
+  }
+
+  return `<div class="breadcrumbs">${crumbs.join('<span>/</span>')}</div>`;
+}
+
+function listFilesHtml(relativeDirectory) {
+  const entries = getDirectoryEntries(relativeDirectory);
+  if (!entries) {
     return `
       <div class="empty-state">
         <div class="empty-icon">📂</div>
-        <h3>No files yet</h3>
-        <p>Upload your first file to get started.</p>
+        <h3>Folder not found</h3>
+        <p>The folder you requested no longer exists.</p>
+      </div>
+    `;
+  }
+
+  if (!entries.length) {
+    return `
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <h3>${relativeDirectory ? 'This folder is empty' : 'No files yet'}</h3>
+        <p>${relativeDirectory ? 'Upload something into this folder to populate it.' : 'Upload your first file or folder to get started.'}</p>
       </div>
     `;
   }
 
   return `
     <div class="file-grid">
-      ${files.map(f => {
-        const enc = encodeURIComponent(f);
+      ${entries.map(entry => {
+        const encodedPath = encodeURIComponent(entry.relativePath);
+
+        if (entry.isDirectory) {
+          const itemLabel = entry.itemCount === 1 ? '1 item' : `${entry.itemCount} items`;
+          return `
+            <div class="file-card folder-card">
+              <div class="file-icon">📁</div>
+              <div class="file-name">${escapeHtml(entry.name)}</div>
+              <div class="file-subtitle">${itemLabel}</div>
+              <div class="file-actions">
+                <a href="${buildStorageLink(entry.relativePath)}">Open</a>
+                <button class="danger" onclick="deleteEntry('${encodedPath}', 'folder')">Delete</button>
+              </div>
+            </div>
+          `;
+        }
+
         return `
           <div class="file-card">
             <div class="file-icon">📄</div>
-            <div class="file-name">${escapeHtml(f)}</div>
+            <div class="file-name">${escapeHtml(entry.name)}</div>
+            <div class="file-subtitle">${formatBytes(entry.size)}</div>
             <div class="file-actions">
-              <a href="/storage/files/${enc}">View</a>
-              <a href="/storage/download/${enc}">Download</a>
-              <button class="danger" onclick="deleteFile('${enc}')">Delete</button>
+              <a href="/storage/files/${encodedPath}">View</a>
+              <a href="/storage/download/${encodedPath}">Download</a>
+              <button class="danger" onclick="deleteEntry('${encodedPath}', 'file')">Delete</button>
             </div>
           </div>
         `;
@@ -90,12 +227,19 @@ function listFilesHtml() {
   `;
 }
 
-function handle(req, res) {
-  if (req.url === '/storage' && req.method === 'GET') {
-    if (!requireAuth(req, res)) return;
+function getRouteRelativePath(pathname, prefix) {
+  const raw = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : '';
+  return sanitizeRelativePath(raw, { allowEmpty: true });
+}
 
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(`<!DOCTYPE html>
+function renderPage(relativeDirectory) {
+  const entries = getDirectoryEntries(relativeDirectory);
+  const currentDirectory = entries ? relativeDirectory : '';
+  const parentDirectory = currentDirectory.includes('/')
+    ? currentDirectory.slice(0, currentDirectory.lastIndexOf('/'))
+    : '';
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -197,9 +341,44 @@ function handle(req, res) {
       margin-bottom: 22px;
     }
 
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
     .section-title {
-      margin: 0 0 16px;
+      margin: 0 0 10px;
       font-size: 1.3rem;
+    }
+
+    .breadcrumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .breadcrumbs a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .folder-nav {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      color: #08111f;
+      background: linear-gradient(135deg, var(--accent), #ffffff);
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-weight: bold;
+      white-space: nowrap;
     }
 
     .upload-panel {
@@ -214,13 +393,8 @@ function handle(req, res) {
       align-items: center;
     }
 
-    input[type="file"] {
-      max-width: 100%;
-      padding: 14px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.08);
-      color: var(--text);
+    .picker-input {
+      display: none;
     }
 
     button {
@@ -240,9 +414,17 @@ function handle(req, res) {
       transform: translateY(-2px);
     }
 
+    .secondary-button {
+      background: rgba(255,255,255,0.10);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.18);
+      box-shadow: none;
+    }
+
     .file-meta {
       color: var(--muted);
       font-size: 0.96rem;
+      line-height: 1.7;
     }
 
     .progress-wrap {
@@ -307,6 +489,11 @@ function handle(req, res) {
       min-height: 180px;
     }
 
+    .folder-card {
+      border-color: rgba(142, 216, 255, 0.24);
+      background: linear-gradient(180deg, rgba(142, 216, 255, 0.10), rgba(255,255,255,0.06));
+    }
+
     .file-icon,
     .empty-icon {
       font-size: 2rem;
@@ -316,6 +503,11 @@ function handle(req, res) {
       font-weight: bold;
       line-height: 1.5;
       word-break: break-word;
+    }
+
+    .file-subtitle {
+      color: var(--muted);
+      font-size: 0.95rem;
     }
 
     .file-actions {
@@ -342,6 +534,7 @@ function handle(req, res) {
       font-weight: bold;
       color: #08111f;
       background: linear-gradient(135deg, var(--accent), #ffffff);
+      box-shadow: none;
     }
 
     .file-actions button.danger {
@@ -374,17 +567,16 @@ function handle(req, res) {
         padding: 20px;
       }
 
-      .upload-controls {
+      .section-head,
+      .upload-controls,
+      .progress-label-row {
         flex-direction: column;
         align-items: stretch;
       }
 
-      button {
+      button,
+      .folder-nav {
         width: 100%;
-      }
-
-      .progress-label-row {
-        flex-direction: column;
       }
     }
   </style>
@@ -394,18 +586,21 @@ function handle(req, res) {
     <section class="hero">
       <div class="eyebrow">Private storage</div>
       <h1>💾 Aaryan Storage</h1>
-      <p>Upload files, keep them organized, and quickly open or download them from one place.</p>
+      <p>Upload files or entire folders, keep the structure intact, and browse everything without the top level turning into a mess.</p>
     </section>
 
     <section class="section">
-      <h2 class="section-title">Upload a file</h2>
+      <h2 class="section-title">Upload files or folders</h2>
       <div class="upload-panel">
         <div class="upload-controls">
-          <input type="file" id="f" multiple>
-          <button onclick="upload()">Upload files</button>
+          <input class="picker-input" type="file" id="fileInput" multiple>
+          <input class="picker-input" type="file" id="folderInput" webkitdirectory directory multiple>
+          <button class="secondary-button" onclick="pickFiles()">Choose files</button>
+          <button class="secondary-button" onclick="pickFolder()">Choose folder</button>
+          <button onclick="upload()">Upload selection</button>
         </div>
 
-        <div class="file-meta" id="fileMeta">No files selected yet.</div>
+        <div class="file-meta" id="fileMeta">No files or folders selected yet.</div>
         <div class="file-meta" id="transferMeta">No upload in progress.</div>
 
         <div class="progress-wrap" id="progressWrap">
@@ -423,13 +618,21 @@ function handle(req, res) {
     </section>
 
     <section class="section">
-      <h2 class="section-title">Your files</h2>
-      ${listFilesHtml()}
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Your storage</h2>
+          ${buildBreadcrumbsHtml(currentDirectory)}
+        </div>
+        ${currentDirectory ? `<a class="folder-nav" href="${buildStorageLink(parentDirectory)}">Up one level</a>` : ''}
+      </div>
+      ${listFilesHtml(currentDirectory)}
     </section>
   </div>
 
   <script>
-    const fileInput = document.getElementById('f');
+    const currentDirectory = ${JSON.stringify(currentDirectory)};
+    const fileInput = document.getElementById('fileInput');
+    const folderInput = document.getElementById('folderInput');
     const fileMeta = document.getElementById('fileMeta');
     const transferMeta = document.getElementById('transferMeta');
     const status = document.getElementById('status');
@@ -438,19 +641,16 @@ function handle(req, res) {
     const progressText = document.getElementById('progressText');
     const progressPercent = document.getElementById('progressPercent');
 
-    fileInput.addEventListener('change', () => {
-      const files = fileInput.files;
-      if (!files.length) {
-        fileMeta.textContent = 'No files selected yet.';
-        transferMeta.textContent = 'No upload in progress.';
-        return;
-      }
+    let selectedFiles = [];
+    let selectionMode = '';
 
-      const totalSize = Array.from(files).reduce((sum, f) => sum + f.size, 0);
-      const fileNames = Array.from(files).map(f => f.name).join(', ');
-      fileMeta.textContent = 'Selected ' + files.length + ' file(s): ' + fileNames + ' (' + formatBytes(totalSize) + ' total)';
-      transferMeta.textContent = 'Ready to upload.';
-    });
+    function pickFiles() {
+      fileInput.click();
+    }
+
+    function pickFolder() {
+      folderInput.click();
+    }
 
     function formatBytes(bytes) {
       if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -493,25 +693,67 @@ function handle(req, res) {
       progressText.textContent = label;
     }
 
-    function upload() {
-      const files = fileInput.files;
-
+    function summariseSelection(files, mode) {
       if (!files.length) {
-        status.textContent = 'Pick files first.';
+        fileMeta.textContent = 'No files or folders selected yet.';
+        transferMeta.textContent = 'No upload in progress.';
+        return;
+      }
+
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+
+      if (mode === 'folder') {
+        const roots = Array.from(new Set(files
+          .map(file => (file.webkitRelativePath || '').split('/')[0])
+          .filter(Boolean)));
+        const folderLabel = roots.length === 1 ? roots[0] : roots.length + ' folders';
+        const preview = files
+          .slice(0, 4)
+          .map(file => file.webkitRelativePath || file.name)
+          .join(', ');
+        const extraCount = Math.max(0, files.length - 4);
+
+        fileMeta.textContent = 'Selected folder upload: ' + folderLabel + ' with ' + files.length + ' file(s) (' + formatBytes(totalSize) + ').';
+        transferMeta.textContent = 'Includes: ' + preview + (extraCount ? ' +' + extraCount + ' more' : '');
+        return;
+      }
+
+      const preview = files.slice(0, 4).map(file => file.name).join(', ');
+      const extraCount = Math.max(0, files.length - 4);
+      fileMeta.textContent = 'Selected ' + files.length + ' file(s) (' + formatBytes(totalSize) + ').';
+      transferMeta.textContent = 'Includes: ' + preview + (extraCount ? ' +' + extraCount + ' more' : '');
+    }
+
+    fileInput.addEventListener('change', () => {
+      selectedFiles = Array.from(fileInput.files || []);
+      selectionMode = selectedFiles.length ? 'files' : '';
+      folderInput.value = '';
+      summariseSelection(selectedFiles, selectionMode);
+    });
+
+    folderInput.addEventListener('change', () => {
+      selectedFiles = Array.from(folderInput.files || []);
+      selectionMode = selectedFiles.length ? 'folder' : '';
+      fileInput.value = '';
+      summariseSelection(selectedFiles, selectionMode);
+    });
+
+    function upload() {
+      if (!selectedFiles.length) {
+        status.textContent = 'Pick files or a folder first.';
         transferMeta.textContent = 'No upload in progress.';
         progressWrap.classList.remove('show');
         return;
       }
 
-      const fileArray = Array.from(files);
-      const totalSize = fileArray.reduce((sum, f) => sum + f.size, 0);
+      const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
       let uploadedSize = 0;
       let failedCount = 0;
       const startedAt = Date.now();
 
-      status.textContent = 'Starting upload of ' + fileArray.length + ' file(s)...';
+      status.textContent = 'Starting upload of ' + selectedFiles.length + ' file(s)...';
       progressWrap.classList.add('show');
-      setProgress(0, 'Uploading file 1 of ' + fileArray.length + '...');
+      setProgress(0, 'Uploading file 1 of ' + selectedFiles.length + '...');
 
       async function uploadFile(file, index) {
         return new Promise((resolve) => {
@@ -519,10 +761,13 @@ function handle(req, res) {
           let lastLoaded = 0;
           let lastTimestamp = startedAt;
           let smoothedSpeed = 0;
+          const relativePath = file.webkitRelativePath || file.name;
 
           xhr.open('POST', '/storage/upload');
           xhr.withCredentials = true;
           xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+          xhr.setRequestHeader('X-Relative-Path', encodeURIComponent(relativePath));
+          xhr.setRequestHeader('X-Target-Directory', encodeURIComponent(currentDirectory));
           xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 
           xhr.upload.onprogress = function (event) {
@@ -530,7 +775,6 @@ function handle(req, res) {
 
             const now = Date.now();
             const loaded = event.loaded;
-            const total = event.total;
             const deltaBytes = loaded - lastLoaded;
             const deltaSeconds = Math.max((now - lastTimestamp) / 1000, 0.001);
             const instantSpeed = deltaBytes / deltaSeconds;
@@ -544,7 +788,7 @@ function handle(req, res) {
             const remainingBytes = totalSize - currentOverallLoaded;
             const etaSeconds = smoothedSpeed > 0 ? remainingBytes / smoothedSpeed : Infinity;
 
-            setProgress(overallPercent, 'Uploading file ' + (index + 1) + ' of ' + fileArray.length + ': ' + file.name + '...');
+            setProgress(overallPercent, 'Uploading file ' + (index + 1) + ' of ' + selectedFiles.length + ': ' + relativePath + '...');
             transferMeta.textContent =
               formatBytes(currentOverallLoaded) + ' / ' + formatBytes(totalSize) +
               ' • ' + formatSpeed(smoothedSpeed) +
@@ -559,15 +803,15 @@ function handle(req, res) {
               uploadedSize += file.size;
               resolve({ ok: true });
             } else {
-              failedCount++;
-              status.textContent = 'Failed to upload ' + file.name + ': ' + xhr.responseText;
+              failedCount += 1;
+              status.textContent = 'Failed to upload ' + relativePath + ': ' + xhr.responseText;
               resolve({ ok: false });
             }
           };
 
           xhr.onerror = function () {
-            failedCount++;
-            status.textContent = 'Error uploading ' + file.name + '. Continuing with next file...';
+            failedCount += 1;
+            status.textContent = 'Error uploading ' + relativePath + '. Continuing with next file...';
             resolve({ ok: false });
           };
 
@@ -576,11 +820,11 @@ function handle(req, res) {
       }
 
       (async () => {
-        for (let i = 0; i < fileArray.length; i++) {
-          await uploadFile(fileArray[i], i);
+        for (let i = 0; i < selectedFiles.length; i++) {
+          await uploadFile(selectedFiles[i], i);
         }
 
-        const successCount = fileArray.length - failedCount;
+        const successCount = selectedFiles.length - failedCount;
         if (failedCount === 0) {
           setProgress(100, 'Upload complete');
           status.textContent = 'All ' + successCount + ' file(s) uploaded successfully.';
@@ -588,31 +832,37 @@ function handle(req, res) {
           setTimeout(() => location.reload(), 700);
         } else if (successCount === 0) {
           setProgress(0, 'Upload failed');
-          status.textContent = 'Failed to upload all ' + fileArray.length + ' file(s).';
+          status.textContent = 'Failed to upload all ' + selectedFiles.length + ' file(s).';
           transferMeta.textContent = 'All uploads failed.';
         } else {
           setProgress(100, 'Completed with errors');
-          status.textContent = 'Uploaded ' + successCount + ' of ' + fileArray.length + ' file(s). ' + failedCount + ' failed.';
+          status.textContent = 'Uploaded ' + successCount + ' of ' + selectedFiles.length + ' file(s). ' + failedCount + ' failed.';
           transferMeta.textContent = successCount + ' file(s) saved. ' + failedCount + ' failed.';
           setTimeout(() => location.reload(), 1400);
         }
       })();
     }
 
-    function deleteFile(encodedName) {
-      const prettyName = decodeURIComponent(encodedName || '');
-      if (!encodedName) return;
-      if (!confirm('Delete "' + prettyName + '"? This cannot be undone.')) return;
+    function deleteEntry(encodedPath, entryType) {
+      const prettyName = decodeURIComponent(encodedPath || '');
+      if (!encodedPath) return;
+      if (!confirm('Delete this ' + entryType + ': "' + prettyName + '"? This cannot be undone.')) return;
 
       status.textContent = 'Deleting ' + prettyName + '...';
-      fetch('/storage/delete/' + encodedName, { method: 'POST', credentials: 'include' })
-        .then(async (r) => {
-          const data = await r.json().catch(() => ({}));
-          if (r.ok) {
+      fetch('/storage/delete/' + encodedPath, { method: 'POST', credentials: 'include' })
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) {
             status.textContent = 'Deleted ' + prettyName + '.';
-            setTimeout(() => location.reload(), 400);
+            setTimeout(() => {
+              if (currentDirectory && prettyName === currentDirectory) {
+                location.href = '/storage';
+                return;
+              }
+              location.reload();
+            }, 400);
           } else {
-            status.textContent = 'Delete failed: ' + (data.error || ('HTTP ' + r.status));
+            status.textContent = 'Delete failed: ' + (data.error || ('HTTP ' + response.status));
           }
         })
         .catch(() => {
@@ -621,23 +871,65 @@ function handle(req, res) {
     }
   </script>
 </body>
-</html>`);
+</html>`;
+}
+
+function handle(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  const pathname = url.pathname;
+
+  if (pathname === '/storage' && req.method === 'GET') {
+    if (!requireAuth(req, res)) return;
+
+    const currentDirectory = sanitizeRelativePath(url.searchParams.get('path') || '', { allowEmpty: true });
+    const directoryEntries = getDirectoryEntries(currentDirectory);
+
+    if (currentDirectory && !directoryEntries) {
+      res.writeHead(302, { Location: '/storage' });
+      res.end();
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(renderPage(currentDirectory));
     return;
   }
 
-  if (req.url === '/storage/upload' && req.method === 'POST') {
+  if (pathname === '/storage/upload' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
 
-    const name = sanitizeFileName(
-      safeDecode(req.headers['x-file-name'] || 'file')
+    const targetDirectory = sanitizeRelativePath(req.headers['x-target-directory'] || '', { allowEmpty: true });
+    const uploadedRelativePath = safeDecode(
+      req.headers['x-relative-path'] ||
+      req.headers['x-file-name'] ||
+      'file'
     );
-    const filePath = path.join(STORAGE_DIR, name);
+    const requestedPath = [targetDirectory, uploadedRelativePath].filter(Boolean).join('/');
+    const resolvedPath = resolveStoragePath(requestedPath, {
+      fallback: safeDecode(req.headers['x-file-name'] || 'file')
+    });
+
+    if (!resolvedPath) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Invalid upload path' }));
+      return;
+    }
+
+    const parentDirectory = path.dirname(resolvedPath.absolutePath);
     const tempPath = path.join(
       STORAGE_DIR,
       `.upload-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`
     );
     const writeStream = fs.createWriteStream(tempPath);
     let finished = false;
+
+    try {
+      fs.mkdirSync(parentDirectory, { recursive: true });
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: error.message }));
+      return;
+    }
 
     function cleanupTempFile() {
       try {
@@ -674,44 +966,56 @@ function handle(req, res) {
       if (finished) return;
 
       try {
-        fs.renameSync(tempPath, filePath);
+        if (fs.existsSync(resolvedPath.absolutePath) && fs.statSync(resolvedPath.absolutePath).isDirectory()) {
+          sendError(400, 'A folder already exists with that name');
+          return;
+        }
+
+        fs.renameSync(tempPath, resolvedPath.absolutePath);
         finished = true;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: true, file: name }));
+        res.end(JSON.stringify({ ok: true, file: resolvedPath.relativePath }));
       } catch (error) {
         sendError(500, error.message);
       }
     });
 
     req.pipe(writeStream);
-
     return;
   }
 
-  // Delete a file
-  if ((req.url.startsWith('/storage/delete/') && (req.method === 'POST' || req.method === 'DELETE'))) {
+  if (pathname.startsWith('/storage/delete/') && (req.method === 'POST' || req.method === 'DELETE')) {
     if (!requireAuth(req, res)) return;
 
-    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
-    const filePath = path.join(STORAGE_DIR, name);
+    const relativePath = getRouteRelativePath(pathname, '/storage/delete/');
+    const resolvedPath = resolveStoragePath(relativePath, { allowEmpty: true });
+
+    if (!resolvedPath || !resolvedPath.relativePath) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Invalid path' }));
+      return;
+    }
 
     try {
-      if (!fs.existsSync(filePath)) {
+      if (!fs.existsSync(resolvedPath.absolutePath)) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: false, error: 'File not found' }));
+        res.end(JSON.stringify({ ok: false, error: 'File or folder not found' }));
         return;
       }
 
-      const stat = fs.statSync(filePath);
-      if (!stat.isFile()) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ ok: false, error: 'Not a file' }));
-        return;
+      const stat = fs.statSync(resolvedPath.absolutePath);
+      if (stat.isDirectory()) {
+        fs.rmSync(resolvedPath.absolutePath, { recursive: true, force: false });
+      } else {
+        fs.unlinkSync(resolvedPath.absolutePath);
       }
 
-      fs.unlinkSync(filePath);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, deleted: name }));
+      res.end(JSON.stringify({
+        ok: true,
+        deleted: resolvedPath.relativePath,
+        type: stat.isDirectory() ? 'folder' : 'file'
+      }));
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, error: error.message }));
@@ -719,20 +1023,26 @@ function handle(req, res) {
     return;
   }
 
-  if (req.url.startsWith('/storage/files/') && req.method === 'GET') {
+  if (pathname.startsWith('/storage/files/') && req.method === 'GET') {
     if (!requireAuth(req, res)) return;
 
-    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
-    const filePath = path.join(STORAGE_DIR, name);
+    const relativePath = getRouteRelativePath(pathname, '/storage/files/');
+    const resolvedPath = resolveStoragePath(relativePath, { allowEmpty: true });
 
-    if (!fs.existsSync(filePath)) {
+    if (!resolvedPath || !resolvedPath.relativePath || !fs.existsSync(resolvedPath.absolutePath)) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('File not found');
       return;
     }
 
-    const stat = fs.statSync(filePath);
-    const contentType = mime.lookup(filePath) || 'application/octet-stream';
+    const stat = fs.statSync(resolvedPath.absolutePath);
+    if (stat.isDirectory()) {
+      res.writeHead(302, { Location: buildStorageLink(resolvedPath.relativePath) });
+      res.end();
+      return;
+    }
+
+    const contentType = mime.lookup(resolvedPath.absolutePath) || 'application/octet-stream';
     const range = req.headers.range;
 
     if (range) {
@@ -768,7 +1078,7 @@ function handle(req, res) {
         'Accept-Ranges': 'bytes'
       });
 
-      fs.createReadStream(filePath, { start, end }).pipe(res);
+      fs.createReadStream(resolvedPath.absolutePath, { start, end }).pipe(res);
       return;
     }
 
@@ -778,33 +1088,39 @@ function handle(req, res) {
       'Accept-Ranges': 'bytes'
     });
 
-    fs.createReadStream(filePath).pipe(res);
+    fs.createReadStream(resolvedPath.absolutePath).pipe(res);
     return;
   }
 
-  if (req.url.startsWith('/storage/download/') && req.method === 'GET') {
+  if (pathname.startsWith('/storage/download/') && req.method === 'GET') {
     if (!requireAuth(req, res)) return;
 
-    const name = sanitizeFileName(safeDecode(req.url.split('/').pop()));
-    const filePath = path.join(STORAGE_DIR, name);
+    const relativePath = getRouteRelativePath(pathname, '/storage/download/');
+    const resolvedPath = resolveStoragePath(relativePath, { allowEmpty: true });
 
-    if (!fs.existsSync(filePath)) {
+    if (!resolvedPath || !resolvedPath.relativePath || !fs.existsSync(resolvedPath.absolutePath)) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('File not found');
       return;
     }
 
-    const stat = fs.statSync(filePath);
-    const contentType = mime.lookup(filePath) || 'application/octet-stream';
+    const stat = fs.statSync(resolvedPath.absolutePath);
+    if (stat.isDirectory()) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Folder download is not supported yet');
+      return;
+    }
+
+    const contentType = mime.lookup(resolvedPath.absolutePath) || 'application/octet-stream';
 
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': stat.size,
-      'Content-Disposition': `attachment; filename="${name}"`,
+      'Content-Disposition': `attachment; filename="${path.basename(resolvedPath.relativePath)}"`,
       'Accept-Ranges': 'bytes'
     });
 
-    fs.createReadStream(filePath).pipe(res);
+    fs.createReadStream(resolvedPath.absolutePath).pipe(res);
     return;
   }
 
