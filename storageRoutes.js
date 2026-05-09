@@ -846,7 +846,6 @@ function renderPage(relativeDirectory) {
     function deleteEntry(encodedPath, entryType) {
       const prettyName = decodeURIComponent(encodedPath || '');
       if (!encodedPath) return;
-      if (!confirm('Delete this ' + entryType + ': "' + prettyName + '"? This cannot be undone.')) return;
 
       status.textContent = 'Deleting ' + prettyName + '...';
       fetch('/storage/delete/' + encodedPath, { method: 'POST', credentials: 'include' })
