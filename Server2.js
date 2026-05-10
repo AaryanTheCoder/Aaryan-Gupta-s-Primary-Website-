@@ -8,10 +8,12 @@ const sandboxRoutes = require('./sandboxRoutes');
 const cloudConsoleRoutes = require('./cloudConsoleRoutes');
 const geminiRoutes = require('./geminiRoutes');
 const simulatorRoutes = require('./simulatorRoutes');
+const plannerRoutes = require('./plannerRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
   console.log('Request Method: ' + request.method); // The console (I think the Azure One,) Will report all requests, like if they requested a specific subsite /kaomoji for example and if they GET or POST (like when uploading)
+const requestPathname = request.url.split('?')[0];
 if (request.url.startsWith('/storage')) {
   return storageRoutes.handle(request, response); // If they request / storage takes them to the storageRoutes.js File 
 }
@@ -35,6 +37,10 @@ if (request.url === '/cloudconsole' || request.url.startsWith('/api/cloudconsole
 
 if (request.url === '/simulator' || request.url.startsWith('/simulator/')) {
   return simulatorRoutes.handle(request, response);
+}
+
+if (requestPathname === '/planner' || requestPathname === '/daily-planner' || requestPathname === '/dailyplanner') {
+  return plannerRoutes.handle(request, response);
 }
 
 if (request.url === '/gemini' || request.url === '/api/gemini') {
@@ -800,6 +806,12 @@ if (request.url === '/gemini' || request.url === '/api/gemini') {
         <div class="route">/simulator</div>
         <h2>Stock Simulator</h2>
         <p>A full paper-trading simulator with portfolio tracking, research, charts, stock and options trades, and custom game modes.</p>
+      </a>
+
+      <a class="widget" href="/planner">
+        <div class="route">/planner</div>
+        <h2>Daily Planner</h2>
+        <p>A password-protected personal school dashboard with Singapore time, notes, weather, tasks, calendar, and urgency widgets.</p>
       </a>
     </section>
 
