@@ -469,6 +469,51 @@ function getPlannerHtml() {
       margin-bottom: 14px;
     }
 
+    .day-remaining {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 18px;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+    }
+
+    .day-remaining-main {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 140px;
+      padding: 20px;
+      border-radius: 22px;
+      color: #f8fff2;
+      background:
+        radial-gradient(circle at top right, rgba(240, 184, 79, 0.30), transparent 42%),
+        linear-gradient(145deg, #173525, #235a3b);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+    }
+
+    .day-remaining-value {
+      font-size: 7rem;
+      line-height: 0.88;
+      font-weight: 900;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .day-remaining-caption {
+      margin-top: 12px;
+      color: rgba(248, 255, 242, 0.78);
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .day-remaining-detail {
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
     .progress-label {
       display: flex;
       justify-content: space-between;
@@ -735,6 +780,10 @@ function getPlannerHtml() {
       .board {
         min-width: 860px;
       }
+
+      .day-remaining-value {
+        font-size: 5.2rem;
+      }
     }
   </style>
 </head>
@@ -761,6 +810,7 @@ function getPlannerHtml() {
           <option value="notes">Notes</option>
           <option value="pomodoro">Pomodoro focus timer</option>
           <option value="urgency">Day, week, month left</option>
+          <option value="dayRemaining">Big day remaining</option>
           <option value="tasks">Homework and tasks</option>
           <option value="habits">Habit tracker</option>
           <option value="links">Study links</option>
@@ -811,6 +861,7 @@ function getPlannerHtml() {
         notes: { title: 'Notes', w: 410, h: 360 },
         pomodoro: { title: 'Pomodoro Timer', w: 360, h: 360 },
         urgency: { title: 'Urgency Timers', w: 390, h: 300 },
+        dayRemaining: { title: 'Day Remaining', w: 720, h: 280 },
         tasks: { title: 'Homework Tasks', w: 380, h: 350 },
         habits: { title: 'Habit Tracker', w: 350, h: 300 },
         links: { title: 'Study Links', w: 320, h: 280 }
@@ -818,13 +869,15 @@ function getPlannerHtml() {
 
       function defaultState() {
         return {
+          dayRemainingWidgetAdded: true,
           widgets: [
             { id: uid(), type: 'weather', title: 'Singapore Weather', x: 0, y: 0, w: 330, h: 250, data: {} },
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
             { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '- Finish homework\\n- Pack bag\\n- Revise one topic', fontSize: '18', format: 'lined' } },
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
-            { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } }
+            { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
+            { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 720, h: 280, data: {} }
           ]
         };
       }
@@ -879,9 +932,11 @@ function getPlannerHtml() {
               state = loadLocalState();
               pendingSave = true;
             }
+            pendingSave = addDayRemainingWidgetOnce(state) || pendingSave;
           })
           .catch(function () {
             state = loadLocalState();
+            addDayRemainingWidgetOnce(state);
             pendingSave = true;
           })
           .finally(function () {
@@ -1046,6 +1101,10 @@ function getPlannerHtml() {
           return '<div data-urgency></div>';
         }
 
+        if (widget.type === 'dayRemaining') {
+          return '<div class="day-remaining" data-day-remaining><div class="day-remaining-main"><div class="day-remaining-value" data-day-remaining-value>--%</div><div class="day-remaining-caption">Day remaining</div></div><div><div class="progress-row"><div class="progress-label"><span>School day left</span><span data-day-remaining-text>Loading...</span></div><div class="track"><div class="bar" data-day-remaining-bar></div></div></div><div class="day-remaining-detail" data-day-remaining-detail>7:30 AM to 9:30 PM Singapore time</div></div></div>';
+        }
+
         if (widget.type === 'pomodoro') {
           normalizePomodoro(widget);
           return '<div class="pomodoro" data-pomodoro><div class="pomodoro-time" data-pomodoro-time>--:--</div><div class="pomodoro-mode"><button type="button" data-pomodoro-mode="work">Focus</button><button type="button" data-pomodoro-mode="break">Break</button><button type="button" data-pomodoro-mode="longBreak">Long</button></div><div class="pomodoro-controls"><button class="primary" type="button" data-pomodoro-start>Start</button><button type="button" data-pomodoro-pause>Pause</button><button type="button" data-pomodoro-reset>Reset</button></div><div class="pomodoro-settings"><label>Focus<input type="number" min="1" max="180" data-pomodoro-work value="' + escapeAttr(widget.data.workMinutes) + '"></label><label>Break<input type="number" min="1" max="60" data-pomodoro-break value="' + escapeAttr(widget.data.breakMinutes) + '"></label><label>Long<input type="number" min="1" max="90" data-pomodoro-long value="' + escapeAttr(widget.data.longBreakMinutes) + '"></label></div><div class="pomodoro-status" data-pomodoro-status></div></div>';
@@ -1164,6 +1223,7 @@ function getPlannerHtml() {
 
       function refreshDynamicWidgets() {
         updateUrgencyWidgets();
+        updateDayRemainingWidgets();
         updateWeatherWidgets();
         updatePomodoroWidgets();
       }
@@ -1314,14 +1374,9 @@ function getPlannerHtml() {
       function updateUrgencyWidgets() {
         document.querySelectorAll('[data-urgency]').forEach(function (target) {
           var now = singaporeNow();
-          var calendarDayStart = new Date(now);
-          calendarDayStart.setHours(0, 0, 0, 0);
-          var dayStart = new Date(now);
-          dayStart.setHours(7, 30, 0, 0);
-          var dayEnd = new Date(now);
-          dayEnd.setHours(21, 30, 0, 0);
+          var dayWindow = plannerDayWindow(now);
 
-          var weekStart = new Date(calendarDayStart);
+          var weekStart = new Date(dayWindow.calendarDayStart);
           var day = weekStart.getDay();
           var mondayOffset = day === 0 ? -6 : 1 - day;
           weekStart.setDate(weekStart.getDate() + mondayOffset);
@@ -1332,10 +1387,38 @@ function getPlannerHtml() {
           var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
           target.innerHTML =
-            progressHtml('Day used', percentBetween(now, dayStart, dayEnd), msLeft(now, dayEnd)) +
+            progressHtml('Day used', percentBetween(now, dayWindow.dayStart, dayWindow.dayEnd), msLeft(now, dayWindow.dayEnd)) +
             progressHtml('Week used', percentBetween(now, weekStart, weekEnd), msLeft(now, weekEnd)) +
             progressHtml('Month used', percentBetween(now, monthStart, monthEnd), msLeft(now, monthEnd));
         });
+      }
+
+      function updateDayRemainingWidgets() {
+        document.querySelectorAll('[data-day-remaining]').forEach(function (target) {
+          var now = singaporeNow();
+          var dayWindow = plannerDayWindow(now);
+          var usedPercent = clamp(percentBetween(now, dayWindow.dayStart, dayWindow.dayEnd), 0, 100);
+          var remainingPercent = clamp(100 - usedPercent, 0, 100);
+          var leftText = msLeft(now, dayWindow.dayEnd);
+          target.querySelector('[data-day-remaining-value]').textContent = Math.round(remainingPercent) + '%';
+          target.querySelector('[data-day-remaining-text]').textContent = Math.round(remainingPercent) + '% remaining - ' + leftText + ' left';
+          target.querySelector('[data-day-remaining-bar]').style.width = remainingPercent + '%';
+          target.querySelector('[data-day-remaining-detail]').textContent = 'Day window: 7:30 AM to 9:30 PM Singapore time';
+        });
+      }
+
+      function plannerDayWindow(now) {
+        var calendarDayStart = new Date(now);
+        calendarDayStart.setHours(0, 0, 0, 0);
+        var dayStart = new Date(now);
+        dayStart.setHours(7, 30, 0, 0);
+        var dayEnd = new Date(now);
+        dayEnd.setHours(21, 30, 0, 0);
+        return {
+          calendarDayStart: calendarDayStart,
+          dayStart: dayStart,
+          dayEnd: dayEnd
+        };
       }
 
       function progressHtml(label, percent, leftText) {
@@ -1430,6 +1513,27 @@ function getPlannerHtml() {
         return escapeHtml(value).replace(new RegExp(String.fromCharCode(96), 'g'), '&#96;');
       }
 
+      function addDayRemainingWidgetOnce(targetState) {
+        if (!targetState || !Array.isArray(targetState.widgets)) return false;
+        if (targetState.dayRemainingWidgetAdded || targetState.widgets.some(function (widget) { return widget.type === 'dayRemaining'; })) {
+          targetState.dayRemainingWidgetAdded = true;
+          return false;
+        }
+
+        targetState.widgets.push({
+          id: uid(),
+          type: 'dayRemaining',
+          title: 'Day Remaining',
+          x: 420,
+          y: 700,
+          w: 720,
+          h: 280,
+          data: {}
+        });
+        targetState.dayRemainingWidgetAdded = true;
+        return true;
+      }
+
       addWidgetBtn.addEventListener('click', function () {
         var type = widgetType.value;
         var meta = widgetMeta[type];
@@ -1471,6 +1575,7 @@ function getPlannerHtml() {
       setInterval(updateClock, 1000);
       setInterval(updatePomodoroWidgets, 1000);
       setInterval(updateUrgencyWidgets, 30000);
+      setInterval(updateDayRemainingWidgets, 30000);
       setInterval(updateWeatherWidgets, 600000);
       loadRemoteState();
     }());
