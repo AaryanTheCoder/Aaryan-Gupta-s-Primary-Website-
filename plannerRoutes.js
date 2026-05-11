@@ -861,7 +861,7 @@ function getPlannerHtml() {
         notes: { title: 'Notes', w: 410, h: 360 },
         pomodoro: { title: 'Pomodoro Timer', w: 360, h: 360 },
         urgency: { title: 'Urgency Timers', w: 390, h: 300 },
-        dayRemaining: { title: 'Day Remaining', w: 820, h: 280 },
+        dayRemaining: { title: 'Day Remaining', w: 920, h: 280 },
         tasks: { title: 'Homework Tasks', w: 380, h: 350 },
         habits: { title: 'Habit Tracker', w: 350, h: 300 },
         links: { title: 'Study Links', w: 320, h: 280 }
