@@ -861,7 +861,7 @@ function getPlannerHtml() {
         notes: { title: 'Notes', w: 410, h: 360 },
         pomodoro: { title: 'Pomodoro Timer', w: 360, h: 360 },
         urgency: { title: 'Urgency Timers', w: 390, h: 300 },
-        dayRemaining: { title: 'Day Remaining', w: 720, h: 280 },
+        dayRemaining: { title: 'Day Remaining', w: 820, h: 280 },
         tasks: { title: 'Homework Tasks', w: 380, h: 350 },
         habits: { title: 'Habit Tracker', w: 350, h: 300 },
         links: { title: 'Study Links', w: 320, h: 280 }
@@ -877,7 +877,7 @@ function getPlannerHtml() {
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
             { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
-            { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 720, h: 280, data: {} }
+            { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 820, h: 280, data: {} }
           ]
         };
       }
@@ -1526,7 +1526,7 @@ function getPlannerHtml() {
           title: 'Day Remaining',
           x: 420,
           y: 700,
-          w: 720,
+          w: 820,
           h: 280,
           data: {}
         });
