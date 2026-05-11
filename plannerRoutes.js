@@ -1314,12 +1314,14 @@ function getPlannerHtml() {
       function updateUrgencyWidgets() {
         document.querySelectorAll('[data-urgency]').forEach(function (target) {
           var now = singaporeNow();
+          var calendarDayStart = new Date(now);
+          calendarDayStart.setHours(0, 0, 0, 0);
           var dayStart = new Date(now);
-          dayStart.setHours(0, 0, 0, 0);
-          var dayEnd = new Date(dayStart);
-          dayEnd.setDate(dayEnd.getDate() + 1);
+          dayStart.setHours(7, 30, 0, 0);
+          var dayEnd = new Date(now);
+          dayEnd.setHours(21, 30, 0, 0);
 
-          var weekStart = new Date(dayStart);
+          var weekStart = new Date(calendarDayStart);
           var day = weekStart.getDay();
           var mondayOffset = day === 0 ? -6 : 1 - day;
           weekStart.setDate(weekStart.getDate() + mondayOffset);
@@ -1337,7 +1339,8 @@ function getPlannerHtml() {
       }
 
       function progressHtml(label, percent, leftText) {
-        return '<div class="progress-row"><div class="progress-label"><span>' + label + '</span><span>' + Math.round(percent) + '% used - ' + leftText + ' left</span></div><div class="track"><div class="bar" style="width:' + clamp(percent, 0, 100) + '%"></div></div></div>';
+        var safePercent = clamp(percent, 0, 100);
+        return '<div class="progress-row"><div class="progress-label"><span>' + label + '</span><span>' + Math.round(safePercent) + '% used - ' + leftText + ' left</span></div><div class="track"><div class="bar" style="width:' + safePercent + '%"></div></div></div>';
       }
 
       function percentBetween(now, start, end) {
