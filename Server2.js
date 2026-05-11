@@ -47,6 +47,21 @@ if (request.url === '/gemini' || request.url === '/api/gemini') {
   return geminiRoutes.handle(request, response, GEMINI_API_KEY);
 }
 
+if (requestPathname === '/sitemap' && (request.method === 'GET' || request.method === 'HEAD')) {
+  const filePath = path.join(__dirname, 'sitemap.xml');
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('Sitemap not found');
+      return;
+    }
+
+    response.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' });
+    response.end(request.method === 'HEAD' ? undefined : data);
+  });
+  return;
+}
+
   if (request.url === '/about' && request.method === 'GET') { // This is an About Page About me (HTML) Things I could add: Abiity to edit my about page without changing code, This would mean making a full passoword based Editor (Like my own digital Canva!)
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });// Could add Socials 
   response.end(`<!DOCTYPE html> 
