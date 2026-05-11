@@ -39,7 +39,7 @@ if (request.url === '/simulator' || request.url.startsWith('/simulator/')) {
   return simulatorRoutes.handle(request, response);
 }
 
-if (requestPathname === '/planner' || requestPathname === '/daily-planner' || requestPathname === '/dailyplanner') {
+if (requestPathname === '/planner' || requestPathname === '/daily-planner' || requestPathname === '/dailyplanner' || requestPathname === '/planner-data') {
   return plannerRoutes.handle(request, response);
 }
 

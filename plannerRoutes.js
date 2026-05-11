@@ -1,4 +1,11 @@
+const fs = require('fs');
+const path = require('path');
+
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
+const PLANNER_DATA_PATH = process.env.PLANNER_DATA_PATH
+  ? path.resolve(process.env.PLANNER_DATA_PATH)
+  : path.join(__dirname, 'planner-data.json');
+const MAX_PLANNER_DATA_BYTES = 2 * 1024 * 1024;
 
 function isAuthorized(req) {
   if (!STORAGE_PASSWORD) return false;
@@ -24,10 +31,99 @@ function requireAuth(req, res) {
   return false;
 }
 
+function readPlannerData() {
+  try {
+    const raw = fs.readFileSync(PLANNER_DATA_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.state && Array.isArray(parsed.state.widgets)) {
+      return {
+        exists: true,
+        savedAt: parsed.savedAt || null,
+        state: parsed.state
+      };
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('Failed to read planner data:', error);
+    }
+  }
+
+  return {
+    exists: false,
+    savedAt: null,
+    state: null
+  };
+}
+
+function writePlannerData(state) {
+  const payload = {
+    savedAt: new Date().toISOString(),
+    state
+  };
+  const tempPath = `${PLANNER_DATA_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2));
+  fs.renameSync(tempPath, PLANNER_DATA_PATH);
+  return payload;
+}
+
+function readJsonBody(req, callback) {
+  let body = '';
+
+  req.on('data', chunk => {
+    body += chunk;
+    if (Buffer.byteLength(body) > MAX_PLANNER_DATA_BYTES) {
+      req.destroy();
+    }
+  });
+
+  req.on('end', () => {
+    try {
+      callback(null, JSON.parse(body || '{}'));
+    } catch (error) {
+      callback(error);
+    }
+  });
+
+  req.on('error', error => {
+    callback(error);
+  });
+}
+
+function sendJson(res, statusCode, payload) {
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store'
+  });
+  res.end(JSON.stringify(payload));
+}
+
 function handle(req, res) {
   if (!requireAuth(req, res)) return;
 
   const pathname = new URL(req.url, 'http://localhost').pathname;
+
+  if (pathname === '/planner-data' && req.method === 'GET') {
+    sendJson(res, 200, readPlannerData());
+    return;
+  }
+
+  if (pathname === '/planner-data' && req.method === 'PUT') {
+    readJsonBody(req, (error, payload) => {
+      if (error || !payload || !payload.state || !Array.isArray(payload.state.widgets)) {
+        sendJson(res, 400, { ok: false, error: 'Invalid planner data' });
+        return;
+      }
+
+      try {
+        const saved = writePlannerData(payload.state);
+        sendJson(res, 200, { ok: true, savedAt: saved.savedAt });
+      } catch (writeError) {
+        console.error('Failed to write planner data:', writeError);
+        sendJson(res, 500, { ok: false, error: 'Planner data could not be saved' });
+      }
+    });
+    return;
+  }
 
   if ((pathname === '/planner' || pathname === '/daily-planner' || pathname === '/dailyplanner') && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -435,6 +531,90 @@ function getPlannerHtml() {
       font-weight: 800;
     }
 
+    .pomodoro {
+      display: grid;
+      gap: 12px;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+    }
+
+    .pomodoro-time {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 96px;
+      border-radius: 20px;
+      color: #f8fff2;
+      background:
+        radial-gradient(circle at top right, rgba(240, 184, 79, 0.28), transparent 42%),
+        linear-gradient(145deg, #173525, #235a3b);
+      font-size: 3.2rem;
+      line-height: 1;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+
+    .pomodoro-mode {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .pomodoro-mode button,
+    .pomodoro-controls button {
+      min-height: 36px;
+      border: 1px solid rgba(35, 90, 59, 0.15);
+      border-radius: 12px;
+      color: var(--green);
+      background: rgba(35, 90, 59, 0.08);
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .pomodoro-mode button.active,
+    .pomodoro-controls button.primary {
+      color: #fffaf0;
+      background: var(--green);
+    }
+
+    .pomodoro-controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .pomodoro-settings {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .pomodoro-settings label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+
+    .pomodoro-settings input {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid rgba(35, 90, 59, 0.13);
+      border-radius: 11px;
+      padding: 0 8px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.62);
+      outline: none;
+    }
+
+    .pomodoro-status {
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 800;
+      min-height: 1.2em;
+    }
+
     .task-list {
       display: grid;
       gap: 9px;
@@ -564,7 +744,7 @@ function getPlannerHtml() {
       <div>
         <div class="eyebrow">Personal Daily Planner</div>
         <h1>Command center for school, focus, and daily momentum.</h1>
-        <p class="subtitle">Move widgets by dragging their headers. Resize from the bottom-right corner. Everything saves in this browser automatically.</p>
+        <p class="subtitle">Move widgets by dragging their headers. Resize from the bottom-right corner. Everything autosaves to the server for access on any device.</p>
       </div>
       <aside class="clock-card" aria-label="Singapore time">
         <div class="clock-label">Live Singapore Time</div>
@@ -579,6 +759,7 @@ function getPlannerHtml() {
           <option value="weather">Singapore weather</option>
           <option value="calendar">Google Calendar</option>
           <option value="notes">Notes</option>
+          <option value="pomodoro">Pomodoro focus timer</option>
           <option value="urgency">Day, week, month left</option>
           <option value="tasks">Homework and tasks</option>
           <option value="habits">Habit tracker</option>
@@ -608,9 +789,11 @@ function getPlannerHtml() {
       var resetBtn = document.getElementById('resetBtn');
       var liveClock = document.getElementById('liveClock');
       var liveDate = document.getElementById('liveDate');
-      var state = loadState();
+      var state = defaultState();
       var saveTimer = null;
       var activeDrag = null;
+      var remoteReady = false;
+      var pendingSave = false;
       var resizeObserver = new ResizeObserver(function (entries) {
         entries.forEach(function (entry) {
           var id = entry.target.dataset.id;
@@ -626,6 +809,7 @@ function getPlannerHtml() {
         weather: { title: 'Singapore Weather', w: 330, h: 250 },
         calendar: { title: 'Google Calendar', w: 520, h: 430 },
         notes: { title: 'Notes', w: 410, h: 360 },
+        pomodoro: { title: 'Pomodoro Timer', w: 360, h: 360 },
         urgency: { title: 'Urgency Timers', w: 390, h: 300 },
         tasks: { title: 'Homework Tasks', w: 380, h: 350 },
         habits: { title: 'Habit Tracker', w: 350, h: 300 },
@@ -639,12 +823,13 @@ function getPlannerHtml() {
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
             { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '- Finish homework\\n- Pack bag\\n- Revise one topic', fontSize: '18', format: 'lined' } },
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
-            { id: uid(), type: 'calendar', title: 'Google Calendar', x: 400, y: 330, w: 520, h: 430, data: { embedUrl: '' } }
+            { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
+            { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } }
           ]
         };
       }
 
-      function loadState() {
+      function loadLocalState() {
         try {
           var parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
           if (parsed && Array.isArray(parsed.widgets)) return parsed;
@@ -653,12 +838,60 @@ function getPlannerHtml() {
       }
 
       function saveState() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (error) {}
+
+        if (!remoteReady) {
+          pendingSave = true;
+          return;
+        }
+
+        fetch('/planner-data', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: state })
+        }).catch(function () {
+          pendingSave = true;
+        });
       }
 
       function scheduleSave() {
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(saveState, 120);
+        saveTimer = setTimeout(saveState, 400);
+      }
+
+      function loadRemoteState() {
+        fetch('/planner-data', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store'
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('Planner data request failed');
+            return response.json();
+          })
+          .then(function (data) {
+            if (data.exists && data.state && Array.isArray(data.state.widgets)) {
+              state = data.state;
+            } else {
+              state = loadLocalState();
+              pendingSave = true;
+            }
+          })
+          .catch(function () {
+            state = loadLocalState();
+            pendingSave = true;
+          })
+          .finally(function () {
+            remoteReady = true;
+            render();
+            if (pendingSave) {
+              pendingSave = false;
+              scheduleSave();
+            }
+          });
       }
 
       function uid() {
@@ -703,11 +936,13 @@ function getPlannerHtml() {
         state.widgets.forEach(function (widget) {
           board.appendChild(renderWidget(widget));
         });
-        saveState();
+        scheduleSave();
         refreshDynamicWidgets();
       }
 
       function renderWidget(widget) {
+        widget.data = widget.data || {};
+
         var el = document.createElement('article');
         el.className = 'widget';
         el.dataset.id = widget.id;
@@ -811,6 +1046,11 @@ function getPlannerHtml() {
           return '<div data-urgency></div>';
         }
 
+        if (widget.type === 'pomodoro') {
+          normalizePomodoro(widget);
+          return '<div class="pomodoro" data-pomodoro><div class="pomodoro-time" data-pomodoro-time>--:--</div><div class="pomodoro-mode"><button type="button" data-pomodoro-mode="work">Focus</button><button type="button" data-pomodoro-mode="break">Break</button><button type="button" data-pomodoro-mode="longBreak">Long</button></div><div class="pomodoro-controls"><button class="primary" type="button" data-pomodoro-start>Start</button><button type="button" data-pomodoro-pause>Pause</button><button type="button" data-pomodoro-reset>Reset</button></div><div class="pomodoro-settings"><label>Focus<input type="number" min="1" max="180" data-pomodoro-work value="' + escapeAttr(widget.data.workMinutes) + '"></label><label>Break<input type="number" min="1" max="60" data-pomodoro-break value="' + escapeAttr(widget.data.breakMinutes) + '"></label><label>Long<input type="number" min="1" max="90" data-pomodoro-long value="' + escapeAttr(widget.data.longBreakMinutes) + '"></label></div><div class="pomodoro-status" data-pomodoro-status></div></div>';
+        }
+
         if (widget.type === 'tasks') {
           return '<div class="task-list" data-task-list></div><form class="compact-form" data-task-form><input name="task" placeholder="Add homework, test, errand..."><button class="btn" type="submit">Add</button></form>';
         }
@@ -859,6 +1099,10 @@ function getPlannerHtml() {
             widget.data.text = '';
             scheduleSave();
           });
+        }
+
+        if (widget.type === 'pomodoro') {
+          bindPomodoro(widget, body);
         }
 
         if (widget.type === 'tasks') {
@@ -921,6 +1165,150 @@ function getPlannerHtml() {
       function refreshDynamicWidgets() {
         updateUrgencyWidgets();
         updateWeatherWidgets();
+        updatePomodoroWidgets();
+      }
+
+      function normalizePomodoro(widget) {
+        widget.data.mode = widget.data.mode || 'work';
+        widget.data.workMinutes = clampNumber(widget.data.workMinutes, 1, 180, 25);
+        widget.data.breakMinutes = clampNumber(widget.data.breakMinutes, 1, 60, 5);
+        widget.data.longBreakMinutes = clampNumber(widget.data.longBreakMinutes, 1, 90, 15);
+        widget.data.sessions = Math.max(0, parseInt(widget.data.sessions || 0, 10) || 0);
+        if (!Number.isFinite(Number(widget.data.remainingSeconds))) {
+          widget.data.remainingSeconds = pomodoroDuration(widget);
+        }
+        widget.data.remainingSeconds = clampNumber(widget.data.remainingSeconds, 0, 180 * 60, pomodoroDuration(widget));
+        widget.data.running = Boolean(widget.data.running);
+      }
+
+      function clampNumber(value, min, max, fallback) {
+        var number = parseInt(value, 10);
+        if (!Number.isFinite(number)) number = fallback;
+        return Math.max(min, Math.min(max, number));
+      }
+
+      function pomodoroDuration(widget) {
+        if (widget.data.mode === 'break') return widget.data.breakMinutes * 60;
+        if (widget.data.mode === 'longBreak') return widget.data.longBreakMinutes * 60;
+        return widget.data.workMinutes * 60;
+      }
+
+      function bindPomodoro(widget, body) {
+        normalizePomodoro(widget);
+        body.querySelectorAll('[data-pomodoro-mode]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            switchPomodoroMode(widget, button.dataset.pomodoroMode);
+            updatePomodoroWidget(widget);
+            scheduleSave();
+          });
+        });
+
+        body.querySelector('[data-pomodoro-start]').addEventListener('click', function () {
+          normalizePomodoro(widget);
+          if (widget.data.remainingSeconds <= 0) widget.data.remainingSeconds = pomodoroDuration(widget);
+          widget.data.running = true;
+          widget.data.endsAt = Date.now() + widget.data.remainingSeconds * 1000;
+          updatePomodoroWidget(widget);
+          scheduleSave();
+        });
+
+        body.querySelector('[data-pomodoro-pause]').addEventListener('click', function () {
+          syncPomodoroRemaining(widget);
+          widget.data.running = false;
+          delete widget.data.endsAt;
+          updatePomodoroWidget(widget);
+          scheduleSave();
+        });
+
+        body.querySelector('[data-pomodoro-reset]').addEventListener('click', function () {
+          widget.data.running = false;
+          delete widget.data.endsAt;
+          widget.data.remainingSeconds = pomodoroDuration(widget);
+          updatePomodoroWidget(widget);
+          scheduleSave();
+        });
+
+        [
+          ['[data-pomodoro-work]', 'workMinutes'],
+          ['[data-pomodoro-break]', 'breakMinutes'],
+          ['[data-pomodoro-long]', 'longBreakMinutes']
+        ].forEach(function (entry) {
+          var input = body.querySelector(entry[0]);
+          input.addEventListener('change', function () {
+            widget.data[entry[1]] = clampNumber(input.value, Number(input.min), Number(input.max), widget.data[entry[1]]);
+            input.value = widget.data[entry[1]];
+            if (!widget.data.running) {
+              widget.data.remainingSeconds = pomodoroDuration(widget);
+            }
+            updatePomodoroWidget(widget);
+            scheduleSave();
+          });
+        });
+
+        updatePomodoroWidget(widget);
+      }
+
+      function switchPomodoroMode(widget, mode) {
+        widget.data.mode = mode;
+        widget.data.running = false;
+        delete widget.data.endsAt;
+        widget.data.remainingSeconds = pomodoroDuration(widget);
+      }
+
+      function syncPomodoroRemaining(widget) {
+        normalizePomodoro(widget);
+        if (widget.data.running && widget.data.endsAt) {
+          widget.data.remainingSeconds = Math.max(0, Math.ceil((widget.data.endsAt - Date.now()) / 1000));
+        }
+      }
+
+      function completePomodoro(widget) {
+        var nextMode = 'work';
+        if (widget.data.mode === 'work') {
+          widget.data.sessions += 1;
+          nextMode = widget.data.sessions % 4 === 0 ? 'longBreak' : 'break';
+        }
+        widget.data.mode = nextMode;
+        widget.data.running = false;
+        delete widget.data.endsAt;
+        widget.data.remainingSeconds = pomodoroDuration(widget);
+        scheduleSave();
+      }
+
+      function updatePomodoroWidgets() {
+        state.widgets.filter(function (widget) {
+          return widget.type === 'pomodoro';
+        }).forEach(updatePomodoroWidget);
+      }
+
+      function updatePomodoroWidget(widget) {
+        syncPomodoroRemaining(widget);
+        if (widget.data.running && widget.data.remainingSeconds <= 0) {
+          completePomodoro(widget);
+        }
+
+        var el = board.querySelector('[data-id="' + widget.id + '"]');
+        if (!el) return;
+
+        var time = el.querySelector('[data-pomodoro-time]');
+        var status = el.querySelector('[data-pomodoro-status]');
+        var start = el.querySelector('[data-pomodoro-start]');
+        var seconds = widget.data.remainingSeconds;
+        var minutes = Math.floor(seconds / 60);
+        var remainder = seconds % 60;
+        time.textContent = String(minutes).padStart(2, '0') + ':' + String(remainder).padStart(2, '0');
+        start.textContent = widget.data.running ? 'Running' : 'Start';
+        status.textContent = pomodoroModeLabel(widget.data.mode) + ' - ' + widget.data.sessions + ' focus session' + (widget.data.sessions === 1 ? '' : 's');
+
+        el.querySelectorAll('[data-pomodoro-mode]').forEach(function (button) {
+          button.classList.toggle('active', button.dataset.pomodoroMode === widget.data.mode);
+        });
+      }
+
+      function pomodoroModeLabel(mode) {
+        if (mode === 'break') return 'Break';
+        if (mode === 'longBreak') return 'Long break';
+        return 'Focus';
       }
 
       function updateUrgencyWidgets() {
@@ -1071,16 +1459,17 @@ function getPlannerHtml() {
       });
 
       resetBtn.addEventListener('click', function () {
-        if (!window.confirm('Reset the planner layout and notes on this browser?')) return;
+        if (!window.confirm('Reset the planner layout and notes on the server?')) return;
         state = defaultState();
         render();
       });
 
       updateClock();
       setInterval(updateClock, 1000);
+      setInterval(updatePomodoroWidgets, 1000);
       setInterval(updateUrgencyWidgets, 30000);
       setInterval(updateWeatherWidgets, 600000);
-      render();
+      loadRemoteState();
     }());
   </script>
 </body>
