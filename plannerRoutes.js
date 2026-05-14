@@ -246,12 +246,12 @@ function getPlannerHtml() {
     }
 
     .clock-card {
-      min-width: min(430px, 100%);
+      min-width: min(560px, 100%);
       display: flex;
       flex-direction: column;
       justify-content: center;
       gap: 10px;
-      padding: 22px;
+      padding: 28px;
       border-radius: 26px;
       color: #f8fff2;
       background:
@@ -272,10 +272,10 @@ function getPlannerHtml() {
 
     .clock-time {
       font-family: 'Trebuchet MS', Verdana, sans-serif;
-      font-size: clamp(2.5rem, 5vw, 5rem);
+      font-size: clamp(3rem, 5vw, 5.6rem);
       font-weight: 900;
       line-height: 0.94;
-      letter-spacing: -0.06em;
+      letter-spacing: 0;
       font-variant-numeric: tabular-nums;
     }
 
@@ -471,41 +471,28 @@ function getPlannerHtml() {
 
     .day-remaining {
       min-height: 100%;
-      display: grid;
-      grid-template-rows: 1fr auto;
-      gap: 18px;
-      font-family: 'Trebuchet MS', Verdana, sans-serif;
-    }
-
-    .day-remaining-main {
       display: flex;
       flex-direction: column;
       justify-content: center;
-      min-height: 140px;
-      padding: 20px;
-      border-radius: 22px;
-      color: #f8fff2;
-      background:
-        radial-gradient(circle at top right, rgba(240, 184, 79, 0.30), transparent 42%),
-        linear-gradient(145deg, #173525, #235a3b);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+      gap: 14px;
+      padding: 10px;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
     }
 
-    .day-remaining-value {
-      font-size: 7rem;
-      line-height: 0.88;
-      font-weight: 900;
-      letter-spacing: 0;
-      font-variant-numeric: tabular-nums;
+    .day-remaining .progress-row {
+      margin: 0;
     }
 
-    .day-remaining-caption {
-      margin-top: 12px;
-      color: rgba(248, 255, 242, 0.78);
-      font-size: 1rem;
+    .day-remaining .progress-label {
+      margin-bottom: 18px;
+      font-size: 1.65rem;
+      line-height: 1.2;
       font-weight: 900;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+    }
+
+    .day-remaining .track {
+      height: 38px;
+      box-shadow: inset 0 0 0 1px rgba(35, 90, 59, 0.08);
     }
 
     .day-remaining-detail {
@@ -660,6 +647,85 @@ function getPlannerHtml() {
       min-height: 1.2em;
     }
 
+    .task-timer {
+      display: grid;
+      gap: 12px;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+    }
+
+    .task-timer-field {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .task-timer-field input,
+    .task-timer-field textarea {
+      width: 100%;
+      border: 1px solid rgba(35, 90, 59, 0.13);
+      border-radius: 13px;
+      padding: 10px 11px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.62);
+      outline: none;
+      font-weight: 700;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .task-timer-field textarea {
+      min-height: 74px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .task-timer-time {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 86px;
+      border-radius: 18px;
+      color: #f8fff2;
+      background: linear-gradient(145deg, #173525, #235a3b);
+      font-size: 3rem;
+      line-height: 1;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+
+    .task-timer-controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .task-timer-controls button {
+      min-height: 36px;
+      border: 1px solid rgba(35, 90, 59, 0.15);
+      border-radius: 12px;
+      color: var(--green);
+      background: rgba(35, 90, 59, 0.08);
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .task-timer-controls button.primary {
+      color: #fffaf0;
+      background: var(--green);
+    }
+
+    .task-timer-status {
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 800;
+      min-height: 1.2em;
+    }
+
     .task-list {
       display: grid;
       gap: 9px;
@@ -781,8 +847,8 @@ function getPlannerHtml() {
         min-width: 860px;
       }
 
-      .day-remaining-value {
-        font-size: 5.2rem;
+      .day-remaining .progress-label {
+        font-size: 1.25rem;
       }
     }
   </style>
@@ -811,6 +877,7 @@ function getPlannerHtml() {
           <option value="pomodoro">Pomodoro focus timer</option>
           <option value="urgency">Day, week, month left</option>
           <option value="dayRemaining">Big day remaining</option>
+          <option value="taskTimer">Task timer</option>
           <option value="tasks">Homework and tasks</option>
           <option value="habits">Habit tracker</option>
           <option value="links">Study links</option>
@@ -862,6 +929,7 @@ function getPlannerHtml() {
         pomodoro: { title: 'Pomodoro Timer', w: 360, h: 360 },
         urgency: { title: 'Urgency Timers', w: 390, h: 300 },
         dayRemaining: { title: 'Day Remaining', w: 920, h: 280 },
+        taskTimer: { title: 'Task Timer', w: 430, h: 430 },
         tasks: { title: 'Homework Tasks', w: 380, h: 350 },
         habits: { title: 'Habit Tracker', w: 350, h: 300 },
         links: { title: 'Study Links', w: 320, h: 280 }
@@ -877,7 +945,7 @@ function getPlannerHtml() {
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
             { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
-            { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 820, h: 280, data: {} }
+            { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 920, h: 280, data: {} }
           ]
         };
       }
@@ -1102,12 +1170,17 @@ function getPlannerHtml() {
         }
 
         if (widget.type === 'dayRemaining') {
-          return '<div class="day-remaining" data-day-remaining><div class="day-remaining-main"><div class="day-remaining-value" data-day-remaining-value>--%</div><div class="day-remaining-caption">Day remaining</div></div><div><div class="progress-row"><div class="progress-label"><span>School day left</span><span data-day-remaining-text>Loading...</span></div><div class="track"><div class="bar" data-day-remaining-bar></div></div></div><div class="day-remaining-detail" data-day-remaining-detail>7:30 AM to 9:30 PM Singapore time</div></div></div>';
+          return '<div class="day-remaining" data-day-remaining><div class="progress-row"><div class="progress-label"><span>Day used</span><span data-day-remaining-text>Loading...</span></div><div class="track"><div class="bar" data-day-remaining-bar></div></div></div><div class="day-remaining-detail">7:30 AM to 9:30 PM Singapore time</div></div>';
         }
 
         if (widget.type === 'pomodoro') {
           normalizePomodoro(widget);
           return '<div class="pomodoro" data-pomodoro><div class="pomodoro-time" data-pomodoro-time>--:--</div><div class="pomodoro-mode"><button type="button" data-pomodoro-mode="work">Focus</button><button type="button" data-pomodoro-mode="break">Break</button><button type="button" data-pomodoro-mode="longBreak">Long</button></div><div class="pomodoro-controls"><button class="primary" type="button" data-pomodoro-start>Start</button><button type="button" data-pomodoro-pause>Pause</button><button type="button" data-pomodoro-reset>Reset</button></div><div class="pomodoro-settings"><label>Focus<input type="number" min="1" max="180" data-pomodoro-work value="' + escapeAttr(widget.data.workMinutes) + '"></label><label>Break<input type="number" min="1" max="60" data-pomodoro-break value="' + escapeAttr(widget.data.breakMinutes) + '"></label><label>Long<input type="number" min="1" max="90" data-pomodoro-long value="' + escapeAttr(widget.data.longBreakMinutes) + '"></label></div><div class="pomodoro-status" data-pomodoro-status></div></div>';
+        }
+
+        if (widget.type === 'taskTimer') {
+          normalizeTaskTimer(widget);
+          return '<div class="task-timer" data-task-timer><label class="task-timer-field">Title<input data-task-timer-title placeholder="Task I am doing" value="' + escapeAttr(widget.data.taskTitle) + '"></label><label class="task-timer-field">Description<textarea data-task-timer-description placeholder="Description of task I am doing">' + escapeHtml(widget.data.description) + '</textarea></label><label class="task-timer-field">Expected duration minutes<input type="number" min="1" max="480" data-task-timer-duration value="' + escapeAttr(widget.data.durationMinutes) + '"></label><div class="task-timer-time" data-task-timer-time>--:--</div><div class="task-timer-controls"><button class="primary" type="button" data-task-timer-start>Start</button><button type="button" data-task-timer-pause>Pause</button><button type="button" data-task-timer-reset>Reset</button></div><div class="task-timer-status" data-task-timer-status></div></div>';
         }
 
         if (widget.type === 'tasks') {
@@ -1162,6 +1235,10 @@ function getPlannerHtml() {
 
         if (widget.type === 'pomodoro') {
           bindPomodoro(widget, body);
+        }
+
+        if (widget.type === 'taskTimer') {
+          bindTaskTimer(widget, body);
         }
 
         if (widget.type === 'tasks') {
@@ -1226,6 +1303,7 @@ function getPlannerHtml() {
         updateDayRemainingWidgets();
         updateWeatherWidgets();
         updatePomodoroWidgets();
+        updateTaskTimerWidgets();
       }
 
       function normalizePomodoro(widget) {
@@ -1371,6 +1449,117 @@ function getPlannerHtml() {
         return 'Focus';
       }
 
+      function normalizeTaskTimer(widget) {
+        widget.data.taskTitle = widget.data.taskTitle || '';
+        widget.data.description = widget.data.description || '';
+        widget.data.durationMinutes = clampNumber(widget.data.durationMinutes, 1, 480, 30);
+        if (!Number.isFinite(Number(widget.data.remainingSeconds))) {
+          widget.data.remainingSeconds = taskTimerDuration(widget);
+        }
+        widget.data.remainingSeconds = clampNumber(widget.data.remainingSeconds, 0, 480 * 60, taskTimerDuration(widget));
+        widget.data.running = Boolean(widget.data.running);
+      }
+
+      function taskTimerDuration(widget) {
+        return widget.data.durationMinutes * 60;
+      }
+
+      function bindTaskTimer(widget, body) {
+        normalizeTaskTimer(widget);
+
+        var title = body.querySelector('[data-task-timer-title]');
+        var description = body.querySelector('[data-task-timer-description]');
+        var duration = body.querySelector('[data-task-timer-duration]');
+
+        title.addEventListener('input', function () {
+          widget.data.taskTitle = title.value;
+          scheduleSave();
+        });
+
+        description.addEventListener('input', function () {
+          widget.data.description = description.value;
+          scheduleSave();
+        });
+
+        duration.addEventListener('change', function () {
+          widget.data.durationMinutes = clampNumber(duration.value, Number(duration.min), Number(duration.max), widget.data.durationMinutes);
+          duration.value = widget.data.durationMinutes;
+          if (!widget.data.running) {
+            widget.data.remainingSeconds = taskTimerDuration(widget);
+          }
+          updateTaskTimerWidget(widget);
+          scheduleSave();
+        });
+
+        body.querySelector('[data-task-timer-start]').addEventListener('click', function () {
+          normalizeTaskTimer(widget);
+          if (widget.data.remainingSeconds <= 0) widget.data.remainingSeconds = taskTimerDuration(widget);
+          widget.data.running = true;
+          widget.data.endsAt = Date.now() + widget.data.remainingSeconds * 1000;
+          updateTaskTimerWidget(widget);
+          scheduleSave();
+        });
+
+        body.querySelector('[data-task-timer-pause]').addEventListener('click', function () {
+          syncTaskTimerRemaining(widget);
+          widget.data.running = false;
+          delete widget.data.endsAt;
+          updateTaskTimerWidget(widget);
+          scheduleSave();
+        });
+
+        body.querySelector('[data-task-timer-reset]').addEventListener('click', function () {
+          widget.data.running = false;
+          delete widget.data.endsAt;
+          widget.data.remainingSeconds = taskTimerDuration(widget);
+          updateTaskTimerWidget(widget);
+          scheduleSave();
+        });
+
+        updateTaskTimerWidget(widget);
+      }
+
+      function syncTaskTimerRemaining(widget) {
+        normalizeTaskTimer(widget);
+        if (widget.data.running && widget.data.endsAt) {
+          widget.data.remainingSeconds = Math.max(0, Math.ceil((widget.data.endsAt - Date.now()) / 1000));
+        }
+      }
+
+      function updateTaskTimerWidgets() {
+        state.widgets.filter(function (widget) {
+          return widget.type === 'taskTimer';
+        }).forEach(updateTaskTimerWidget);
+      }
+
+      function updateTaskTimerWidget(widget) {
+        syncTaskTimerRemaining(widget);
+        if (widget.data.running && widget.data.remainingSeconds <= 0) {
+          widget.data.running = false;
+          delete widget.data.endsAt;
+          scheduleSave();
+        }
+
+        var el = board.querySelector('[data-id="' + widget.id + '"]');
+        if (!el) return;
+
+        var time = el.querySelector('[data-task-timer-time]');
+        var start = el.querySelector('[data-task-timer-start]');
+        var status = el.querySelector('[data-task-timer-status]');
+        var seconds = widget.data.remainingSeconds;
+        var minutes = Math.floor(seconds / 60);
+        var remainder = seconds % 60;
+        time.textContent = String(minutes).padStart(2, '0') + ':' + String(remainder).padStart(2, '0');
+        start.textContent = widget.data.running ? 'Running' : 'Start';
+        if (seconds <= 0) {
+          status.textContent = 'Done';
+        } else if (widget.data.running) {
+          status.textContent = 'Counting down';
+        } else {
+          status.textContent = 'Ready';
+        }
+      }
+
       function updateUrgencyWidgets() {
         document.querySelectorAll('[data-urgency]').forEach(function (target) {
           var now = singaporeNow();
@@ -1398,12 +1587,9 @@ function getPlannerHtml() {
           var now = singaporeNow();
           var dayWindow = plannerDayWindow(now);
           var usedPercent = clamp(percentBetween(now, dayWindow.dayStart, dayWindow.dayEnd), 0, 100);
-          var remainingPercent = clamp(100 - usedPercent, 0, 100);
           var leftText = msLeft(now, dayWindow.dayEnd);
-          target.querySelector('[data-day-remaining-value]').textContent = Math.round(remainingPercent) + '%';
-          target.querySelector('[data-day-remaining-text]').textContent = Math.round(remainingPercent) + '% remaining - ' + leftText + ' left';
-          target.querySelector('[data-day-remaining-bar]').style.width = remainingPercent + '%';
-          target.querySelector('[data-day-remaining-detail]').textContent = 'Day window: 7:30 AM to 9:30 PM Singapore time';
+          target.querySelector('[data-day-remaining-text]').textContent = Math.round(usedPercent) + '% used - ' + leftText + ' left';
+          target.querySelector('[data-day-remaining-bar]').style.width = usedPercent + '%';
         });
       }
 
@@ -1526,7 +1712,7 @@ function getPlannerHtml() {
           title: 'Day Remaining',
           x: 420,
           y: 700,
-          w: 820,
+          w: 920,
           h: 280,
           data: {}
         });
@@ -1574,6 +1760,7 @@ function getPlannerHtml() {
       updateClock();
       setInterval(updateClock, 1000);
       setInterval(updatePomodoroWidgets, 1000);
+      setInterval(updateTaskTimerWidgets, 1000);
       setInterval(updateUrgencyWidgets, 30000);
       setInterval(updateDayRemainingWidgets, 30000);
       setInterval(updateWeatherWidgets, 600000);
