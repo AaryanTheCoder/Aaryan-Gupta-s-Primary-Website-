@@ -976,16 +976,21 @@ function getPlannerHtml() {
       var activeDrag = null;
       var remoteReady = false;
       var pendingSave = false;
-      var resizeObserver = new ResizeObserver(function (entries) {
-        entries.forEach(function (entry) {
-          var id = entry.target.dataset.id;
-          var widget = findWidget(id);
-          if (!widget) return;
-          widget.w = Math.round(entry.contentRect.width);
-          widget.h = Math.round(entry.contentRect.height);
-        });
-        scheduleSave();
-      });
+      var resizeObserver = window.ResizeObserver
+        ? new ResizeObserver(function (entries) {
+          entries.forEach(function (entry) {
+            var id = entry.target.dataset.id;
+            var widget = findWidget(id);
+            if (!widget) return;
+            widget.w = Math.round(entry.contentRect.width);
+            widget.h = Math.round(entry.contentRect.height);
+          });
+          scheduleSave();
+        })
+        : {
+          observe: function () {},
+          disconnect: function () {}
+        };
 
       var widgetMeta = {
         weather: { title: 'Singapore Weather', w: 330, h: 250 },
@@ -999,6 +1004,28 @@ function getPlannerHtml() {
         habits: { title: 'Habit Tracker', w: 350, h: 300 },
         links: { title: 'Study Links', w: 320, h: 280 }
       };
+
+      function normalizePlannerState(targetState) {
+        if (!targetState || !Array.isArray(targetState.widgets)) {
+          return defaultState();
+        }
+
+        targetState.widgets = targetState.widgets.map(function (widget, index) {
+          widget = widget && typeof widget === 'object' ? widget : {};
+          widget.type = widgetMeta[widget.type] ? widget.type : 'notes';
+          var meta = widgetMeta[widget.type];
+          widget.id = widget.id || uid();
+          widget.title = widget.title || meta.title;
+          widget.x = clampNumber(widget.x, 0, 4000, (index % 3) * 390);
+          widget.y = clampNumber(widget.y, 0, 4000, Math.floor(index / 3) * 360);
+          widget.w = clampNumber(widget.w, 220, 1800, meta.w);
+          widget.h = clampNumber(widget.h, 170, 1400, meta.h);
+          widget.data = widget.data && typeof widget.data === 'object' ? widget.data : {};
+          return widget;
+        });
+
+        return targetState;
+      }
 
       function defaultState() {
         return {
@@ -1060,15 +1087,15 @@ function getPlannerHtml() {
           })
           .then(function (data) {
             if (data.exists && data.state && Array.isArray(data.state.widgets)) {
-              state = data.state;
+              state = normalizePlannerState(data.state);
             } else {
-              state = loadLocalState();
+              state = normalizePlannerState(loadLocalState());
               pendingSave = true;
             }
             pendingSave = addDayRemainingWidgetOnce(state) || pendingSave;
           })
           .catch(function () {
-            state = loadLocalState();
+            state = normalizePlannerState(loadLocalState());
             addDayRemainingWidgetOnce(state);
             pendingSave = true;
           })
@@ -1177,7 +1204,7 @@ function getPlannerHtml() {
       }
 
       function startDrag(event) {
-        if (event.target.closest('button') || event.target.closest('input')) return;
+        if (event.target.closest && (event.target.closest('button') || event.target.closest('input') || event.target.closest('textarea') || event.target.closest('select'))) return;
         var el = event.currentTarget.closest('.widget');
         var widget = findWidget(el.dataset.id);
         if (!widget) return;
@@ -1316,11 +1343,13 @@ function getPlannerHtml() {
       function normalizeNotes(widget) {
         widget.data = widget.data || {};
         if (Array.isArray(widget.data.noteItems)) {
-          widget.data.noteItems.forEach(function (item) {
+          widget.data.noteItems = widget.data.noteItems.map(function (item) {
+            item = item && typeof item === 'object' ? item : { text: String(item || '') };
             item.id = item.id || uid();
             item.text = item.text || '';
             item.done = Boolean(item.done);
             item.indent = clampNumber(item.indent, 0, 5, 0);
+            return item;
           });
         } else {
           var lines = String(widget.data.text || '').split('\\n');
@@ -1406,6 +1435,7 @@ function getPlannerHtml() {
         });
 
         list.addEventListener('click', function (event) {
+          if (!event.target.closest) return;
           var check = event.target.closest('.apple-note-check');
           if (!check) return;
           var row = check.closest('[data-note-id]');
@@ -1418,6 +1448,7 @@ function getPlannerHtml() {
         });
 
         list.addEventListener('input', function (event) {
+          if (!event.target.matches) return;
           if (!event.target.matches('[data-note-input]')) return;
           var row = event.target.closest('[data-note-id]');
           var item = findNoteItem(row.dataset.noteId);
@@ -1428,6 +1459,7 @@ function getPlannerHtml() {
         });
 
         list.addEventListener('keydown', function (event) {
+          if (!event.target.matches) return;
           if (!event.target.matches('[data-note-input]')) return;
           var row = event.target.closest('[data-note-id]');
           var item = findNoteItem(row.dataset.noteId);
@@ -1464,7 +1496,15 @@ function getPlannerHtml() {
 
       function renderTasks(widget, body, key) {
         var list = body.querySelector(key === 'tasks' ? '[data-task-list]' : '[data-habit-list]');
-        var items = widget.data[key] || [];
+        var items = Array.isArray(widget.data[key]) ? widget.data[key] : [];
+        widget.data[key] = items.map(function (item) {
+          item = item && typeof item === 'object' ? item : { text: String(item || ''), done: false };
+          item.id = item.id || uid();
+          item.text = item.text || '';
+          item.done = Boolean(item.done);
+          return item;
+        });
+        items = widget.data[key];
         if (!items.length) {
           list.innerHTML = '<div class="empty">No items yet.</div>';
           return;
