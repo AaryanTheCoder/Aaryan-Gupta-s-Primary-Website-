@@ -9,6 +9,7 @@ const cloudConsoleRoutes = require('./cloudConsoleRoutes');
 const geminiRoutes = require('./geminiRoutes');
 const simulatorRoutes = require('./simulatorRoutes');
 const plannerRoutes = require('./plannerRoutes');
+const tablockerRoutes = require('./tablockerRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -16,6 +17,10 @@ const server = http.createServer((request, response) => {
 const requestPathname = request.url.split('?')[0];
 if (request.url.startsWith('/storage')) {
   return storageRoutes.handle(request, response); // If they request / storage takes them to the storageRoutes.js File 
+}
+
+if (requestPathname === '/tablocker' || requestPathname.startsWith('/tablocker/')) {
+  return tablockerRoutes.handle(request, response);
 }
 
 if (request.url === '/sandbox' && request.method === 'GET') { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
@@ -849,6 +854,11 @@ if (requestPathname === '/sitemap' && (request.method === 'GET' || request.metho
 });
 
 const PORT = process.env.PORT || 3000;
+server.on('upgrade', (request, socket, head) => {
+  if (tablockerRoutes.handleUpgrade(request, socket, head)) return;
+  socket.destroy();
+});
+
 server.listen(PORT, function () {
   console.log(`Server running at http://localhost:${PORT}`);
 });

@@ -1,3 +1,4 @@
+node_modules/
 simulator_data/
 planner-data.json
 planner-data.json.*.tmp

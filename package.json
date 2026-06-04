@@ -4,7 +4,8 @@
   "description": "",
   "main": "Server2.js",
   "scripts": {
-    "start": "node Server2.js"
+    "start": "node Server2.js",
+    "test:tablocker": "node tests/tablockerRoutes.test.js"
   },
   "keywords": [],
   "author": "",
@@ -12,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "mime-types": "^3.0.2",
-    "mysql2": "^3.20.0"
+    "mysql2": "^3.20.0",
+    "ws": "^8.21.0"
   }
 }
