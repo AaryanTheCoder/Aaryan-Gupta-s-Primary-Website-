@@ -10,6 +10,7 @@ const geminiRoutes = require('./geminiRoutes');
 const simulatorRoutes = require('./simulatorRoutes');
 const plannerRoutes = require('./plannerRoutes');
 const tablockerRoutes = require('./tablockerRoutes');
+const privacyRoutes = require('./privacyRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -65,6 +66,10 @@ if (requestPathname === '/sitemap' && (request.method === 'GET' || request.metho
     response.end(request.method === 'HEAD' ? undefined : data);
   });
   return;
+}
+
+if (requestPathname === '/privacy' && (request.method === 'GET' || request.method === 'HEAD')) {
+  return privacyRoutes.handle(request, response);
 }
 
   if (request.url === '/about' && request.method === 'GET') { // This is an About Page About me (HTML) Things I could add: Abiity to edit my about page without changing code, This would mean making a full passoword based Editor (Like my own digital Canva!)
