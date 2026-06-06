@@ -134,6 +134,7 @@ function getPrivacyHtml() {
         <li>IP address or basic request information received by the website server</li>
         <li>Website URLs needed for the extension to understand or manage browser tabs</li>
         <li>Browser history or tab information only when required by a specific extension feature</li>
+        <li>Basic User info (Name, age, race)</li>
       </ul>
 
       <h2>Where Data Is Stored</h2>
