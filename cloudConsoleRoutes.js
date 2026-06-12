@@ -407,14 +407,13 @@ function getConsoleHTML() {
         <div class="panel-header">
           <h2>Code Editor</h2>
           <div class="language-selector">
-            <button class="lang-btn active" data-lang="javascript">JavaScript</button>
-            <button class="lang-btn" data-lang="python">Python</button>
+            <button class="lang-btn" data-lang="javascript">JavaScript</button>
+            <button class="lang-btn active" data-lang="python">Python</button>
             <button class="lang-btn" data-lang="bash">Bash</button>
           </div>
         </div>
         <div class="panel-content">
-          <textarea class="code-editor scrollbar" id="codeEditor" placeholder="Write your code here...">// Hello, World!
-console.log('Welcome to Cloud Code Console!');</textarea>
+          <textarea class="code-editor scrollbar" id="codeEditor" placeholder="Write your code here..."></textarea>
         </div>
         <div class="controls">
           <button class="btn btn-primary" id="executeBtn">
@@ -444,7 +443,7 @@ console.log('Welcome to Cloud Code Console!');</textarea>
   </div>
 
   <script>
-    let currentLanguage = 'javascript';
+    let currentLanguage = 'python';
     const codeEditor = document.getElementById('codeEditor');
     const outputDisplay = document.getElementById('outputDisplay');
     const executeBtn = document.getElementById('executeBtn');
@@ -456,9 +455,48 @@ console.log('Welcome to Cloud Code Console!');</textarea>
       javascript: \`// JavaScript Example
 console.log('Hello, World!');
 console.log('2 + 2 =', 2 + 2);\`,
-      python: \`# Python Example
-print('Hello, World!')
-print('2 + 2 =', 2 + 2)\`,
+      python: \`import random
+
+
+NUM_PRISONERS = 100
+MAX_OPENS = 50
+
+
+def random_strategy_success(boxes):
+    """Each prisoner opens 50 distinct boxes chosen at random."""
+    for prisoner in range(1, NUM_PRISONERS + 1):
+        opened = random.sample(range(NUM_PRISONERS), MAX_OPENS)
+        if prisoner not in (boxes[i] for i in opened):
+            return False
+    return True
+
+
+def loop_strategy_success(boxes):
+    """Each prisoner follows the cycle starting from their own number."""
+    for prisoner in range(1, NUM_PRISONERS + 1):
+        box_index = prisoner - 1
+        for _ in range(MAX_OPENS):
+            if boxes[box_index] == prisoner:
+                break
+            box_index = boxes[box_index] - 1
+        else:
+            return False
+    return True
+
+
+def main():
+    boxes = list(range(1, NUM_PRISONERS + 1))
+    random.shuffle(boxes)
+
+    random_result = random_strategy_success(boxes)
+    loop_result = loop_strategy_success(boxes)
+
+    print("Random strategy:", "WIN" if random_result else "LOSS")
+    print("Cycle/loop strategy:", "WIN" if loop_result else "LOSS")
+
+
+if __name__ == "__main__":
+    main()\`,
       bash: \`# Bash Example
 echo "Hello, World!"
 echo "Current date: \$(date)"\`
@@ -535,7 +573,7 @@ echo "Current date: \$(date)"\`
     });
 
     // Initialize
-    codeEditor.value = templates.javascript;
+    codeEditor.value = templates.python;
   </script>
 </body>
 </html>`;
