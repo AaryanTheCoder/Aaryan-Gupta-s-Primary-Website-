@@ -1,3 +1,7 @@
+const { readJsonBody } = require('./routeHelpers');
+
+const MAX_GEMINI_BODY_BYTES = 64 * 1024;
+
 function serveGeminiPage(response) {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   response.end(`<!DOCTYPE html>
@@ -332,65 +336,56 @@ function serveGeminiPage(response) {
 }
 
 async function handleGeminiApi(request, response, GEMINI_API_KEY) {
-  let body = '';
+  try {
+    const parsed = await readJsonBody(request, { maxBytes: MAX_GEMINI_BODY_BYTES });
+    const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
 
-  request.on('data', chunk => {
-    body += chunk;
-  });
-
-  request.on('end', async () => {
-    try {
-      const parsed = JSON.parse(body || '{}');
-      const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
-
-      if (!message) {
-        response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({ error: 'Message is required.' }));
-        return;
-      }
-
-      if (!GEMINI_API_KEY) {
-        response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({ error: 'Gemini API key is not configured.' }));
-        return;
-      }
-
-      // Use Gemini 2.0 Flash (best available model for free tier)
-      const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: message
-                  }
-                ]
-              }
-            ]
-          })
-        }
-      );
-
-      const geminiData = await geminiResponse.json();
-      const reply = geminiData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
-
-      if (!geminiResponse.ok) {
-        response.writeHead(geminiResponse.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({ error: geminiData?.error?.message || 'Gemini API request failed.' }));
-        return;
-      }
-
-      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      response.end(JSON.stringify({ reply: reply || 'Gemini returned an empty reply.' }));
-    } catch (error) {
-      response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      response.end(JSON.stringify({ error: error.message || 'Internal server error.' }));
+    if (!message) {
+      response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'Message is required.' }));
+      return;
     }
-  });
+
+    if (!GEMINI_API_KEY) {
+      response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'Gemini API key is not configured.' }));
+      return;
+    }
+
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: message
+                }
+              ]
+            }
+          ]
+        })
+      }
+    );
+
+    const geminiData = await geminiResponse.json();
+    const reply = geminiData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+
+    if (!geminiResponse.ok) {
+      response.writeHead(geminiResponse.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: geminiData?.error?.message || 'Gemini API request failed.' }));
+      return;
+    }
+
+    response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ reply: reply || 'Gemini returned an empty reply.' }));
+  } catch (error) {
+    response.writeHead(error.statusCode || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ error: error.message || 'Internal server error.' }));
+  }
 }
 
 function handle(request, response, GEMINI_API_KEY) {

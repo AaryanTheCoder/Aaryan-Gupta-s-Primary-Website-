@@ -2,12 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
+const { isPathInside, readJsonBody } = require('./routeHelpers');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const SIMULATOR_SESSION_SECRET = process.env.SIMULATOR_SESSION_SECRET || STORAGE_PASSWORD || 'simulator-dev-secret';
 const TWELVEDATA_API_KEY = process.env.TWELVEDATA_API_KEY || '';
 const ALPACA_API_KEY = process.env.ALPACA_API_KEY || '';
 const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET || '';
+const MAX_SIMULATOR_BODY_BYTES = 512 * 1024;
 
 const SIMULATOR_DIR = path.join(__dirname, 'simulator');
 const DATA_DIR = process.env.SIMULATOR_DATA_DIR
@@ -378,23 +380,7 @@ function writeJson(filePath, value) {
 }
 
 function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString().trim();
-      if (!raw) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(raw));
-      } catch {
-        reject(new Error('Invalid JSON body'));
-      }
-    });
-    req.on('error', reject);
-  });
+  return readJsonBody(req, { maxBytes: MAX_SIMULATOR_BODY_BYTES });
 }
 
 function json(res, statusCode, payload, extraHeaders = {}) {
@@ -2182,8 +2168,9 @@ function getOrCreateProfile(req, res) {
 function serveStatic(req, res) {
   const requestPath = req.url.replace(/^\/simulator/, '') || '/';
   const cleanPath = requestPath === '/' ? '/index.html' : requestPath.split('?')[0];
-  const filePath = path.join(SIMULATOR_DIR, cleanPath);
-  if (!filePath.startsWith(SIMULATOR_DIR) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+  const relativePath = cleanPath.replace(/^\/+/, '');
+  const filePath = path.resolve(SIMULATOR_DIR, relativePath);
+  if (!isPathInside(SIMULATOR_DIR, filePath) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not found');
     return;
@@ -2206,7 +2193,7 @@ async function handle(req, res) {
     try {
       await handleApi(req, res, profile);
     } catch (error) {
-      json(res, 500, { ok: false, error: error.message || 'Simulator error' });
+      json(res, error.statusCode || 500, { ok: false, error: error.message || 'Simulator error' });
     }
     return;
   }

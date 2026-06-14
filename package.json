@@ -5,6 +5,8 @@
   "main": "Server2.js",
   "scripts": {
     "start": "node Server2.js",
+    "test": "node tests/routeSmoke.test.js && node tests/tablockerRoutes.test.js",
+    "test:routes": "node tests/routeSmoke.test.js",
     "test:tablocker": "node tests/tablockerRoutes.test.js"
   },
   "keywords": [],

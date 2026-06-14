@@ -16,8 +16,9 @@ const shooterGameRoutes = require('./shooterGameRoutes');
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
   console.log('Request Method: ' + request.method); // The console (I think the Azure One,) Will report all requests, like if they requested a specific subsite /kaomoji for example and if they GET or POST (like when uploading)
+response.setHeader('X-Content-Type-Options', 'nosniff');
 const requestPathname = request.url.split('?')[0];
-if (request.url.startsWith('/storage')) {
+if (requestPathname === '/storage' || requestPathname.startsWith('/storage/')) {
   return storageRoutes.handle(request, response); // If they request / storage takes them to the storageRoutes.js File 
 }
 
@@ -29,7 +30,7 @@ if (requestPathname === '/shooter-game' || requestPathname.startsWith('/shooter-
   return shooterGameRoutes.handle(request, response);
 }
 
-if (request.url === '/sandbox' && request.method === 'GET') { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
+if (requestPathname === '/sandbox' || requestPathname.startsWith('/sandbox/')) { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
   return sandboxRoutes.handle(request, response);
 }
 
@@ -42,7 +43,7 @@ if (
   return kaomojiRoutes.handle(request, response, { fs, path, GEMINI_API_KEY });
 }
 
-if (request.url === '/cloudconsole' || request.url.startsWith('/api/cloudconsole')) {
+if (requestPathname === '/cloudconsole' || requestPathname.startsWith('/api/cloudconsole')) {
   return cloudConsoleRoutes.handle(request, response);
 }
 
@@ -577,7 +578,7 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
       .on('error', () => { response.writeHead(404, {'Content-Type':'text/plain; charset=utf-8'}); response.end('Photo not found'); })
       .pipe(response);
   }
-  else {
+  else if (requestPathname === '/' && request.method === 'GET') {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     response.end(`<!DOCTYPE html>
 <html lang="en">
@@ -870,6 +871,10 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
 </body>
 </html>`);
   }
+  else {
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('Not found');
+  }
 
 });
 
@@ -880,7 +885,11 @@ server.on('upgrade', (request, socket, head) => {
   socket.destroy();
 });
 
-server.listen(PORT, function () {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, function () {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = server;
   

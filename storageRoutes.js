@@ -4,6 +4,7 @@ const path = require('path');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const STORAGE_DIR = path.join(__dirname, 'storage_uploads');
+const MAX_STORAGE_UPLOAD_BYTES = Number(process.env.MAX_STORAGE_UPLOAD_BYTES || 200 * 1024 * 1024);
 
 if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
@@ -897,6 +898,13 @@ function handle(req, res) {
   if (pathname === '/storage/upload' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
 
+    const contentLength = Number(req.headers['content-length'] || 0);
+    if (contentLength > MAX_STORAGE_UPLOAD_BYTES) {
+      res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: 'Upload is too large' }));
+      return;
+    }
+
     const targetDirectory = sanitizeRelativePath(req.headers['x-target-directory'] || '', { allowEmpty: true });
     const uploadedRelativePath = safeDecode(
       req.headers['x-relative-path'] ||
@@ -921,6 +929,7 @@ function handle(req, res) {
     );
     const writeStream = fs.createWriteStream(tempPath);
     let finished = false;
+    let receivedBytes = 0;
 
     try {
       fs.mkdirSync(parentDirectory, { recursive: true });
@@ -956,9 +965,20 @@ function handle(req, res) {
       sendError(500, error.message);
     });
 
+    req.on('data', chunk => {
+      receivedBytes += chunk.length;
+      if (receivedBytes > MAX_STORAGE_UPLOAD_BYTES) {
+        writeStream.destroy();
+        sendError(413, 'Upload is too large');
+        req.destroy();
+      }
+    });
+
     req.on('aborted', () => {
       writeStream.destroy();
-      sendError(499, 'Upload was aborted before completion');
+      if (!finished) {
+        sendError(receivedBytes > MAX_STORAGE_UPLOAD_BYTES ? 413 : 499, receivedBytes > MAX_STORAGE_UPLOAD_BYTES ? 'Upload is too large' : 'Upload was aborted before completion');
+      }
     });
 
     writeStream.on('finish', () => {

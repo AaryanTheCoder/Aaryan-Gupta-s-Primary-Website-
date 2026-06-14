@@ -1,10 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { isPathInside, readJsonBody } = require('./routeHelpers');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const SANDBOX_DIR = path.join(__dirname, 'sandbox');
 const SAVES_DIR = path.join(__dirname, 'sandbox_saves');
+const MAX_SANDBOX_BODY_BYTES = 2 * 1024 * 1024;
 
 if (!fs.existsSync(SAVES_DIR)) {
   fs.mkdirSync(SAVES_DIR, { recursive: true });
@@ -27,21 +29,6 @@ const MIME_TYPES = {
 function getMime(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   return MIME_TYPES[ext] || 'application/octet-stream';
-}
-
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString()));
-      } catch {
-        resolve(null);
-      }
-    });
-    req.on('error', reject);
-  });
 }
 
 function sanitizeId(id) {
@@ -95,7 +82,7 @@ function handle(req, res) {
 
   // ── API: Save project ──────────────────────────────────────────────
   if (url === '/sandbox/api/save' && req.method === 'POST') {
-    readBody(req).then(body => {
+    readJsonBody(req, { maxBytes: MAX_SANDBOX_BODY_BYTES }).then(body => {
       if (!body || !body.id) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ ok: false, error: 'Missing project id' }));
@@ -164,7 +151,7 @@ function handle(req, res) {
 
   // ── API: AI Generate object ────────────────────────────────────────
   if (url === '/sandbox/api/ai-generate' && req.method === 'POST') {
-    readBody(req).then(async body => {
+    readJsonBody(req, { maxBytes: MAX_SANDBOX_BODY_BYTES }).then(async body => {
       const prompt = `You are a game object generator. Given this description: "${body?.prompt || ''}"
 
 Return ONLY a JSON object with these exact fields:
@@ -187,16 +174,15 @@ Return ONLY a JSON object with these exact fields:
   }
 
   // ── Static files: serve the built sandbox app ──────────────────────
-  let filePath;
   let urlPath = url.replace(/^\/sandbox/, '') || '/';
-  if (urlPath === '' || urlPath === '/') {
-    filePath = path.join(SANDBOX_DIR, 'index.html');
-  } else {
-    filePath = path.join(SANDBOX_DIR, urlPath.split('?')[0]);
-  }
+  const cleanPath = urlPath.split('?')[0];
+  const relativePath = cleanPath === '' || cleanPath === '/'
+    ? 'index.html'
+    : cleanPath.replace(/^\/+/, '');
+  let filePath = path.resolve(SANDBOX_DIR, relativePath);
 
   // Prevent path traversal
-  if (!filePath.startsWith(SANDBOX_DIR)) {
+  if (!isPathInside(SANDBOX_DIR, filePath)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
   }

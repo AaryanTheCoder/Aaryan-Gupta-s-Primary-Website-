@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
+const { isPathInside } = require('./routeHelpers');
 
 const PUBLIC_DIR = path.join(__dirname, 'shooter-game');
 const ARENA_SIZE = 900;
@@ -480,9 +481,9 @@ function serveFile(req, res, pathname) {
   const normalized = pathname === '/shooter-game' || pathname === '/shooter-game/'
     ? '/index.html'
     : pathname.replace(/^\/shooter-game\/?/, '/');
-  const filePath = path.normalize(path.join(PUBLIC_DIR, normalized));
+  const filePath = path.resolve(PUBLIC_DIR, normalized.replace(/^\/+/, ''));
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  if (!isPathInside(PUBLIC_DIR, filePath)) {
     sendText(res, 403, 'Forbidden');
     return;
   }

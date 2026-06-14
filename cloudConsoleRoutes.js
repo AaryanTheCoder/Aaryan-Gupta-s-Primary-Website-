@@ -2,21 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const os = require('os');
+const { readJsonBody, requireBasicAuth, sendJson } = require('./routeHelpers');
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString()));
-      } catch {
-        resolve(null);
-      }
-    });
-    req.on('error', reject);
-  });
-}
+const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
+const MAX_CODE_REQUEST_BYTES = 256 * 1024;
 
 function executeCode(code, language) {
   try {
@@ -90,6 +79,10 @@ function executeCode(code, language) {
 }
 
 function handle(request, response) {
+  if (!requireBasicAuth(request, response, STORAGE_PASSWORD, 'Cloud Console', 'Cloud Console password required')) {
+    return;
+  }
+
   // Serve the cloud console HTML page
   if (request.url === '/cloudconsole' && request.method === 'GET') {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -99,25 +92,22 @@ function handle(request, response) {
 
   // Handle code execution API
   if (request.url === '/api/cloudconsole/execute' && request.method === 'POST') {
-    readBody(request).then(body => {
+    readJsonBody(request, { maxBytes: MAX_CODE_REQUEST_BYTES }).then(body => {
       if (!body || !body.code || !body.language) {
-        response.writeHead(400, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ 
+        sendJson(response, 400, {
           error: 'Missing code or language parameter',
-          success: false 
-        }));
+          success: false
+        });
         return;
       }
 
       const result = executeCode(body.code, body.language);
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify(result));
+      sendJson(response, 200, result);
     }).catch(error => {
-      response.writeHead(500, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ 
+      sendJson(response, error.statusCode || 500, {
         error: error.message,
-        success: false 
-      }));
+        success: false
+      });
     });
     return;
   }

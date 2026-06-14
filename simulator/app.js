@@ -118,10 +118,24 @@
     }).format(Number(value || 0));
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[ch]));
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+  }
+
   function fillSelect(select, values, current, allLabel) {
     select.innerHTML = [
-      `<option value="all">${allLabel}</option>`,
-      ...values.map(value => `<option value="${value}">${value}</option>`),
+      `<option value="all">${escapeHtml(allLabel)}</option>`,
+      ...values.map(value => `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`),
     ].join('');
     select.value = current || 'all';
   }
@@ -144,7 +158,7 @@
   function toast(title, description) {
     const element = document.createElement('div');
     element.className = 'toast';
-    element.innerHTML = `<strong>${title}</strong><span>${description}</span>`;
+    element.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span>`;
     dom.toastHost.appendChild(element);
     setTimeout(() => element.remove(), 3400);
   }
@@ -231,21 +245,21 @@
   function renderProviderBadges() {
     const providers = state.bootstrap.providers;
     dom.providerBadges.innerHTML = [
-      `<span class="badge">Equities: ${providers.equities}</span>`,
-      `<span class="badge">Options: ${providers.options}</span>`,
-      `<span class="badge">Access: ${providers.gatedBy}</span>`,
+      `<span class="badge">Equities: ${escapeHtml(providers.equities)}</span>`,
+      `<span class="badge">Options: ${escapeHtml(providers.options)}</span>`,
+      `<span class="badge">Access: ${escapeHtml(providers.gatedBy)}</span>`,
     ].join('');
   }
 
   function renderWatchlist() {
     dom.watchlist.innerHTML = state.bootstrap.watchlistQuotes.map(item => `
-      <button class="watch-item" type="button" data-symbol="${item.symbol}">
+      <button class="watch-item" type="button" data-symbol="${escapeAttr(item.symbol)}">
         <div class="watch-symbol-row">
-          <span class="watch-symbol">${item.symbol}</span>
+          <span class="watch-symbol">${escapeHtml(item.symbol)}</span>
           <span class="watch-price">${money(item.price)}</span>
         </div>
         <div class="watch-symbol-row">
-          <span>${item.name}</span>
+          <span>${escapeHtml(item.name)}</span>
           <span class="watch-change ${item.percentChange >= 0 ? 'up' : 'down'}">${percent(item.percentChange)}</span>
         </div>
       </button>
@@ -260,7 +274,7 @@
 
   function renderContextSelect() {
     dom.contextSelect.innerHTML = state.bootstrap.contexts.map(context => `
-      <option value="${context.id}" ${context.id === state.context ? 'selected' : ''}>${context.label} · ${context.subtitle}</option>
+      <option value="${escapeAttr(context.id)}" ${context.id === state.context ? 'selected' : ''}>${escapeHtml(context.label)} · ${escapeHtml(context.subtitle)}</option>
     `).join('');
   }
 
@@ -287,11 +301,11 @@
     dom.allocationList.innerHTML = account.allocation.length ? account.allocation.map(item => `
       <div class="allocation-item">
         <div class="metric-row">
-          <strong>${item.label}</strong>
+          <strong>${escapeHtml(item.label)}</strong>
           <span>${item.weight.toFixed(2)}%</span>
         </div>
         <div class="metric-row">
-          <span>${item.sector}</span>
+          <span>${escapeHtml(item.sector)}</span>
           <span>${money(item.value)}</span>
         </div>
         <div class="allocation-bar"><span style="width:${Math.max(item.weight, 2)}%"></span></div>
@@ -300,8 +314,8 @@
 
     dom.stockPositionsBody.innerHTML = account.positions.stocks.length ? account.positions.stocks.map(position => `
       <tr>
-        <td>${position.symbol}</td>
-        <td>${position.side}</td>
+        <td>${escapeHtml(position.symbol)}</td>
+        <td>${escapeHtml(position.side)}</td>
         <td>${position.qty}</td>
         <td>${money(position.avgCost)}</td>
         <td>${money(position.lastPrice)}</td>
@@ -312,7 +326,7 @@
 
     dom.optionPositionsBody.innerHTML = account.positions.options.length ? account.positions.options.map(position => `
       <tr>
-        <td>${position.contractSymbol}</td>
+        <td>${escapeHtml(position.contractSymbol)}</td>
         <td>${position.qty}</td>
         <td>${money(position.avgCost)}</td>
         <td>${money(position.lastPrice)}</td>
@@ -324,13 +338,13 @@
     dom.ordersBody.innerHTML = account.orders.length ? account.orders.map(order => `
       <tr>
         <td>${new Date(order.createdAt).toLocaleString()}</td>
-        <td>${order.assetClass === 'option' ? order.contractSymbol : order.symbol}</td>
-        <td>${order.action}</td>
-        <td>${order.orderType}</td>
+        <td>${escapeHtml(order.assetClass === 'option' ? order.contractSymbol : order.symbol)}</td>
+        <td>${escapeHtml(order.action)}</td>
+        <td>${escapeHtml(order.orderType)}</td>
         <td>${order.qty}</td>
-        <td>${order.status}</td>
+        <td>${escapeHtml(order.status)}</td>
         <td>${order.fillPrice ? money(order.fillPrice) : (order.limitPrice ? money(order.limitPrice) : order.stopPrice ? money(order.stopPrice) : 'Market')}</td>
-        <td>${order.status === 'open' ? `<button class="ghost-button cancel-order" data-id="${order.id}">Cancel</button>` : ''}</td>
+        <td>${order.status === 'open' ? `<button class="ghost-button cancel-order" data-id="${escapeAttr(order.id)}">Cancel</button>` : ''}</td>
       </tr>
     `).join('') : '<tr><td colspan="8">No orders yet.</td></tr>';
 
@@ -352,10 +366,10 @@
     dom.activityFeed.innerHTML = account.activities.length ? account.activities.map(activity => `
       <div class="activity-item">
         <div class="metric-row">
-          <strong>${activity.title}</strong>
+          <strong>${escapeHtml(activity.title)}</strong>
           <span>${new Date(activity.timestamp).toLocaleString()}</span>
         </div>
-        <span>${activity.description}</span>
+        <span>${escapeHtml(activity.description)}</span>
         ${activity.amount ? `<span class="${relativeClass(activity.amount)}">${signedMoney(activity.amount)}</span>` : ''}
       </div>
     `).join('') : '<div class="trade-lens"><p>Activity will appear here after you start trading.</p></div>';
@@ -366,8 +380,8 @@
     state.screener.filters = payload.filters;
 
     dom.screenerPresetRow.innerHTML = payload.filters.presets.map(preset => `
-      <button type="button" class="screener-preset ${preset.value === state.screener.preset ? 'is-active' : ''}" data-preset="${preset.value}">
-        ${preset.label}
+      <button type="button" class="screener-preset ${preset.value === state.screener.preset ? 'is-active' : ''}" data-preset="${escapeAttr(preset.value)}">
+        ${escapeHtml(preset.label)}
       </button>
     `).join('');
 
@@ -378,7 +392,7 @@
 
     const currentSort = dom.screenerSort.value || 'preset';
     dom.screenerSort.innerHTML = payload.filters.sortOptions.map(option => `
-      <option value="${option.value}">${option.label}</option>
+      <option value="${escapeAttr(option.value)}">${escapeHtml(option.label)}</option>
     `).join('');
     dom.screenerSort.value = payload.filters.sortOptions.some(option => option.value === currentSort) ? currentSort : 'preset';
 
@@ -415,16 +429,16 @@
     dom.screenerBody.innerHTML = state.screener.rows.length ? state.screener.rows.map(row => `
       <tr>
         <td>
-          <button type="button" class="symbol-link view-symbol" data-symbol="${row.symbol}">${row.symbol}</button>
-          <div class="row-sub">${row.exchange} · ${row.country}</div>
+          <button type="button" class="symbol-link view-symbol" data-symbol="${escapeAttr(row.symbol)}">${escapeHtml(row.symbol)}</button>
+          <div class="row-sub">${escapeHtml(row.exchange)} · ${escapeHtml(row.country)}</div>
         </td>
         <td>
-          <strong>${row.name}</strong>
-          <div class="row-sub">${row.sector} · ${row.assetType.toUpperCase()}</div>
+          <strong>${escapeHtml(row.name)}</strong>
+          <div class="row-sub">${escapeHtml(row.sector)} · ${escapeHtml(String(row.assetType || '').toUpperCase())}</div>
         </td>
         <td>${money(row.price)}</td>
         <td class="${relativeClass(row.percentChange)}">${percent(row.percentChange)}</td>
-        <td>${row.technicalRating || 'Neutral'}</td>
+        <td>${escapeHtml(row.technicalRating || 'Neutral')}</td>
         <td>${compactNumber(row.volume)}</td>
         <td>${compactNumber(row.dollarVolume)}</td>
         <td>${compactNumber(row.marketCap)}</td>
@@ -433,12 +447,12 @@
         <td>${row.employees ? compactNumber(row.employees) : '-'}</td>
         <td>${Number(row.relativeVolume || 0).toFixed(2)}x</td>
         <td>${Number(row.trendScore || 0).toFixed(1)}</td>
-        <td><span class="source-pill">${row.source}${row.optionsEligible ? ' · options' : ''}</span></td>
+        <td><span class="source-pill">${escapeHtml(row.source)}${row.optionsEligible ? ' · options' : ''}</span></td>
         <td>
           <div class="row-actions">
-            <button type="button" class="ghost-button compact view-symbol" data-symbol="${row.symbol}">View</button>
-            <button type="button" class="ghost-button compact trade-stock" data-symbol="${row.symbol}">Stock</button>
-            <button type="button" class="ghost-button compact trade-options ${row.optionsEligible ? '' : 'disabled'}" data-symbol="${row.symbol}" ${row.optionsEligible ? '' : 'disabled'}>Options</button>
+            <button type="button" class="ghost-button compact view-symbol" data-symbol="${escapeAttr(row.symbol)}">View</button>
+            <button type="button" class="ghost-button compact trade-stock" data-symbol="${escapeAttr(row.symbol)}">Stock</button>
+            <button type="button" class="ghost-button compact trade-options ${row.optionsEligible ? '' : 'disabled'}" data-symbol="${escapeAttr(row.symbol)}" ${row.optionsEligible ? '' : 'disabled'}>Options</button>
           </div>
         </td>
       </tr>
@@ -526,7 +540,7 @@
       <div class="metric-row"><strong>${money(quote.price)}</strong><span class="${relativeClass(quote.change)}">${signedMoney(quote.change)} · ${percent(quote.percentChange)} today</span></div>
       <div class="metric-row"><span>${periodLabel}</span><span class="${relativeClass(period.change)}">${signedMoney(period.change)} · ${percent(period.percentChange)}</span></div>
       <div class="metric-row"><span>Chart start ${money(period.start)}</span><span>Chart end ${money(period.end)}</span></div>
-      <div class="metric-row"><span>Quote source: ${quote.source}</span><span>${research.optionsEligible ? 'Options eligible' : 'No options for this symbol'}</span></div>
+      <div class="metric-row"><span>Quote source: ${escapeHtml(quote.source)}</span><span>${research.optionsEligible ? 'Options eligible' : 'No options for this symbol'}</span></div>
     `;
     dom.researchNumbers.innerHTML = `
       <div class="number-card"><span>Open</span><strong>${money(quote.open)}</strong></div>
@@ -537,7 +551,7 @@
       <div class="number-card"><span>Ask</span><strong>${money(quote.ask)}</strong></div>
       <div class="number-card"><span>Volume</span><strong>${compactNumber(quote.volume)}</strong></div>
       <div class="number-card"><span>Market Cap</span><strong>${quote.marketCap ? compactNumber(quote.marketCap) : 'Limited'}</strong></div>
-      <div class="number-card"><span>Technical Rating</span><strong>${quote.technicalRating || 'Neutral'}</strong></div>
+      <div class="number-card"><span>Technical Rating</span><strong>${escapeHtml(quote.technicalRating || 'Neutral')}</strong></div>
       <div class="number-card"><span>P/E</span><strong>${quote.peRatio ? Number(quote.peRatio).toFixed(2) : 'Limited'}</strong></div>
       <div class="number-card"><span>EPS (TTM)</span><strong>${quote.epsTtm ? money(quote.epsTtm) : 'Limited'}</strong></div>
       <div class="number-card"><span>Employees</span><strong>${quote.employees ? compactNumber(quote.employees) : 'Limited'}</strong></div>
@@ -546,29 +560,29 @@
     `;
     dom.researchChart.innerHTML = buildLineChart(research.chart.map(point => ({ value: point.close })), period.change >= 0 ? '#7ee787' : '#ff7b72');
     dom.profileCard.innerHTML = `
-      <h4>${research.profile.name}</h4>
-      <p>${research.profile.description || 'Profile data is limited for this symbol in the current feed mode.'}</p>
+      <h4>${escapeHtml(research.profile.name)}</h4>
+      <p>${escapeHtml(research.profile.description || 'Profile data is limited for this symbol in the current feed mode.')}</p>
       <div class="profile-stats">
-        <span>Exchange: ${research.profile.exchange || research.quote.exchange}</span>
-        <span>Sector: ${research.profile.sector || research.quote.sector}</span>
+        <span>Exchange: ${escapeHtml(research.profile.exchange || research.quote.exchange)}</span>
+        <span>Sector: ${escapeHtml(research.profile.sector || research.quote.sector)}</span>
       </div>
       <div class="profile-stats">
-        <span>Industry: ${research.profile.industry || 'Unknown'}</span>
-        <span>Data source: ${research.profile.source}</span>
+        <span>Industry: ${escapeHtml(research.profile.industry || 'Unknown')}</span>
+        <span>Data source: ${escapeHtml(research.profile.source)}</span>
       </div>
     `;
     dom.optionChainBody.innerHTML = research.optionChain.length ? research.optionChain.slice(0, 40).map(contract => `
       <tr>
-        <td>${contract.contractSymbol}</td>
-        <td>${contract.type}</td>
-        <td>${contract.expiration || '-'}</td>
+        <td>${escapeHtml(contract.contractSymbol)}</td>
+        <td>${escapeHtml(contract.type)}</td>
+        <td>${escapeHtml(contract.expiration || '-')}</td>
         <td>${money(contract.strike)}</td>
         <td>${money(contract.bid)}</td>
         <td>${money(contract.ask)}</td>
         <td>${money(contract.mid)}</td>
         <td>${(Number(contract.impliedVolatility || 0) * 100).toFixed(1)}%</td>
         <td>${Number(contract.greeks?.delta || 0).toFixed(3)}</td>
-        <td><button class="ghost-button use-contract" data-contract="${contract.contractSymbol}">Trade</button></td>
+        <td><button class="ghost-button use-contract" data-contract="${escapeAttr(contract.contractSymbol)}">Trade</button></td>
       </tr>
     `).join('') : '<tr><td colspan="10">No options chain is available for this symbol. U.S. stocks and ETFs can load options.</td></tr>';
 
@@ -590,7 +604,7 @@
     const quote = state.research.quote;
     dom.tradeLensTitle.textContent = `${state.research.symbol} execution view`;
     dom.tradeLensContent.innerHTML = `
-      <h4>${quote.name}</h4>
+      <h4>${escapeHtml(quote.name)}</h4>
       <div class="profile-stats">
         <span>Last ${money(quote.price)}</span>
         <span class="${relativeClass(quote.change)}">${percent(quote.percentChange)}</span>
@@ -607,7 +621,7 @@
     const symbol = dom.tradeSymbolInput.value.trim().toUpperCase() || state.selectedSymbol;
     const contracts = (state.research?.optionChain || []).filter(item => item.underlyingSymbol === symbol);
     dom.optionContractSelect.innerHTML = contracts.length ? contracts.map(contract => `
-      <option value="${contract.contractSymbol}">${contract.type.toUpperCase()} ${contract.expiration} ${money(contract.strike)} · ${money(contract.mid)}</option>
+      <option value="${escapeAttr(contract.contractSymbol)}">${escapeHtml(String(contract.type || '').toUpperCase())} ${escapeHtml(contract.expiration)} ${money(contract.strike)} · ${money(contract.mid)}</option>
     `).join('') : '<option value="">No option contracts available</option>';
   }
 
@@ -666,19 +680,19 @@
     const gameMarkup = (state.bootstrap.games || []).map(game => `
       <div class="game-card">
         <div class="metric-row">
-          <h4>${game.name}</h4>
+          <h4>${escapeHtml(game.name)}</h4>
           <span>${game.memberCount} traders</span>
         </div>
-        <p>${game.description || 'No description provided.'}</p>
+        <p>${escapeHtml(game.description || 'No description provided.')}</p>
         <div class="game-meta">
           <span>Cash ${money(game.settings.startingCash)}</span>
           <span>${game.settings.allowShort ? 'Shorting on' : 'Shorting off'}</span>
           <span>${game.settings.allowOptions ? 'Options on' : 'Options off'}</span>
         </div>
         <div class="game-actions">
-          ${game.joined ? `<button class="ghost-button" type="button" data-context="${game.id}">Open Context</button>` : `<button class="primary-button join-game" type="button" data-id="${game.id}" data-private="${game.isPrivate}">Join Game</button>`}
+          ${game.joined ? `<button class="ghost-button" type="button" data-context="${escapeAttr(game.id)}">Open Context</button>` : `<button class="primary-button join-game" type="button" data-id="${escapeAttr(game.id)}" data-private="${escapeAttr(game.isPrivate)}">Join Game</button>`}
         </div>
-        <div class="leaderboard" id="leaderboard-${game.id}"></div>
+        <div class="leaderboard" id="leaderboard-${escapeAttr(game.id)}"></div>
       </div>
     `).join('');
 
@@ -692,7 +706,7 @@
         if (!leaderboard || !fresh) return;
         leaderboard.innerHTML = fresh.leaderboard.length ? fresh.leaderboard.slice(0, 5).map((entry, index) => `
           <div class="leaderboard-row">
-            <span>#${index + 1} ${entry.label}</span>
+            <span>#${index + 1} ${escapeHtml(entry.label)}</span>
             <span>${percent(entry.returnPct)} · ${money(entry.equity)}</span>
           </div>
         `).join('') : '<p>No trades in this game yet.</p>';
