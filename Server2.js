@@ -859,8 +859,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
        style="max-width: 220px; border-radius: 20px;
               box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
 </div>
-    <div style="text-align:center; margin-top: 10px;">
-      <a href="/google39fdc9cf51b98b51.html" style="font-size:9px; color:#9fb6d6; opacity:0.7; text-decoration:none;">google verification</a>
+    <div style="text-align:center; margin-top: 10px; font-size:9px; color:#9fb6d6; opacity:0.7;">
+      <a href="/privacy" style="color:#9fb6d6; text-decoration:none;">privacy</a>
+      <span style="margin: 0 6px;">|</span>
+      <a href="/sitemap" style="color:#9fb6d6; text-decoration:none;">sitemap</a>
+      <span style="margin: 0 6px;">|</span>
+      <a href="/google39fdc9cf51b98b51.html" style="color:#9fb6d6; text-decoration:none;">google verification</a>
     </div>
   </div>
 </body>
