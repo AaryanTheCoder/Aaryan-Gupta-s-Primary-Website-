@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Square Shooter Online</title>
+  <link rel="stylesheet" href="/shooter-game/style.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar" aria-label="Match controls">
+      <div class="brand">
+        <span class="mark"></span>
+        <div>
+          <h1>Square Shooter</h1>
+          <p id="connectionStatus">Disconnected</p>
+        </div>
+      </div>
+
+      <form id="joinForm" class="join-form">
+        <button id="createButton" type="button">Create Room</button>
+        <label>
+          <span>Room</span>
+          <input id="roomInput" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="0000">
+        </label>
+        <button type="submit">Join</button>
+      </form>
+    </section>
+
+    <section class="game-wrap">
+      <aside class="scoreboard" aria-label="Match status">
+        <div>
+          <span class="label">Room</span>
+          <strong id="roomCode">----</strong>
+        </div>
+        <div>
+          <span class="label">You</span>
+          <strong id="slotLabel">--</strong>
+        </div>
+        <div>
+          <span class="label">Blue</span>
+          <strong id="p1Health">8</strong>
+        </div>
+        <div>
+          <span class="label">Red</span>
+          <strong id="p2Health">8</strong>
+        </div>
+        <button id="restartButton" type="button" disabled>Restart</button>
+      </aside>
+
+      <div class="arena-shell">
+        <canvas id="gameCanvas" width="900" height="900" aria-label="Square Shooter game arena"></canvas>
+        <div id="overlay" class="overlay">
+          <div id="overlayTitle">Create or join a room</div>
+          <div id="overlayText">Share the 4 digit room code with player 2.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/shooter-game/game.js" defer></script>
+</body>
+</html>

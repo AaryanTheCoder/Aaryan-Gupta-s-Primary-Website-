@@ -11,6 +11,7 @@ const simulatorRoutes = require('./simulatorRoutes');
 const plannerRoutes = require('./plannerRoutes');
 const tablockerRoutes = require('./tablockerRoutes');
 const privacyRoutes = require('./privacyRoutes');
+const shooterGameRoutes = require('./shooterGameRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -22,6 +23,10 @@ if (request.url.startsWith('/storage')) {
 
 if (requestPathname === '/tablocker' || requestPathname.startsWith('/tablocker/')) {
   return tablockerRoutes.handle(request, response);
+}
+
+if (requestPathname === '/shooter-game' || requestPathname.startsWith('/shooter-game/')) {
+  return shooterGameRoutes.handle(request, response);
 }
 
 if (request.url === '/sandbox' && request.method === 'GET') { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
@@ -809,6 +814,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <p>Check out my Near Impossible Pong project and download the Python version to run locally.</p>
       </a>
 
+      <a class="widget" href="/shooter-game">
+        <div class="route">/shooter-game</div>
+        <h2>Square Shooter Online</h2>
+        <p>Play the web version of the square shooter game in a live 1v1 room.</p>
+      </a>
+
       <a class="widget" href="/aaryan">
         <div class="route">/aaryan</div>
         <h2>Photo Page</h2>
@@ -861,6 +872,7 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
 const PORT = process.env.PORT || 3000;
 server.on('upgrade', (request, socket, head) => {
   if (tablockerRoutes.handleUpgrade(request, socket, head)) return;
+  if (shooterGameRoutes.handleUpgrade(request, socket, head)) return;
   socket.destroy();
 });
 
