@@ -76,17 +76,11 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(simulatorTraversal.statusCode, 404);
 
   const cloudUnauthed = await invoke('/cloudconsole');
-  assert.strictEqual(cloudUnauthed.statusCode, 401);
-
-  const cloudAuthed = await invoke('/cloudconsole', {
-    headers: { authorization: basicAuth() }
-  });
-  assert.strictEqual(cloudAuthed.statusCode, 200);
+  assert.strictEqual(cloudUnauthed.statusCode, 200);
 
   const execute = await invoke('/api/cloudconsole/execute', {
     method: 'POST',
     headers: {
-      authorization: basicAuth(),
       'content-type': 'application/json'
     },
     body: JSON.stringify({
@@ -96,6 +90,32 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(execute.statusCode, 200);
   assert.deepStrictEqual(JSON.parse(execute.body), { success: true, output: '4\n' });
+
+  const bashUnauthed = await invoke('/api/cloudconsole/execute', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      language: 'bash',
+      code: 'echo blocked'
+    })
+  });
+  assert.strictEqual(bashUnauthed.statusCode, 401);
+
+  const bashAuthed = await invoke('/api/cloudconsole/execute', {
+    method: 'POST',
+    headers: {
+      authorization: basicAuth(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      language: 'bash',
+      code: 'echo allowed'
+    })
+  });
+  assert.strictEqual(bashAuthed.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(bashAuthed.body), { success: true, output: 'allowed\n' });
 
   const unknown = await invoke('/not-a-real-route');
   assert.strictEqual(unknown.statusCode, 404);

@@ -7,6 +7,11 @@ const { readJsonBody, requireBasicAuth, sendJson } = require('./routeHelpers');
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const MAX_CODE_REQUEST_BYTES = 256 * 1024;
 
+function isBashLanguage(language) {
+  const normalized = String(language || '').toLowerCase();
+  return normalized === 'bash' || normalized === 'sh';
+}
+
 function executeCode(code, language) {
   try {
     const tmpDir = os.tmpdir();
@@ -79,10 +84,6 @@ function executeCode(code, language) {
 }
 
 function handle(request, response) {
-  if (!requireBasicAuth(request, response, STORAGE_PASSWORD, 'Cloud Console', 'Cloud Console password required')) {
-    return;
-  }
-
   // Serve the cloud console HTML page
   if (request.url === '/cloudconsole' && request.method === 'GET') {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -98,6 +99,13 @@ function handle(request, response) {
           error: 'Missing code or language parameter',
           success: false
         });
+        return;
+      }
+
+      if (
+        isBashLanguage(body.language) &&
+        !requireBasicAuth(request, response, STORAGE_PASSWORD, 'Cloud Console Bash', 'Cloud Console bash password required')
+      ) {
         return;
       }
 
@@ -434,6 +442,7 @@ function getConsoleHTML() {
 
   <script>
     let currentLanguage = 'python';
+    let bashPassword = '';
     const codeEditor = document.getElementById('codeEditor');
     const outputDisplay = document.getElementById('outputDisplay');
     const executeBtn = document.getElementById('executeBtn');
@@ -495,6 +504,12 @@ echo "Current date: \$(date)"\`
     // Language switcher
     langButtons.forEach(btn => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.lang === 'bash' && !bashPassword) {
+          const password = window.prompt('Enter the cloud console password to use Bash:');
+          if (!password) return;
+          bashPassword = password;
+        }
+
         langButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentLanguage = btn.dataset.lang;
@@ -520,14 +535,26 @@ echo "Current date: \$(date)"\`
       outputDisplay.className = 'output-display scrollbar loading';
 
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentLanguage === 'bash') {
+          headers.Authorization = 'Basic ' + btoa(':' + bashPassword);
+        }
+
         const response = await fetch('/api/cloudconsole/execute', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             code: code,
             language: currentLanguage
           })
         });
+
+        if (response.status === 401) {
+          bashPassword = '';
+          outputDisplay.textContent = 'Error: Bash password required or incorrect. Click Bash and try again.';
+          outputDisplay.className = 'output-display scrollbar error';
+          return;
+        }
 
         const result = await response.json();
 
