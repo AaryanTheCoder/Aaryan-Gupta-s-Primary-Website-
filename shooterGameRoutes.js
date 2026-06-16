@@ -9,7 +9,7 @@ const PUBLIC_DIR = path.join(__dirname, 'shooter-game');
 // Change these values to tune the online 1v1 match.
 const DEFAULT_GAME_SETTINGS = Object.freeze({
   arenaSize: 900,
-  fps: 67,
+  fps: 100,
   roomLifetimeHours: 3,
   roomCodeDigits: 4,
 
