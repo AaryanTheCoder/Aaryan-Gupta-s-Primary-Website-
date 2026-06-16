@@ -75,6 +75,7 @@ let aim = {
 };
 let lastInputSentAt = 0;
 let lastSettingsJson = '';
+let settingsSubmitInProgress = false;
 
 const keys = {
   up: false,
@@ -115,6 +116,7 @@ function connect(room, mode = 'online') {
   joined = false;
   yourSlot = null;
   state = null;
+  settingsSubmitInProgress = false;
   setStatus('Connecting');
 
   socket = new WebSocket(wsUrl());
@@ -149,12 +151,14 @@ function connect(room, mode = 'online') {
     }
 
     if (message.type === 'settingsUpdated') {
+      settingsSubmitInProgress = false;
       syncSettingsForm(message.settings, true);
       setStatus('Settings applied');
       return;
     }
 
     if (message.type === 'error') {
+      settingsSubmitInProgress = false;
       setStatus(message.error || 'Connection error');
       showOverlay('Room unavailable', 'Create a room or check the code.');
     }
@@ -162,6 +166,7 @@ function connect(room, mode = 'online') {
 
   socket.addEventListener('close', () => {
     joined = false;
+    settingsSubmitInProgress = false;
     setStatus('Disconnected');
     restartButton.disabled = true;
     settingsButton.disabled = true;
@@ -187,7 +192,7 @@ function updateUi() {
   p2Health.textContent = state.players?.[2]?.health ?? 0;
   restartButton.disabled = !state.winner;
   settingsButton.disabled = !joined;
-  applySettingsButton.disabled = yourSlot !== 1 || !joined;
+  applySettingsButton.disabled = yourSlot !== 1 || !joined || settingsSubmitInProgress;
   settingsHint.textContent = yourSlot === 1
     ? 'Applying settings restarts this room.'
     : 'Only player 1 can change room settings.';
@@ -246,7 +251,10 @@ function readSettingsForm() {
   for (const field of ROOM_SETTING_FIELDS) {
     const input = settingsForm.elements[field];
     if (!input) continue;
-    settings[field] = Number(input.value);
+    const value = Number(input.value);
+    if (Number.isFinite(value)) {
+      settings[field] = value;
+    }
   }
 
   return settings;
@@ -482,11 +490,29 @@ resetSettingsButton.addEventListener('click', () => {
   }
 });
 
+for (const field of ROOM_SETTING_FIELDS) {
+  const input = settingsForm.elements[field];
+  if (input) input.required = true;
+}
+
 settingsForm.addEventListener('submit', event => {
   event.preventDefault();
 
-  if (!socket || socket.readyState !== WebSocket.OPEN || yourSlot !== 1) return;
+  if (!settingsForm.reportValidity()) return;
 
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    setStatus('Connect before changing settings');
+    return;
+  }
+
+  if (yourSlot !== 1) {
+    setStatus('Only player 1 can change settings');
+    return;
+  }
+
+  settingsSubmitInProgress = true;
+  applySettingsButton.disabled = true;
+  setStatus('Applying settings');
   socket.send(JSON.stringify({
     type: 'updateSettings',
     settings: readSettingsForm()
