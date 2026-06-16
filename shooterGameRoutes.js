@@ -22,7 +22,24 @@ const GAME_SETTINGS = Object.freeze({
   bulletSpeed: 11.7,
 
   cactusSize: 74,
-  cactusDamageCooldownMs: 900
+  cactusDamageCooldownMs: 900,
+
+  aiStartSpeed: 1,
+  aiHardcoreSpeed: 10,
+  aiStartBulletSpeed: 4,
+  aiHardcoreBulletSpeed: 11.7,
+  aiStartShotsPerSecond: 0.5,
+  aiHardcoreShotsPerSecond: 50,
+  aiHardcoreAfterLosingLives: 5,
+  aiDodgeLookahead: 360,
+  aiDodgeRadius: 95,
+  aiDodgeWeight: 3.5,
+  aiTooCloseDistance: 240,
+  aiTooFarDistance: 380,
+  aiStrafeStrength: 0.8,
+  aiStrafeCycleMs: 380,
+  aiCactusAvoidDistanceMultiplier: 1.45,
+  aiCactusAvoidWeight: 1.8
 });
 
 const ARENA_SIZE = GAME_SETTINGS.arenaSize;
@@ -39,6 +56,9 @@ const BULLET_SIZE = GAME_SETTINGS.bulletSize;
 const BULLET_SPEED = GAME_SETTINGS.bulletSpeed;
 const PLAYER_FIRE_COOLDOWN_MS = 1000 / GAME_SETTINGS.playerShotsPerSecond;
 const CACTUS_SIZE = GAME_SETTINGS.cactusSize;
+const ROOM_MODE_ONLINE = 'online';
+const ROOM_MODE_AI = 'ai';
+const AI_SLOT = 2;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -129,6 +149,7 @@ function resetRoom(room) {
     1: makePlayer(1),
     2: makePlayer(2)
   };
+  room.players[AI_SLOT].isAi = room.mode === ROOM_MODE_AI;
   room.bullets = [];
   room.cactuses = makeCactuses();
   room.winner = null;
@@ -136,9 +157,10 @@ function resetRoom(room) {
   room.updatedAt = now();
 }
 
-function createRoom() {
+function createRoom(mode = ROOM_MODE_ONLINE) {
   const room = {
     code: makeCode(),
+    mode,
     sockets: new Map(),
     players: {},
     bullets: [],
@@ -179,6 +201,68 @@ function playerRect(player) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function centerOf(rect) {
+  return {
+    x: rect.x + rect.w / 2,
+    y: rect.y + rect.h / 2
+  };
+}
+
+function playerCenter(player) {
+  return {
+    x: player.x + PLAYER_SIZE / 2,
+    y: player.y + PLAYER_SIZE / 2
+  };
+}
+
+function distanceBetween(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function lineIntersectsRect(start, end, rect) {
+  if (
+    start.x >= rect.x &&
+    start.x <= rect.x + rect.w &&
+    start.y >= rect.y &&
+    start.y <= rect.y + rect.h
+  ) {
+    return true;
+  }
+
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  let t0 = 0;
+  let t1 = 1;
+  const checks = [
+    [-dx, start.x - rect.x],
+    [dx, rect.x + rect.w - start.x],
+    [-dy, start.y - rect.y],
+    [dy, rect.y + rect.h - start.y]
+  ];
+
+  for (const [p, q] of checks) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+
+    const ratio = q / p;
+    if (p < 0) {
+      if (ratio > t1) return false;
+      if (ratio > t0) t0 = ratio;
+    } else {
+      if (ratio < t0) return false;
+      if (ratio < t1) t1 = ratio;
+    }
+  }
+
+  return true;
+}
+
+function rectLineBlocked(start, end, obstacles) {
+  return obstacles.some(obstacle => lineIntersectsRect(start, end, obstacle));
 }
 
 function pushOutOfObstacles(player, obstacles) {
@@ -239,6 +323,182 @@ function applyInput(player, obstacles) {
   return touchedCactus;
 }
 
+function aiIsHardcore(aiPlayer) {
+  return PLAYER_LIVES - aiPlayer.health >= GAME_SETTINGS.aiHardcoreAfterLosingLives;
+}
+
+function currentAiSpeed(aiPlayer) {
+  return aiIsHardcore(aiPlayer) ? GAME_SETTINGS.aiHardcoreSpeed : GAME_SETTINGS.aiStartSpeed;
+}
+
+function currentAiBulletSpeed(aiPlayer) {
+  return aiIsHardcore(aiPlayer) ? GAME_SETTINGS.aiHardcoreBulletSpeed : GAME_SETTINGS.aiStartBulletSpeed;
+}
+
+function currentAiFireCooldownMs(aiPlayer) {
+  const shotsPerSecond = aiIsHardcore(aiPlayer)
+    ? GAME_SETTINGS.aiHardcoreShotsPerSecond
+    : GAME_SETTINGS.aiStartShotsPerSecond;
+  return 1000 / shotsPerSecond;
+}
+
+function incomingBulletDodge(aiPlayer, bullets) {
+  const aiCenter = playerCenter(aiPlayer);
+  const dodge = { x: 0, y: 0 };
+
+  for (const bullet of bullets) {
+    if (bullet.owner === aiPlayer.slot) continue;
+
+    const velocityLength = Math.hypot(bullet.vx, bullet.vy);
+    if (velocityLength === 0) continue;
+
+    const bulletDirection = {
+      x: bullet.vx / velocityLength,
+      y: bullet.vy / velocityLength
+    };
+    const toAi = {
+      x: aiCenter.x - bullet.x,
+      y: aiCenter.y - bullet.y
+    };
+    const forwardDistance = toAi.x * bulletDirection.x + toAi.y * bulletDirection.y;
+
+    if (forwardDistance < 0 || forwardDistance > GAME_SETTINGS.aiDodgeLookahead) continue;
+
+    const closestPoint = {
+      x: bullet.x + bulletDirection.x * forwardDistance,
+      y: bullet.y + bulletDirection.y * forwardDistance
+    };
+    const missDistance = distanceBetween(aiCenter, closestPoint);
+
+    if (missDistance > GAME_SETTINGS.aiDodgeRadius) continue;
+
+    const dodgeSide = {
+      x: -bulletDirection.y,
+      y: bulletDirection.x
+    };
+    if (toAi.x * dodgeSide.x + toAi.y * dodgeSide.y < 0) {
+      dodgeSide.x *= -1;
+      dodgeSide.y *= -1;
+    }
+
+    const distanceDanger = 1 - missDistance / GAME_SETTINGS.aiDodgeRadius;
+    const timeDanger = 1 - forwardDistance / GAME_SETTINGS.aiDodgeLookahead;
+    dodge.x += dodgeSide.x * (distanceDanger + timeDanger) * GAME_SETTINGS.aiDodgeWeight;
+    dodge.y += dodgeSide.y * (distanceDanger + timeDanger) * GAME_SETTINGS.aiDodgeWeight;
+  }
+
+  return dodge;
+}
+
+function applyAiMovement(aiPlayer, humanPlayer, room) {
+  const oldX = aiPlayer.x;
+  const oldY = aiPlayer.y;
+  const aiCenter = playerCenter(aiPlayer);
+  const humanCenter = playerCenter(humanPlayer);
+  const toHuman = {
+    x: humanCenter.x - aiCenter.x,
+    y: humanCenter.y - aiCenter.y
+  };
+  const distance = Math.hypot(toHuman.x, toHuman.y);
+  const direction = distance === 0
+    ? { x: 1, y: 0 }
+    : { x: toHuman.x / distance, y: toHuman.y / distance };
+  const lineBlocked = rectLineBlocked(aiCenter, humanCenter, room.cactuses);
+  const movement = { x: 0, y: 0 };
+
+  if (lineBlocked) {
+    movement.x += direction.x;
+    movement.y += direction.y;
+  } else {
+    if (distance < GAME_SETTINGS.aiTooCloseDistance) {
+      movement.x -= direction.x;
+      movement.y -= direction.y;
+    } else if (distance > GAME_SETTINGS.aiTooFarDistance) {
+      movement.x += direction.x;
+      movement.y += direction.y;
+    }
+
+    const strafeAmount = Math.sin(now() / GAME_SETTINGS.aiStrafeCycleMs) * GAME_SETTINGS.aiStrafeStrength;
+    movement.x += -direction.y * strafeAmount;
+    movement.y += direction.x * strafeAmount;
+  }
+
+  const dodge = incomingBulletDodge(aiPlayer, room.bullets);
+  movement.x += dodge.x;
+  movement.y += dodge.y;
+
+  let nearestCactus = null;
+  let nearestDistance = Infinity;
+  for (const cactus of room.cactuses) {
+    const cactusDistance = distanceBetween(aiCenter, centerOf(cactus));
+    if (cactusDistance < nearestDistance) {
+      nearestCactus = cactus;
+      nearestDistance = cactusDistance;
+    }
+  }
+
+  if (nearestCactus && nearestDistance < CACTUS_SIZE * GAME_SETTINGS.aiCactusAvoidDistanceMultiplier) {
+    const cactusCenter = centerOf(nearestCactus);
+    const away = {
+      x: aiCenter.x - cactusCenter.x,
+      y: aiCenter.y - cactusCenter.y
+    };
+    const awayLength = Math.hypot(away.x, away.y);
+    if (awayLength > 0) {
+      movement.x += (away.x / awayLength) * GAME_SETTINGS.aiCactusAvoidWeight;
+      movement.y += (away.y / awayLength) * GAME_SETTINGS.aiCactusAvoidWeight;
+    }
+  }
+
+  const movementLength = Math.hypot(movement.x, movement.y);
+  if (movementLength > 0) {
+    const speed = currentAiSpeed(aiPlayer);
+    movement.x = (movement.x / movementLength) * speed;
+    movement.y = (movement.y / movementLength) * speed;
+  }
+
+  let touchedCactus = false;
+  aiPlayer.x += Math.round(movement.x);
+  touchedCactus = pushOutOfObstacles(aiPlayer, room.cactuses) || touchedCactus;
+  aiPlayer.y += Math.round(movement.y);
+  touchedCactus = pushOutOfObstacles(aiPlayer, room.cactuses) || touchedCactus;
+  aiPlayer.x = clamp(aiPlayer.x, 0, ARENA_SIZE - PLAYER_SIZE);
+  aiPlayer.y = clamp(aiPlayer.y, 0, ARENA_SIZE - PLAYER_SIZE);
+  aiPlayer.vx = aiPlayer.x - oldX;
+  aiPlayer.vy = aiPlayer.y - oldY;
+
+  return touchedCactus;
+}
+
+function currentAiTarget(aiPlayer, humanPlayer) {
+  const aiCenter = playerCenter(aiPlayer);
+  const humanCenter = playerCenter(humanPlayer);
+  const distance = distanceBetween(aiCenter, humanCenter);
+  const framesUntilHit = distance / currentAiBulletSpeed(aiPlayer);
+
+  return {
+    x: clamp(humanCenter.x + humanPlayer.vx * framesUntilHit, 0, ARENA_SIZE),
+    y: clamp(humanCenter.y + humanPlayer.vy * framesUntilHit, 0, ARENA_SIZE)
+  };
+}
+
+function applyAiShooting(aiPlayer, humanPlayer, room, currentTime) {
+  const aiCenter = playerCenter(aiPlayer);
+  const humanCenter = playerCenter(humanPlayer);
+  aiPlayer.input.shooting = false;
+  if (rectLineBlocked(aiCenter, humanCenter, room.cactuses)) return;
+
+  aiPlayer.input.shooting = true;
+  const target = currentAiTarget(aiPlayer, humanPlayer);
+  aiPlayer.input.aimX = target.x;
+  aiPlayer.input.aimY = target.y;
+  aiPlayer.fireCooldownMs = currentAiFireCooldownMs(aiPlayer);
+  shoot(aiPlayer, room, currentTime, {
+    fireCooldownMs: currentAiFireCooldownMs(aiPlayer),
+    bulletSpeed: currentAiBulletSpeed(aiPlayer)
+  });
+}
+
 function damageFromCactuses(player, cactuses, currentTime, touchedCactus) {
   if (currentTime - player.lastCactusDamageAt < TOUCH_DAMAGE_COOLDOWN_MS) return;
 
@@ -248,8 +508,10 @@ function damageFromCactuses(player, cactuses, currentTime, touchedCactus) {
   }
 }
 
-function shoot(player, room, currentTime) {
-  if (!player.input.shooting || currentTime - player.lastShotAt < PLAYER_FIRE_COOLDOWN_MS) return;
+function shoot(player, room, currentTime, options = {}) {
+  const fireCooldownMs = options.fireCooldownMs ?? PLAYER_FIRE_COOLDOWN_MS;
+  const bulletSpeed = options.bulletSpeed ?? BULLET_SPEED;
+  if (!player.input.shooting || currentTime - player.lastShotAt < fireCooldownMs) return;
 
   const centerX = player.x + PLAYER_SIZE / 2;
   const centerY = player.y + PLAYER_SIZE / 2;
@@ -265,8 +527,8 @@ function shoot(player, room, currentTime) {
   room.bullets.push({
     x: centerX,
     y: centerY,
-    vx: dx * BULLET_SPEED,
-    vy: dy * BULLET_SPEED,
+    vx: dx * bulletSpeed,
+    vy: dy * bulletSpeed,
     owner: player.slot
   });
 }
@@ -315,7 +577,13 @@ function roomIsFull(room) {
   return [...room.sockets.values()].filter(Boolean).length >= 2;
 }
 
+function roomIsReady(room) {
+  return room.mode === ROOM_MODE_AI ? room.sockets.size > 0 : roomIsFull(room);
+}
+
 function firstOpenSlot(room) {
+  if (room.mode === ROOM_MODE_AI) return room.sockets.size === 0 ? 1 : null;
+
   const taken = new Set(room.sockets.values());
   if (!taken.has(1)) return 1;
   if (!taken.has(2)) return 2;
@@ -329,13 +597,22 @@ function livingPlayers(room) {
 function tickRoom(room) {
   room.updatedAt = now();
 
-  if (!room.winner && roomIsFull(room)) {
+  if (!room.winner && roomIsReady(room)) {
     const currentTime = now();
     const touched = {};
 
-    for (const player of livingPlayers(room)) {
-      touched[player.slot] = applyInput(player, room.cactuses);
-      shoot(player, room, currentTime);
+    if (room.mode === ROOM_MODE_AI) {
+      const human = room.players[1];
+      const ai = room.players[AI_SLOT];
+      touched[human.slot] = applyInput(human, room.cactuses);
+      shoot(human, room, currentTime);
+      touched[ai.slot] = applyAiMovement(ai, human, room);
+      applyAiShooting(ai, human, room, currentTime);
+    } else {
+      for (const player of livingPlayers(room)) {
+        touched[player.slot] = applyInput(player, room.cactuses);
+        shoot(player, room, currentTime);
+      }
     }
 
     for (const player of livingPlayers(room)) {
@@ -366,14 +643,19 @@ function publicState(room) {
     playerSize: PLAYER_SIZE,
     bulletSize: BULLET_SIZE,
     playerLives: PLAYER_LIVES,
+    mode: room.mode,
     settings: {
       fps: GAME_SETTINGS.fps,
       playerSpeed: GAME_SETTINGS.playerSpeed,
       bulletSpeed: GAME_SETTINGS.bulletSpeed,
       playerShotsPerSecond: GAME_SETTINGS.playerShotsPerSecond,
+      aiStartSpeed: GAME_SETTINGS.aiStartSpeed,
+      aiHardcoreSpeed: GAME_SETTINGS.aiHardcoreSpeed,
+      aiStartShotsPerSecond: GAME_SETTINGS.aiStartShotsPerSecond,
+      aiHardcoreShotsPerSecond: GAME_SETTINGS.aiHardcoreShotsPerSecond,
       cactusDamageCooldownMs: GAME_SETTINGS.cactusDamageCooldownMs
     },
-    waiting: !roomIsFull(room),
+    waiting: !roomIsReady(room),
     winner: room.winner,
     cactuses: room.cactuses,
     bullets: room.bullets.map(bullet => ({
@@ -392,7 +674,8 @@ function playerSummary(player) {
   return {
     x: Math.round(player.x),
     y: Math.round(player.y),
-    health: player.health
+    health: player.health,
+    isAi: Boolean(player.isAi)
   };
 }
 
@@ -433,7 +716,7 @@ function cleanInput(input) {
 function joinRequestedRoom(code) {
   if (!ROOM_CODE_RE.test(code)) return null;
   const room = rooms.get(code);
-  if (!room || roomIsFull(room)) return null;
+  if (!room || room.mode !== ROOM_MODE_ONLINE || roomIsFull(room)) return null;
   return room;
 }
 
@@ -452,7 +735,8 @@ wss.on('connection', socket => {
       if (room) return;
       cleanupRooms();
 
-      room = message.roomCode ? joinRequestedRoom(String(message.roomCode)) : createRoom();
+      const requestedMode = message.mode === ROOM_MODE_AI ? ROOM_MODE_AI : ROOM_MODE_ONLINE;
+      room = message.roomCode ? joinRequestedRoom(String(message.roomCode)) : createRoom(requestedMode);
       if (!room) {
         send(socket, { type: 'error', error: 'Room not found or already full' });
         return;

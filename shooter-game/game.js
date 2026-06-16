@@ -4,10 +4,12 @@ const ctx = canvas.getContext('2d');
 const connectionStatus = document.getElementById('connectionStatus');
 const joinForm = document.getElementById('joinForm');
 const createButton = document.getElementById('createButton');
+const aiButton = document.getElementById('aiButton');
 const roomInput = document.getElementById('roomInput');
 const roomCode = document.getElementById('roomCode');
 const slotLabel = document.getElementById('slotLabel');
 const p1Health = document.getElementById('p1Health');
+const p2Name = document.getElementById('p2Name');
 const p2Health = document.getElementById('p2Health');
 const restartButton = document.getElementById('restartButton');
 const overlay = document.getElementById('overlay');
@@ -71,7 +73,7 @@ function setStatus(text) {
   connectionStatus.textContent = text;
 }
 
-function connect(room) {
+function connect(room, mode = 'online') {
   if (socket) {
     socket.close();
   }
@@ -86,7 +88,8 @@ function connect(room) {
   socket.addEventListener('open', () => {
     socket.send(JSON.stringify({
       type: 'join',
-      roomCode: room || ''
+      roomCode: room || '',
+      mode
     }));
   });
 
@@ -139,6 +142,7 @@ function updateUi() {
   roomCode.textContent = state.roomCode || '----';
   slotLabel.textContent = yourSlot === 1 ? 'Blue' : yourSlot === 2 ? 'Red' : '--';
   p1Health.textContent = state.players?.[1]?.health ?? 0;
+  p2Name.textContent = state.mode === 'ai' ? 'AI' : 'Red';
   p2Health.textContent = state.players?.[2]?.health ?? 0;
   restartButton.disabled = !state.winner;
 
@@ -149,7 +153,9 @@ function updateUi() {
       ? 'Draw'
       : state.winner === yourSlot
         ? 'You win'
-        : 'You lose';
+        : state.mode === 'ai'
+          ? 'AI wins'
+          : 'You lose';
     showOverlay(text, 'Press restart to play again.');
   } else {
     hideOverlay();
@@ -345,7 +351,11 @@ canvas.addEventListener('contextmenu', event => {
 });
 
 createButton.addEventListener('click', () => {
-  connect('');
+  connect('', 'online');
+});
+
+aiButton.addEventListener('click', () => {
+  connect('', 'ai');
 });
 
 joinForm.addEventListener('submit', event => {
@@ -356,7 +366,7 @@ joinForm.addEventListener('submit', event => {
     setStatus(`Enter a ${CLIENT_SETTINGS.roomCodeDigits} digit room`);
     return;
   }
-  connect(code);
+  connect(code, 'online');
 });
 
 roomInput.addEventListener('input', () => {
