@@ -14,12 +14,30 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlayTitle');
 const overlayText = document.getElementById('overlayText');
 
+// ---------- Easy client settings ----------
+// Gameplay speed is controlled by shooterGameRoutes.js on the server.
+const CLIENT_SETTINGS = Object.freeze({
+  defaultArenaSize: 900,
+  defaultPlayerSize: 64,
+  defaultBulletSize: 18,
+  defaultPlayerLives: 8,
+  roomCodeDigits: 4,
+  inputSendEveryMs: 16,
+  aimLineDash: [8, 10]
+});
+
+roomInput.maxLength = CLIENT_SETTINGS.roomCodeDigits;
+roomInput.placeholder = '0'.repeat(CLIENT_SETTINGS.roomCodeDigits);
+
 let socket = null;
 let state = null;
 let joined = false;
 let yourSlot = null;
 let pointerDown = false;
-let aim = { x: 450, y: 450 };
+let aim = {
+  x: CLIENT_SETTINGS.defaultArenaSize / 2,
+  y: CLIENT_SETTINGS.defaultArenaSize / 2
+};
 let lastInputSentAt = 0;
 
 const keys = {
@@ -150,7 +168,7 @@ function hideOverlay() {
 
 function canvasPoint(event) {
   const rect = canvas.getBoundingClientRect();
-  const arenaSize = state?.arenaSize || 900;
+  const arenaSize = state?.arenaSize || CLIENT_SETTINGS.defaultArenaSize;
   const x = ((event.clientX - rect.left) / rect.width) * arenaSize;
   const y = ((event.clientY - rect.top) / rect.height) * arenaSize;
   return {
@@ -177,7 +195,7 @@ function inputPayload() {
 
 function sendInput(time) {
   if (!joined || !socket || socket.readyState !== WebSocket.OPEN) return;
-  if (time - lastInputSentAt < 16) return;
+  if (time - lastInputSentAt < CLIENT_SETTINGS.inputSendEveryMs) return;
   lastInputSentAt = time;
   socket.send(JSON.stringify({
     type: 'input',
@@ -240,11 +258,11 @@ function drawAim() {
   const player = state.players?.[yourSlot];
   if (!player) return;
 
-  const size = state.playerSize || 64;
+  const size = state.playerSize || CLIENT_SETTINGS.defaultPlayerSize;
   const centerX = player.x + size / 2;
   const centerY = player.y + size / 2;
   ctx.save();
-  ctx.setLineDash([8, 10]);
+  ctx.setLineDash(CLIENT_SETTINGS.aimLineDash);
   ctx.strokeStyle = yourSlot === 1 ? 'rgba(45, 168, 255, 0.45)' : 'rgba(255, 91, 91, 0.45)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -255,7 +273,7 @@ function drawAim() {
 }
 
 function render() {
-  const arenaSize = state?.arenaSize || 900;
+  const arenaSize = state?.arenaSize || CLIENT_SETTINGS.defaultArenaSize;
   canvas.width = arenaSize;
   canvas.height = arenaSize;
   ctx.fillStyle = colors.background;
@@ -269,13 +287,13 @@ function render() {
     drawCactus(cactus);
   }
 
-  const playerSize = state.playerSize || 64;
-  const playerLives = state.playerLives || 8;
+  const playerSize = state.playerSize || CLIENT_SETTINGS.defaultPlayerSize;
+  const playerLives = state.playerLives || CLIENT_SETTINGS.defaultPlayerLives;
   if (state.players?.[1]) drawPlayer(state.players[1], 1, playerSize, playerLives);
   if (state.players?.[2]) drawPlayer(state.players[2], 2, playerSize, playerLives);
 
   for (const bullet of state.bullets || []) {
-    drawBullet(bullet, state.bulletSize || 18);
+    drawBullet(bullet, state.bulletSize || CLIENT_SETTINGS.defaultBulletSize);
   }
 
   drawAim();
@@ -333,15 +351,16 @@ createButton.addEventListener('click', () => {
 joinForm.addEventListener('submit', event => {
   event.preventDefault();
   const code = roomInput.value.trim();
-  if (!/^\d{4}$/.test(code)) {
-    setStatus('Enter a 4 digit room');
+  const roomCodePattern = new RegExp(`^\\d{${CLIENT_SETTINGS.roomCodeDigits}}$`);
+  if (!roomCodePattern.test(code)) {
+    setStatus(`Enter a ${CLIENT_SETTINGS.roomCodeDigits} digit room`);
     return;
   }
   connect(code);
 });
 
 roomInput.addEventListener('input', () => {
-  roomInput.value = roomInput.value.replace(/\D/g, '').slice(0, 4);
+  roomInput.value = roomInput.value.replace(/\D/g, '').slice(0, CLIENT_SETTINGS.roomCodeDigits);
 });
 
 restartButton.addEventListener('click', () => {

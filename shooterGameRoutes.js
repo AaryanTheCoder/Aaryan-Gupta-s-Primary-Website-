@@ -4,20 +4,41 @@ const WebSocket = require('ws');
 const { isPathInside } = require('./routeHelpers');
 
 const PUBLIC_DIR = path.join(__dirname, 'shooter-game');
-const ARENA_SIZE = 900;
-const FPS = 60;
-const TICK_MS = 1000 / FPS;
-const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
-const ROOM_CODE_RE = /^\d{4}$/;
 
-const PLAYER_SIZE = 64;
-const PLAYER_SPEED = 4.3;
-const PLAYER_LIVES = 8;
-const TOUCH_DAMAGE_COOLDOWN_MS = 900;
-const BULLET_SIZE = 18;
-const BULLET_SPEED = 6.7;
-const PLAYER_FIRE_COOLDOWN_MS = 250;
-const CACTUS_SIZE = 74;
+// ---------- Easy game settings ----------
+// Change these values to tune the online 1v1 match.
+const GAME_SETTINGS = Object.freeze({
+  arenaSize: 900,
+  fps: 120,
+  roomLifetimeHours: 3,
+  roomCodeDigits: 4,
+
+  playerSize: 64,
+  playerSpeed: 6.7,
+  playerLives: 8,
+  playerShotsPerSecond: 4,
+
+  bulletSize: 18,
+  bulletSpeed: 11.7,
+
+  cactusSize: 74,
+  cactusDamageCooldownMs: 900
+});
+
+const ARENA_SIZE = GAME_SETTINGS.arenaSize;
+const FPS = GAME_SETTINGS.fps;
+const TICK_MS = 1000 / FPS;
+const ROOM_TTL_MS = GAME_SETTINGS.roomLifetimeHours * 60 * 60 * 1000;
+const ROOM_CODE_RE = new RegExp(`^\\d{${GAME_SETTINGS.roomCodeDigits}}$`);
+
+const PLAYER_SIZE = GAME_SETTINGS.playerSize;
+const PLAYER_SPEED = GAME_SETTINGS.playerSpeed;
+const PLAYER_LIVES = GAME_SETTINGS.playerLives;
+const TOUCH_DAMAGE_COOLDOWN_MS = GAME_SETTINGS.cactusDamageCooldownMs;
+const BULLET_SIZE = GAME_SETTINGS.bulletSize;
+const BULLET_SPEED = GAME_SETTINGS.bulletSpeed;
+const PLAYER_FIRE_COOLDOWN_MS = 1000 / GAME_SETTINGS.playerShotsPerSecond;
+const CACTUS_SIZE = GAME_SETTINGS.cactusSize;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -38,9 +59,11 @@ function now() {
 }
 
 function makeCode() {
+  const min = 10 ** (GAME_SETTINGS.roomCodeDigits - 1);
+  const range = 9 * min;
   let code;
   do {
-    code = String(Math.floor(1000 + Math.random() * 9000));
+    code = String(Math.floor(min + Math.random() * range));
   } while (rooms.has(code));
   return code;
 }
@@ -343,6 +366,13 @@ function publicState(room) {
     playerSize: PLAYER_SIZE,
     bulletSize: BULLET_SIZE,
     playerLives: PLAYER_LIVES,
+    settings: {
+      fps: GAME_SETTINGS.fps,
+      playerSpeed: GAME_SETTINGS.playerSpeed,
+      bulletSpeed: GAME_SETTINGS.bulletSpeed,
+      playerShotsPerSecond: GAME_SETTINGS.playerShotsPerSecond,
+      cactusDamageCooldownMs: GAME_SETTINGS.cactusDamageCooldownMs
+    },
     waiting: !roomIsFull(room),
     winner: room.winner,
     cactuses: room.cactuses,
