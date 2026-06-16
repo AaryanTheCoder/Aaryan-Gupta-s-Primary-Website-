@@ -808,10 +808,12 @@ function serveFile(req, res, pathname) {
       return;
     }
 
-    const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+    const extension = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[extension] || 'application/octet-stream';
+    const shouldSkipCache = ['.html', '.js', '.css'].includes(extension);
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': contentType.includes('html') ? 'no-store' : 'public, max-age=3600'
+      'Cache-Control': shouldSkipCache ? 'no-store' : 'public, max-age=3600'
     });
     res.end(req.method === 'HEAD' ? undefined : data);
   });
