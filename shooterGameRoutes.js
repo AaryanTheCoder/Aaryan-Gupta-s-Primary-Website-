@@ -7,7 +7,7 @@ const PUBLIC_DIR = path.join(__dirname, 'shooter-game');
 
 // ---------- Easy game settings ----------
 // Change these values to tune the online 1v1 match.
-const GAME_SETTINGS = Object.freeze({
+const DEFAULT_GAME_SETTINGS = Object.freeze({
   arenaSize: 900,
   fps: 120,
   roomLifetimeHours: 3,
@@ -42,20 +42,39 @@ const GAME_SETTINGS = Object.freeze({
   aiCactusAvoidWeight: 1.8
 });
 
-const ARENA_SIZE = GAME_SETTINGS.arenaSize;
-const FPS = GAME_SETTINGS.fps;
-const TICK_MS = 1000 / FPS;
-const ROOM_TTL_MS = GAME_SETTINGS.roomLifetimeHours * 60 * 60 * 1000;
-const ROOM_CODE_RE = new RegExp(`^\\d{${GAME_SETTINGS.roomCodeDigits}}$`);
+const SETTING_LIMITS = Object.freeze({
+  playerSpeed: [1, 18],
+  playerLives: [1, 50],
+  playerShotsPerSecond: [0.2, 20],
+  bulletSpeed: [1, 30],
+  cactusDamageCooldownMs: [100, 5000],
+  aiStartSpeed: [0, 18],
+  aiHardcoreSpeed: [0, 24],
+  aiStartBulletSpeed: [1, 30],
+  aiHardcoreBulletSpeed: [1, 36],
+  aiStartShotsPerSecond: [0.1, 20],
+  aiHardcoreShotsPerSecond: [0.1, 80],
+  aiHardcoreAfterLosingLives: [0, 50],
+  aiDodgeLookahead: [0, 1000],
+  aiDodgeRadius: [0, 300],
+  aiDodgeWeight: [0, 12],
+  aiTooCloseDistance: [0, 700],
+  aiTooFarDistance: [0, 900],
+  aiStrafeStrength: [0, 5],
+  aiStrafeCycleMs: [80, 3000],
+  aiCactusAvoidDistanceMultiplier: [0, 5],
+  aiCactusAvoidWeight: [0, 8]
+});
 
-const PLAYER_SIZE = GAME_SETTINGS.playerSize;
-const PLAYER_SPEED = GAME_SETTINGS.playerSpeed;
-const PLAYER_LIVES = GAME_SETTINGS.playerLives;
-const TOUCH_DAMAGE_COOLDOWN_MS = GAME_SETTINGS.cactusDamageCooldownMs;
-const BULLET_SIZE = GAME_SETTINGS.bulletSize;
-const BULLET_SPEED = GAME_SETTINGS.bulletSpeed;
-const PLAYER_FIRE_COOLDOWN_MS = 1000 / GAME_SETTINGS.playerShotsPerSecond;
-const CACTUS_SIZE = GAME_SETTINGS.cactusSize;
+const ARENA_SIZE = DEFAULT_GAME_SETTINGS.arenaSize;
+const FPS = DEFAULT_GAME_SETTINGS.fps;
+const TICK_MS = 1000 / FPS;
+const ROOM_TTL_MS = DEFAULT_GAME_SETTINGS.roomLifetimeHours * 60 * 60 * 1000;
+const ROOM_CODE_RE = new RegExp(`^\\d{${DEFAULT_GAME_SETTINGS.roomCodeDigits}}$`);
+
+const PLAYER_SIZE = DEFAULT_GAME_SETTINGS.playerSize;
+const BULLET_SIZE = DEFAULT_GAME_SETTINGS.bulletSize;
+const CACTUS_SIZE = DEFAULT_GAME_SETTINGS.cactusSize;
 const ROOM_MODE_ONLINE = 'online';
 const ROOM_MODE_AI = 'ai';
 const AI_SLOT = 2;
@@ -78,8 +97,36 @@ function now() {
   return Date.now();
 }
 
+function cloneRoomSettings(source = {}) {
+  const settings = {};
+  for (const key of Object.keys(DEFAULT_GAME_SETTINGS)) {
+    settings[key] = source[key] ?? DEFAULT_GAME_SETTINGS[key];
+  }
+  return settings;
+}
+
+function cleanRoomSettings(input, base = DEFAULT_GAME_SETTINGS) {
+  const next = cloneRoomSettings(base);
+  const source = input && typeof input === 'object' ? input : {};
+
+  for (const [key, [min, max]] of Object.entries(SETTING_LIMITS)) {
+    if (source[key] === undefined) continue;
+    const value = Number(source[key]);
+    if (!Number.isFinite(value)) continue;
+    next[key] = clamp(value, min, max);
+  }
+
+  next.playerLives = Math.round(next.playerLives);
+  next.aiHardcoreAfterLosingLives = Math.round(next.aiHardcoreAfterLosingLives);
+  next.cactusDamageCooldownMs = Math.round(next.cactusDamageCooldownMs);
+  next.aiDodgeLookahead = Math.round(next.aiDodgeLookahead);
+  next.aiDodgeRadius = Math.round(next.aiDodgeRadius);
+  next.aiStrafeCycleMs = Math.round(next.aiStrafeCycleMs);
+  return next;
+}
+
 function makeCode() {
-  const min = 10 ** (GAME_SETTINGS.roomCodeDigits - 1);
+  const min = 10 ** (DEFAULT_GAME_SETTINGS.roomCodeDigits - 1);
   const range = 9 * min;
   let code;
   do {
@@ -88,7 +135,7 @@ function makeCode() {
   return code;
 }
 
-function makePlayer(slot) {
+function makePlayer(slot, settings) {
   const start = slot === 1
     ? { x: PLAYER_SIZE, y: ARENA_SIZE - PLAYER_SIZE * 2 }
     : { x: ARENA_SIZE - PLAYER_SIZE * 2, y: PLAYER_SIZE };
@@ -99,9 +146,9 @@ function makePlayer(slot) {
     y: start.y,
     vx: 0,
     vy: 0,
-    health: PLAYER_LIVES,
-    lastShotAt: -PLAYER_FIRE_COOLDOWN_MS,
-    lastCactusDamageAt: -TOUCH_DAMAGE_COOLDOWN_MS,
+    health: settings.playerLives,
+    lastShotAt: -(1000 / settings.playerShotsPerSecond),
+    lastCactusDamageAt: -settings.cactusDamageCooldownMs,
     input: {
       up: false,
       down: false,
@@ -146,8 +193,8 @@ function makeCactuses() {
 
 function resetRoom(room) {
   room.players = {
-    1: makePlayer(1),
-    2: makePlayer(2)
+    1: makePlayer(1, room.settings),
+    2: makePlayer(2, room.settings)
   };
   room.players[AI_SLOT].isAi = room.mode === ROOM_MODE_AI;
   room.bullets = [];
@@ -161,6 +208,7 @@ function createRoom(mode = ROOM_MODE_ONLINE) {
   const room = {
     code: makeCode(),
     mode,
+    settings: cloneRoomSettings(),
     sockets: new Map(),
     players: {},
     bullets: [],
@@ -293,7 +341,7 @@ function pushOutOfObstacles(player, obstacles) {
   return touched;
 }
 
-function applyInput(player, obstacles) {
+function applyInput(player, obstacles, settings) {
   const oldX = player.x;
   const oldY = player.y;
   let dx = 0;
@@ -306,8 +354,8 @@ function applyInput(player, obstacles) {
 
   const length = Math.hypot(dx, dy);
   if (length > 0) {
-    dx = (dx / length) * PLAYER_SPEED;
-    dy = (dy / length) * PLAYER_SPEED;
+    dx = (dx / length) * settings.playerSpeed;
+    dy = (dy / length) * settings.playerSpeed;
   }
 
   let touchedCactus = false;
@@ -323,26 +371,30 @@ function applyInput(player, obstacles) {
   return touchedCactus;
 }
 
-function aiIsHardcore(aiPlayer) {
-  return PLAYER_LIVES - aiPlayer.health >= GAME_SETTINGS.aiHardcoreAfterLosingLives;
+function aiIsHardcore(aiPlayer, settings) {
+  return settings.playerLives - aiPlayer.health >= settings.aiHardcoreAfterLosingLives;
 }
 
-function currentAiSpeed(aiPlayer) {
-  return aiIsHardcore(aiPlayer) ? GAME_SETTINGS.aiHardcoreSpeed : GAME_SETTINGS.aiStartSpeed;
+function currentAiSpeed(aiPlayer, settings) {
+  return aiIsHardcore(aiPlayer, settings) ? settings.aiHardcoreSpeed : settings.aiStartSpeed;
 }
 
-function currentAiBulletSpeed(aiPlayer) {
-  return aiIsHardcore(aiPlayer) ? GAME_SETTINGS.aiHardcoreBulletSpeed : GAME_SETTINGS.aiStartBulletSpeed;
+function currentAiBulletSpeed(aiPlayer, settings) {
+  return aiIsHardcore(aiPlayer, settings) ? settings.aiHardcoreBulletSpeed : settings.aiStartBulletSpeed;
 }
 
-function currentAiFireCooldownMs(aiPlayer) {
-  const shotsPerSecond = aiIsHardcore(aiPlayer)
-    ? GAME_SETTINGS.aiHardcoreShotsPerSecond
-    : GAME_SETTINGS.aiStartShotsPerSecond;
+function currentAiFireCooldownMs(aiPlayer, settings) {
+  const shotsPerSecond = aiIsHardcore(aiPlayer, settings)
+    ? settings.aiHardcoreShotsPerSecond
+    : settings.aiStartShotsPerSecond;
   return 1000 / shotsPerSecond;
 }
 
-function incomingBulletDodge(aiPlayer, bullets) {
+function incomingBulletDodge(aiPlayer, bullets, settings) {
+  if (settings.aiDodgeLookahead <= 0 || settings.aiDodgeRadius <= 0 || settings.aiDodgeWeight <= 0) {
+    return { x: 0, y: 0 };
+  }
+
   const aiCenter = playerCenter(aiPlayer);
   const dodge = { x: 0, y: 0 };
 
@@ -362,7 +414,7 @@ function incomingBulletDodge(aiPlayer, bullets) {
     };
     const forwardDistance = toAi.x * bulletDirection.x + toAi.y * bulletDirection.y;
 
-    if (forwardDistance < 0 || forwardDistance > GAME_SETTINGS.aiDodgeLookahead) continue;
+    if (forwardDistance < 0 || forwardDistance > settings.aiDodgeLookahead) continue;
 
     const closestPoint = {
       x: bullet.x + bulletDirection.x * forwardDistance,
@@ -370,7 +422,7 @@ function incomingBulletDodge(aiPlayer, bullets) {
     };
     const missDistance = distanceBetween(aiCenter, closestPoint);
 
-    if (missDistance > GAME_SETTINGS.aiDodgeRadius) continue;
+    if (missDistance > settings.aiDodgeRadius) continue;
 
     const dodgeSide = {
       x: -bulletDirection.y,
@@ -381,10 +433,10 @@ function incomingBulletDodge(aiPlayer, bullets) {
       dodgeSide.y *= -1;
     }
 
-    const distanceDanger = 1 - missDistance / GAME_SETTINGS.aiDodgeRadius;
-    const timeDanger = 1 - forwardDistance / GAME_SETTINGS.aiDodgeLookahead;
-    dodge.x += dodgeSide.x * (distanceDanger + timeDanger) * GAME_SETTINGS.aiDodgeWeight;
-    dodge.y += dodgeSide.y * (distanceDanger + timeDanger) * GAME_SETTINGS.aiDodgeWeight;
+    const distanceDanger = 1 - missDistance / settings.aiDodgeRadius;
+    const timeDanger = 1 - forwardDistance / settings.aiDodgeLookahead;
+    dodge.x += dodgeSide.x * (distanceDanger + timeDanger) * settings.aiDodgeWeight;
+    dodge.y += dodgeSide.y * (distanceDanger + timeDanger) * settings.aiDodgeWeight;
   }
 
   return dodge;
@@ -405,25 +457,26 @@ function applyAiMovement(aiPlayer, humanPlayer, room) {
     : { x: toHuman.x / distance, y: toHuman.y / distance };
   const lineBlocked = rectLineBlocked(aiCenter, humanCenter, room.cactuses);
   const movement = { x: 0, y: 0 };
+  const settings = room.settings;
 
   if (lineBlocked) {
     movement.x += direction.x;
     movement.y += direction.y;
   } else {
-    if (distance < GAME_SETTINGS.aiTooCloseDistance) {
+    if (distance < settings.aiTooCloseDistance) {
       movement.x -= direction.x;
       movement.y -= direction.y;
-    } else if (distance > GAME_SETTINGS.aiTooFarDistance) {
+    } else if (distance > settings.aiTooFarDistance) {
       movement.x += direction.x;
       movement.y += direction.y;
     }
 
-    const strafeAmount = Math.sin(now() / GAME_SETTINGS.aiStrafeCycleMs) * GAME_SETTINGS.aiStrafeStrength;
+    const strafeAmount = Math.sin(now() / settings.aiStrafeCycleMs) * settings.aiStrafeStrength;
     movement.x += -direction.y * strafeAmount;
     movement.y += direction.x * strafeAmount;
   }
 
-  const dodge = incomingBulletDodge(aiPlayer, room.bullets);
+  const dodge = incomingBulletDodge(aiPlayer, room.bullets, settings);
   movement.x += dodge.x;
   movement.y += dodge.y;
 
@@ -437,7 +490,7 @@ function applyAiMovement(aiPlayer, humanPlayer, room) {
     }
   }
 
-  if (nearestCactus && nearestDistance < CACTUS_SIZE * GAME_SETTINGS.aiCactusAvoidDistanceMultiplier) {
+  if (nearestCactus && nearestDistance < CACTUS_SIZE * settings.aiCactusAvoidDistanceMultiplier) {
     const cactusCenter = centerOf(nearestCactus);
     const away = {
       x: aiCenter.x - cactusCenter.x,
@@ -445,14 +498,14 @@ function applyAiMovement(aiPlayer, humanPlayer, room) {
     };
     const awayLength = Math.hypot(away.x, away.y);
     if (awayLength > 0) {
-      movement.x += (away.x / awayLength) * GAME_SETTINGS.aiCactusAvoidWeight;
-      movement.y += (away.y / awayLength) * GAME_SETTINGS.aiCactusAvoidWeight;
+      movement.x += (away.x / awayLength) * settings.aiCactusAvoidWeight;
+      movement.y += (away.y / awayLength) * settings.aiCactusAvoidWeight;
     }
   }
 
   const movementLength = Math.hypot(movement.x, movement.y);
   if (movementLength > 0) {
-    const speed = currentAiSpeed(aiPlayer);
+    const speed = currentAiSpeed(aiPlayer, settings);
     movement.x = (movement.x / movementLength) * speed;
     movement.y = (movement.y / movementLength) * speed;
   }
@@ -470,11 +523,11 @@ function applyAiMovement(aiPlayer, humanPlayer, room) {
   return touchedCactus;
 }
 
-function currentAiTarget(aiPlayer, humanPlayer) {
+function currentAiTarget(aiPlayer, humanPlayer, settings) {
   const aiCenter = playerCenter(aiPlayer);
   const humanCenter = playerCenter(humanPlayer);
   const distance = distanceBetween(aiCenter, humanCenter);
-  const framesUntilHit = distance / currentAiBulletSpeed(aiPlayer);
+  const framesUntilHit = distance / currentAiBulletSpeed(aiPlayer, settings);
 
   return {
     x: clamp(humanCenter.x + humanPlayer.vx * framesUntilHit, 0, ARENA_SIZE),
@@ -485,22 +538,23 @@ function currentAiTarget(aiPlayer, humanPlayer) {
 function applyAiShooting(aiPlayer, humanPlayer, room, currentTime) {
   const aiCenter = playerCenter(aiPlayer);
   const humanCenter = playerCenter(humanPlayer);
+  const settings = room.settings;
   aiPlayer.input.shooting = false;
   if (rectLineBlocked(aiCenter, humanCenter, room.cactuses)) return;
 
   aiPlayer.input.shooting = true;
-  const target = currentAiTarget(aiPlayer, humanPlayer);
+  const target = currentAiTarget(aiPlayer, humanPlayer, settings);
   aiPlayer.input.aimX = target.x;
   aiPlayer.input.aimY = target.y;
-  aiPlayer.fireCooldownMs = currentAiFireCooldownMs(aiPlayer);
+  aiPlayer.fireCooldownMs = currentAiFireCooldownMs(aiPlayer, settings);
   shoot(aiPlayer, room, currentTime, {
-    fireCooldownMs: currentAiFireCooldownMs(aiPlayer),
-    bulletSpeed: currentAiBulletSpeed(aiPlayer)
+    fireCooldownMs: currentAiFireCooldownMs(aiPlayer, settings),
+    bulletSpeed: currentAiBulletSpeed(aiPlayer, settings)
   });
 }
 
-function damageFromCactuses(player, cactuses, currentTime, touchedCactus) {
-  if (currentTime - player.lastCactusDamageAt < TOUCH_DAMAGE_COOLDOWN_MS) return;
+function damageFromCactuses(player, cactuses, currentTime, touchedCactus, settings) {
+  if (currentTime - player.lastCactusDamageAt < settings.cactusDamageCooldownMs) return;
 
   if (touchedCactus || cactuses.some(cactus => rectsCollide(playerRect(player), cactus))) {
     player.health = Math.max(0, player.health - 1);
@@ -509,8 +563,8 @@ function damageFromCactuses(player, cactuses, currentTime, touchedCactus) {
 }
 
 function shoot(player, room, currentTime, options = {}) {
-  const fireCooldownMs = options.fireCooldownMs ?? PLAYER_FIRE_COOLDOWN_MS;
-  const bulletSpeed = options.bulletSpeed ?? BULLET_SPEED;
+  const fireCooldownMs = options.fireCooldownMs ?? (1000 / room.settings.playerShotsPerSecond);
+  const bulletSpeed = options.bulletSpeed ?? room.settings.bulletSpeed;
   if (!player.input.shooting || currentTime - player.lastShotAt < fireCooldownMs) return;
 
   const centerX = player.x + PLAYER_SIZE / 2;
@@ -604,19 +658,19 @@ function tickRoom(room) {
     if (room.mode === ROOM_MODE_AI) {
       const human = room.players[1];
       const ai = room.players[AI_SLOT];
-      touched[human.slot] = applyInput(human, room.cactuses);
+      touched[human.slot] = applyInput(human, room.cactuses, room.settings);
       shoot(human, room, currentTime);
       touched[ai.slot] = applyAiMovement(ai, human, room);
       applyAiShooting(ai, human, room, currentTime);
     } else {
       for (const player of livingPlayers(room)) {
-        touched[player.slot] = applyInput(player, room.cactuses);
+        touched[player.slot] = applyInput(player, room.cactuses, room.settings);
         shoot(player, room, currentTime);
       }
     }
 
     for (const player of livingPlayers(room)) {
-      damageFromCactuses(player, room.cactuses, currentTime, touched[player.slot]);
+      damageFromCactuses(player, room.cactuses, currentTime, touched[player.slot], room.settings);
     }
 
     updateBullets(room);
@@ -642,19 +696,9 @@ function publicState(room) {
     arenaSize: ARENA_SIZE,
     playerSize: PLAYER_SIZE,
     bulletSize: BULLET_SIZE,
-    playerLives: PLAYER_LIVES,
+    playerLives: room.settings.playerLives,
     mode: room.mode,
-    settings: {
-      fps: GAME_SETTINGS.fps,
-      playerSpeed: GAME_SETTINGS.playerSpeed,
-      bulletSpeed: GAME_SETTINGS.bulletSpeed,
-      playerShotsPerSecond: GAME_SETTINGS.playerShotsPerSecond,
-      aiStartSpeed: GAME_SETTINGS.aiStartSpeed,
-      aiHardcoreSpeed: GAME_SETTINGS.aiHardcoreSpeed,
-      aiStartShotsPerSecond: GAME_SETTINGS.aiStartShotsPerSecond,
-      aiHardcoreShotsPerSecond: GAME_SETTINGS.aiHardcoreShotsPerSecond,
-      cactusDamageCooldownMs: GAME_SETTINGS.cactusDamageCooldownMs
-    },
+    settings: room.settings,
     waiting: !roomIsReady(room),
     winner: room.winner,
     cactuses: room.cactuses,
@@ -767,6 +811,19 @@ wss.on('connection', socket => {
 
     if (message.type === 'restart' && room.winner) {
       resetRoom(room);
+      broadcastState(room);
+      return;
+    }
+
+    if (message.type === 'updateSettings') {
+      if (slot !== 1) {
+        send(socket, { type: 'error', error: 'Only player 1 can change room settings' });
+        return;
+      }
+
+      room.settings = cleanRoomSettings(message.settings, room.settings);
+      resetRoom(room);
+      send(socket, { type: 'settingsUpdated', settings: room.settings });
       broadcastState(room);
     }
   });

@@ -12,9 +12,16 @@ const p1Health = document.getElementById('p1Health');
 const p2Name = document.getElementById('p2Name');
 const p2Health = document.getElementById('p2Health');
 const restartButton = document.getElementById('restartButton');
+const settingsButton = document.getElementById('settingsButton');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlayTitle');
 const overlayText = document.getElementById('overlayText');
+const settingsPanel = document.getElementById('settingsPanel');
+const settingsForm = document.getElementById('settingsForm');
+const settingsHint = document.getElementById('settingsHint');
+const closeSettingsButton = document.getElementById('closeSettingsButton');
+const resetSettingsButton = document.getElementById('resetSettingsButton');
+const applySettingsButton = document.getElementById('applySettingsButton');
 
 // ---------- Easy client settings ----------
 // Gameplay speed is controlled by shooterGameRoutes.js on the server.
@@ -27,6 +34,32 @@ const CLIENT_SETTINGS = Object.freeze({
   inputSendEveryMs: 16,
   aimLineDash: [8, 10]
 });
+
+const DEFAULT_ROOM_SETTINGS = Object.freeze({
+  playerSpeed: 6.7,
+  playerLives: 8,
+  playerShotsPerSecond: 4,
+  bulletSpeed: 11.7,
+  cactusDamageCooldownMs: 900,
+  aiStartSpeed: 1,
+  aiHardcoreSpeed: 10,
+  aiStartBulletSpeed: 4,
+  aiHardcoreBulletSpeed: 11.7,
+  aiStartShotsPerSecond: 0.5,
+  aiHardcoreShotsPerSecond: 50,
+  aiHardcoreAfterLosingLives: 5,
+  aiDodgeLookahead: 360,
+  aiDodgeRadius: 95,
+  aiDodgeWeight: 3.5,
+  aiTooCloseDistance: 240,
+  aiTooFarDistance: 380,
+  aiStrafeStrength: 0.8,
+  aiStrafeCycleMs: 380,
+  aiCactusAvoidDistanceMultiplier: 1.45,
+  aiCactusAvoidWeight: 1.8
+});
+
+const ROOM_SETTING_FIELDS = Object.keys(DEFAULT_ROOM_SETTINGS);
 
 roomInput.maxLength = CLIENT_SETTINGS.roomCodeDigits;
 roomInput.placeholder = '0'.repeat(CLIENT_SETTINGS.roomCodeDigits);
@@ -41,6 +74,7 @@ let aim = {
   y: CLIENT_SETTINGS.defaultArenaSize / 2
 };
 let lastInputSentAt = 0;
+let lastSettingsJson = '';
 
 const keys = {
   up: false,
@@ -114,6 +148,12 @@ function connect(room, mode = 'online') {
       return;
     }
 
+    if (message.type === 'settingsUpdated') {
+      syncSettingsForm(message.settings, true);
+      setStatus('Settings applied');
+      return;
+    }
+
     if (message.type === 'error') {
       setStatus(message.error || 'Connection error');
       showOverlay('Room unavailable', 'Create a room or check the code.');
@@ -124,6 +164,7 @@ function connect(room, mode = 'online') {
     joined = false;
     setStatus('Disconnected');
     restartButton.disabled = true;
+    settingsButton.disabled = true;
     showOverlay('Disconnected', 'Create or join a room.');
   });
 }
@@ -145,6 +186,13 @@ function updateUi() {
   p2Name.textContent = state.mode === 'ai' ? 'AI' : 'Red';
   p2Health.textContent = state.players?.[2]?.health ?? 0;
   restartButton.disabled = !state.winner;
+  settingsButton.disabled = !joined;
+  applySettingsButton.disabled = yourSlot !== 1 || !joined;
+  settingsHint.textContent = yourSlot === 1
+    ? 'Applying settings restarts this room.'
+    : 'Only player 1 can change room settings.';
+
+  syncSettingsForm(state.settings);
 
   if (state.waiting) {
     showOverlay('Waiting for player 2', `Room ${state.roomCode}`);
@@ -170,6 +218,47 @@ function showOverlay(title, text) {
 
 function hideOverlay() {
   overlay.classList.add('hidden');
+}
+
+function mergedRoomSettings(settings = {}) {
+  return {
+    ...DEFAULT_ROOM_SETTINGS,
+    ...settings
+  };
+}
+
+function syncSettingsForm(settings, force = false) {
+  const merged = mergedRoomSettings(settings);
+  const nextJson = JSON.stringify(merged);
+  if (!force && nextJson === lastSettingsJson) return;
+
+  for (const field of ROOM_SETTING_FIELDS) {
+    const input = settingsForm.elements[field];
+    if (input) input.value = merged[field];
+  }
+
+  lastSettingsJson = nextJson;
+}
+
+function readSettingsForm() {
+  const settings = {};
+
+  for (const field of ROOM_SETTING_FIELDS) {
+    const input = settingsForm.elements[field];
+    if (!input) continue;
+    settings[field] = Number(input.value);
+  }
+
+  return settings;
+}
+
+function showSettingsPanel() {
+  syncSettingsForm(state?.settings || DEFAULT_ROOM_SETTINGS, true);
+  settingsPanel.classList.remove('hidden');
+}
+
+function hideSettingsPanel() {
+  settingsPanel.classList.add('hidden');
 }
 
 function canvasPoint(event) {
@@ -376,6 +465,32 @@ roomInput.addEventListener('input', () => {
 restartButton.addEventListener('click', () => {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ type: 'restart' }));
+});
+
+settingsButton.addEventListener('click', () => {
+  showSettingsPanel();
+});
+
+closeSettingsButton.addEventListener('click', () => {
+  hideSettingsPanel();
+});
+
+resetSettingsButton.addEventListener('click', () => {
+  for (const field of ROOM_SETTING_FIELDS) {
+    const input = settingsForm.elements[field];
+    if (input) input.value = DEFAULT_ROOM_SETTINGS[field];
+  }
+});
+
+settingsForm.addEventListener('submit', event => {
+  event.preventDefault();
+
+  if (!socket || socket.readyState !== WebSocket.OPEN || yourSlot !== 1) return;
+
+  socket.send(JSON.stringify({
+    type: 'updateSettings',
+    settings: readSettingsForm()
+  }));
 });
 
 requestAnimationFrame(loop);

@@ -71,6 +71,10 @@ input:focus {
   outline: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .shell {
   width: min(1180px, calc(100vw - 28px));
   margin: 0 auto;
@@ -171,6 +175,57 @@ p {
   line-height: 1.1;
 }
 
+.settings-panel {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(27, 29, 34, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.settings-form {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-head,
+.settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-grid label {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #2d313a;
+  border-radius: 8px;
+  background: #121419;
+}
+
+.settings-grid span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.settings-grid input {
+  width: 100%;
+  text-align: left;
+}
+
 .arena-shell {
   position: relative;
   width: min(100%, calc(100vh - 122px));
@@ -241,7 +296,7 @@ canvas {
   }
 
   .scoreboard {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .scoreboard > div,
@@ -256,6 +311,10 @@ canvas {
   .arena-shell {
     width: 100%;
   }
+
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
@@ -263,7 +322,18 @@ canvas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  #restartButton {
+  #restartButton,
+  #settingsButton {
     grid-column: span 2;
+  }
+
+  .settings-head,
+  .settings-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
   }
 }

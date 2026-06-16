@@ -47,6 +47,7 @@
           <strong id="p2Health">8</strong>
         </div>
         <button id="restartButton" type="button" disabled>Restart</button>
+        <button id="settingsButton" type="button" disabled>Settings</button>
       </aside>
 
       <div class="arena-shell">
@@ -57,8 +58,112 @@
         </div>
       </div>
     </section>
+
+    <section id="settingsPanel" class="settings-panel hidden" aria-label="Room settings">
+      <form id="settingsForm" class="settings-form">
+        <div class="settings-head">
+          <div>
+            <h2>Room Settings</h2>
+            <p id="settingsHint">Player 1 can apply settings.</p>
+          </div>
+          <button id="closeSettingsButton" type="button">Close</button>
+        </div>
+
+        <div class="settings-grid">
+          <label>
+            <span>Player speed</span>
+            <input name="playerSpeed" type="number" min="1" max="18" step="0.1">
+          </label>
+          <label>
+            <span>Bullet speed</span>
+            <input name="bulletSpeed" type="number" min="1" max="30" step="0.1">
+          </label>
+          <label>
+            <span>Shots / second</span>
+            <input name="playerShotsPerSecond" type="number" min="0.2" max="20" step="0.1">
+          </label>
+          <label>
+            <span>Lives</span>
+            <input name="playerLives" type="number" min="1" max="50" step="1">
+          </label>
+          <label>
+            <span>Cactus cooldown ms</span>
+            <input name="cactusDamageCooldownMs" type="number" min="100" max="5000" step="50">
+          </label>
+          <label>
+            <span>AI start speed</span>
+            <input name="aiStartSpeed" type="number" min="0" max="18" step="0.1">
+          </label>
+          <label>
+            <span>AI hardcore speed</span>
+            <input name="aiHardcoreSpeed" type="number" min="0" max="24" step="0.1">
+          </label>
+          <label>
+            <span>AI start bullet speed</span>
+            <input name="aiStartBulletSpeed" type="number" min="1" max="30" step="0.1">
+          </label>
+          <label>
+            <span>AI hardcore bullet speed</span>
+            <input name="aiHardcoreBulletSpeed" type="number" min="1" max="36" step="0.1">
+          </label>
+          <label>
+            <span>AI start shots / second</span>
+            <input name="aiStartShotsPerSecond" type="number" min="0.1" max="20" step="0.1">
+          </label>
+          <label>
+            <span>AI hardcore shots / second</span>
+            <input name="aiHardcoreShotsPerSecond" type="number" min="0.1" max="80" step="0.1">
+          </label>
+          <label>
+            <span>AI hardcore after lives lost</span>
+            <input name="aiHardcoreAfterLosingLives" type="number" min="0" max="50" step="1">
+          </label>
+          <label>
+            <span>AI dodge lookahead</span>
+            <input name="aiDodgeLookahead" type="number" min="0" max="1000" step="10">
+          </label>
+          <label>
+            <span>AI dodge radius</span>
+            <input name="aiDodgeRadius" type="number" min="0" max="300" step="5">
+          </label>
+          <label>
+            <span>AI dodge weight</span>
+            <input name="aiDodgeWeight" type="number" min="0" max="12" step="0.1">
+          </label>
+          <label>
+            <span>AI too close distance</span>
+            <input name="aiTooCloseDistance" type="number" min="0" max="700" step="10">
+          </label>
+          <label>
+            <span>AI too far distance</span>
+            <input name="aiTooFarDistance" type="number" min="0" max="900" step="10">
+          </label>
+          <label>
+            <span>AI strafe strength</span>
+            <input name="aiStrafeStrength" type="number" min="0" max="5" step="0.1">
+          </label>
+          <label>
+            <span>AI strafe cycle ms</span>
+            <input name="aiStrafeCycleMs" type="number" min="80" max="3000" step="20">
+          </label>
+          <label>
+            <span>AI cactus avoid range</span>
+            <input name="aiCactusAvoidDistanceMultiplier" type="number" min="0" max="5" step="0.05">
+          </label>
+          <label>
+            <span>AI cactus avoid weight</span>
+            <input name="aiCactusAvoidWeight" type="number" min="0" max="8" step="0.1">
+          </label>
+        </div>
+
+        <div class="settings-actions">
+          <button id="resetSettingsButton" type="button">Defaults</button>
+          <button id="applySettingsButton" type="submit">Apply & Restart</button>
+        </div>
+      </form>
+    </section>
   </main>
 
-  <script src="/shooter-game/game.js?v=ai-mode-1" defer></script>
+  <script src="/shooter-game/game.js?v=settings-1" defer></script>
 </body>
 </html>
