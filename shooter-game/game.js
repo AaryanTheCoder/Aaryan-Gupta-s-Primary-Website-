@@ -153,12 +153,14 @@ function connect(room, mode = 'online') {
     if (message.type === 'settingsUpdated') {
       settingsSubmitInProgress = false;
       syncSettingsForm(message.settings, true);
+      updateSettingsControls();
       setStatus('Settings applied');
       return;
     }
 
     if (message.type === 'error') {
       settingsSubmitInProgress = false;
+      updateSettingsControls();
       setStatus(message.error || 'Connection error');
       showOverlay('Room unavailable', 'Create a room or check the code.');
     }
@@ -169,7 +171,7 @@ function connect(room, mode = 'online') {
     settingsSubmitInProgress = false;
     setStatus('Disconnected');
     restartButton.disabled = true;
-    settingsButton.disabled = true;
+    applySettingsButton.disabled = true;
     showOverlay('Disconnected', 'Create or join a room.');
   });
 }
@@ -191,11 +193,7 @@ function updateUi() {
   p2Name.textContent = state.mode === 'ai' ? 'AI' : 'Red';
   p2Health.textContent = state.players?.[2]?.health ?? 0;
   restartButton.disabled = !state.winner;
-  settingsButton.disabled = !joined;
-  applySettingsButton.disabled = yourSlot !== 1 || !joined || settingsSubmitInProgress;
-  settingsHint.textContent = yourSlot === 1
-    ? 'Applying settings restarts this room.'
-    : 'Only player 1 can change room settings.';
+  updateSettingsControls();
 
   syncSettingsForm(state.settings);
 
@@ -262,11 +260,25 @@ function readSettingsForm() {
 
 function showSettingsPanel() {
   syncSettingsForm(state?.settings || DEFAULT_ROOM_SETTINGS, true);
+  updateSettingsControls();
   settingsPanel.classList.remove('hidden');
 }
 
 function hideSettingsPanel() {
   settingsPanel.classList.add('hidden');
+}
+
+function updateSettingsControls() {
+  if (!joined || !state) {
+    applySettingsButton.disabled = true;
+    settingsHint.textContent = 'Create or join a room before applying settings.';
+    return;
+  }
+
+  applySettingsButton.disabled = yourSlot !== 1 || settingsSubmitInProgress;
+  settingsHint.textContent = yourSlot === 1
+    ? 'Applying settings restarts this room.'
+    : 'Only player 1 can change room settings.';
 }
 
 function canvasPoint(event) {
@@ -416,6 +428,13 @@ function setKey(event, value) {
 }
 
 document.addEventListener('keydown', event => {
+  if (!settingsPanel.classList.contains('hidden')) {
+    if (event.key === 'Escape') {
+      hideSettingsPanel();
+    }
+    return;
+  }
+
   setKey(event, true);
   if ((event.key === 'r' || event.key === 'R') && state?.winner) {
     restartButton.click();
@@ -481,6 +500,12 @@ settingsButton.addEventListener('click', () => {
 
 closeSettingsButton.addEventListener('click', () => {
   hideSettingsPanel();
+});
+
+settingsPanel.addEventListener('click', event => {
+  if (event.target === settingsPanel) {
+    hideSettingsPanel();
+  }
 });
 
 resetSettingsButton.addEventListener('click', () => {
