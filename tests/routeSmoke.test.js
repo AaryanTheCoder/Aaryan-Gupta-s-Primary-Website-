@@ -1,7 +1,12 @@
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { Readable } = require('stream');
 
 process.env.STORAGE_PASSWORD = process.env.STORAGE_PASSWORD || 'test-password';
+const gameTheoryDataPath = path.join(os.tmpdir(), `game-theory-route-smoke-${process.pid}.json`);
+process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
 
 const server = require('../Server2');
 const requestHandler = server.listeners('request')[0];
@@ -84,6 +89,38 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(gameTheoryJournalImage.statusCode, 200);
   assert.match(gameTheoryJournalImage.headers['content-type'], /^image\/jpeg/);
 
+  const gameTheoryContentBefore = await invoke('/game-theory/api/content');
+  assert.strictEqual(gameTheoryContentBefore.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(gameTheoryContentBefore.body).sections, {});
+
+  const gameTheoryAdminDenied = await invoke('/game-theory/api/admin/verify', { method: 'POST' });
+  assert.strictEqual(gameTheoryAdminDenied.statusCode, 401);
+
+  const gameTheoryAdminVerified = await invoke('/game-theory/api/admin/verify', {
+    method: 'POST',
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(gameTheoryAdminVerified.statusCode, 200);
+
+  const customGameTheorySections = {
+    'section-0': 'Edited <strong>Game Theory</strong>',
+    'section-12': '<p>Custom explanation</p>'
+  };
+  const gameTheorySave = await invoke('/game-theory/api/content', {
+    method: 'PUT',
+    headers: {
+      authorization: basicAuth(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ sections: customGameTheorySections })
+  });
+  assert.strictEqual(gameTheorySave.statusCode, 200);
+  assert.strictEqual(JSON.parse(gameTheorySave.body).ok, true);
+
+  const gameTheoryContentAfter = await invoke('/game-theory/api/content');
+  assert.strictEqual(gameTheoryContentAfter.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(gameTheoryContentAfter.body).sections, customGameTheorySections);
+
   const gameTheoryTraversal = await invoke('/game-theory/../Server2.js');
   assert.notStrictEqual(gameTheoryTraversal.statusCode, 200);
 
@@ -141,4 +178,6 @@ function invoke(pathname, options = {}) {
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
+}).finally(() => {
+  fs.rmSync(gameTheoryDataPath, { force: true });
 });

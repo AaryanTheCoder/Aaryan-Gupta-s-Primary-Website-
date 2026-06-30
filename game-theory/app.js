@@ -9,10 +9,422 @@
   const chapters = ['monty', 'prisoner', 'newcomb', 'hundred'];
   let audioContext = null;
   let soundEnabled = false;
+  let adminEditing = false;
+  let adminDirty = false;
+  let adminAuthHeader = '';
+  let selectedEditable = null;
+  let selectedMedia = null;
+  let adminSnapshot = null;
+  let toastTimer = null;
+  const managedRegions = [];
+  const managedTemplates = [];
+  const CMS_SELECTOR = [
+    'main h1',
+    'main h2',
+    'main h3:not([id])',
+    'main p:not([id]):not(.mono-label):not(.kicker):not(.bot-clue):not(.loop-status)',
+    'main code',
+    'main .truth-table .table-head span',
+    'main .payoff-matrix > b',
+    'main .payoff-matrix > span',
+    'footer > p:first-child'
+  ].join(',');
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms * delayScale));
+
+  function sanitizeHtml(rawHtml) {
+    const documentFragment = new DOMParser().parseFromString(`<body>${String(rawHtml || '')}</body>`, 'text/html');
+    const body = documentFragment.body;
+    const blockedTags = 'script,style,iframe,object,embed,link,meta,base,form,input,button,textarea,select,svg,math';
+    body.querySelectorAll(blockedTags).forEach(element => element.remove());
+    const allowedTags = new Set([
+      'A', 'ARTICLE', 'B', 'BR', 'CODE', 'DIV', 'EM', 'FIGCAPTION', 'FIGURE',
+      'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'I', 'IMG', 'LI', 'OL', 'P',
+      'SMALL', 'SPAN', 'STRONG', 'SUB', 'SUP', 'UL'
+    ]);
+
+    [...body.querySelectorAll('*')].forEach(element => {
+      if (!allowedTags.has(element.tagName)) {
+        element.replaceWith(...element.childNodes);
+        return;
+      }
+
+      [...element.attributes].forEach(attribute => {
+        const allowed = ['alt', 'class', 'href', 'rel', 'src', 'target', 'title'].includes(attribute.name);
+        if (!allowed || attribute.name.startsWith('on')) element.removeAttribute(attribute.name);
+      });
+
+      if (element.hasAttribute('class')) {
+        const safeClasses = element.className
+          .split(/\s+/)
+          .filter(className => /^[a-z0-9_-]{1,64}$/i.test(className));
+        if (safeClasses.length) element.className = safeClasses.join(' ');
+        else element.removeAttribute('class');
+      }
+
+      if (element.tagName === 'IMG') {
+        const source = element.getAttribute('src') || '';
+        const safeImage = /^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(source)
+          || /^\/game-theory\/assets\//.test(source)
+          || /^https:\/\//i.test(source);
+        if (!safeImage) element.remove();
+      }
+
+      if (element.tagName === 'A') {
+        const href = element.getAttribute('href') || '';
+        if (!/^(?:https?:\/\/|\/|#)/i.test(href)) element.removeAttribute('href');
+        if (/^https?:\/\//i.test(href)) {
+          element.setAttribute('target', '_blank');
+          element.setAttribute('rel', 'noopener');
+        }
+      }
+    });
+
+    return body.innerHTML;
+  }
+
+  function registerManagedContent() {
+    $$(CMS_SELECTOR).forEach((element, index) => {
+      const key = `section-${index}`;
+      element.dataset.cmsKey = key;
+      managedRegions.push({
+        key,
+        element,
+        defaultHtml: sanitizeHtml(element.innerHTML)
+      });
+    });
+
+    $$('template[id^="info-"]').forEach((template, index) => {
+      const key = `section-${managedRegions.length + index}`;
+      template.dataset.cmsKey = key;
+      managedTemplates.push({
+        key,
+        template,
+        defaultHtml: sanitizeHtml(template.innerHTML)
+      });
+    });
+  }
+
+  function findTemplateRecord(template) {
+    return managedTemplates.find(record => record.template === template) || null;
+  }
+
+  function applyManagedSections(sections = {}) {
+    managedRegions.forEach(record => {
+      if (typeof sections[record.key] === 'string') {
+        record.element.innerHTML = sanitizeHtml(sections[record.key]);
+      }
+    });
+    managedTemplates.forEach(record => {
+      if (typeof sections[record.key] === 'string') {
+        record.template.innerHTML = sanitizeHtml(sections[record.key]);
+      }
+    });
+    decorateAdminMedia();
+  }
+
+  async function loadManagedContent() {
+    try {
+      const response = await fetch('/game-theory/api/content', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Content request failed (${response.status})`);
+      const payload = await response.json();
+      applyManagedSections(payload.sections);
+    } catch (error) {
+      console.warn('Game Theory custom content could not be loaded:', error);
+    }
+  }
+
+  function captureManagedSections() {
+    commitOpenTemplateEdits();
+    const sections = {};
+    managedRegions.forEach(record => {
+      sections[record.key] = sanitizeHtml(record.element.innerHTML);
+    });
+    managedTemplates.forEach(record => {
+      sections[record.key] = sanitizeHtml(record.template.innerHTML);
+    });
+    return sections;
+  }
+
+  function restoreManagedSections(snapshot) {
+    selectMedia(null);
+    managedRegions.forEach(record => {
+      record.element.innerHTML = snapshot?.[record.key] ?? record.defaultHtml;
+    });
+    managedTemplates.forEach(record => {
+      record.template.innerHTML = snapshot?.[record.key] ?? record.defaultHtml;
+    });
+    decorateAdminMedia();
+  }
+
+  function basicAuthorization(password) {
+    const bytes = new TextEncoder().encode(`:${password}`);
+    let binary = '';
+    bytes.forEach(byte => {
+      binary += String.fromCharCode(byte);
+    });
+    return `Basic ${btoa(binary)}`;
+  }
+
+  function showAdminToast(message, isError = false) {
+    const toast = $('#admin-toast');
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.style.borderColor = isError ? 'rgba(255, 107, 85, .55)' : '';
+    toast.hidden = false;
+    toastTimer = setTimeout(() => {
+      toast.hidden = true;
+    }, 3200);
+  }
+
+  function setAdminStatus(message) {
+    $('#admin-status').textContent = message;
+  }
+
+  function markAdminDirty(message = 'Unsaved changes') {
+    if (!adminEditing) return;
+    adminDirty = true;
+    setAdminStatus(message);
+  }
+
+  function selectEditable(element) {
+    if (!adminEditing || !element) return;
+    selectedEditable?.classList.remove('admin-selected');
+    selectedEditable = element;
+    selectedEditable.classList.add('admin-selected');
+    selectMedia(null);
+    setAdminStatus('Editing selected text block');
+  }
+
+  function selectMedia(media) {
+    selectedMedia?.classList.remove('admin-media-selected');
+    selectedMedia = media;
+    if (selectedMedia) {
+      selectedMedia.classList.add('admin-media-selected');
+      $('#admin-image-tools').hidden = false;
+      setAdminStatus('Image selected — align, drag, or remove it');
+    } else {
+      $('#admin-image-tools').hidden = true;
+    }
+  }
+
+  function decorateAdminMedia(root = document) {
+    $$('.admin-added-media', root).forEach(media => {
+      media.contentEditable = 'false';
+      media.draggable = adminEditing;
+      const caption = $('.admin-image-caption', media);
+      if (caption) caption.contentEditable = adminEditing ? 'true' : 'false';
+    });
+  }
+
+  function setEditableMode(enabled) {
+    managedRegions.forEach(record => {
+      record.element.contentEditable = enabled ? 'true' : 'false';
+      record.element.spellcheck = enabled;
+      if (!enabled) record.element.classList.remove('admin-selected');
+    });
+    adminEditing = enabled;
+    document.body.classList.toggle('admin-editing', enabled);
+    $('#admin-toolbar').hidden = !enabled;
+    if (!enabled) {
+      selectedEditable = null;
+      selectMedia(null);
+    }
+    decorateAdminMedia();
+  }
+
+  function commitOpenTemplateEdits() {
+    const content = $('#info-content');
+    const key = content?.dataset.cmsTemplateKey;
+    if (!key) return;
+    const record = managedTemplates.find(item => item.key === key);
+    if (record) record.template.innerHTML = sanitizeHtml(content.innerHTML);
+  }
+
+  function enableOpenTemplateEditing(template) {
+    if (!adminEditing) return;
+    const record = findTemplateRecord(template);
+    if (!record) return;
+    const content = $('#info-content');
+    content.dataset.cmsTemplateKey = record.key;
+    content.contentEditable = 'true';
+    content.spellcheck = true;
+    content.addEventListener('focus', () => {
+      selectedEditable = content;
+      selectMedia(null);
+      setAdminStatus('Editing this rules/explanation panel');
+    });
+    content.addEventListener('input', () => markAdminDirty('Unsaved explanation changes'));
+    decorateAdminMedia(content);
+  }
+
+  function clearOpenTemplateEditing() {
+    const content = $('#info-content');
+    if (!content) return;
+    content.contentEditable = 'false';
+    delete content.dataset.cmsTemplateKey;
+  }
+
+  async function decodeAdminImage(file) {
+    if ('createImageBitmap' in window) return createImageBitmap(file);
+    const source = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Image could not be read.'));
+      reader.readAsDataURL(file);
+    });
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Image could not be decoded.'));
+      image.src = source;
+    });
+  }
+
+  async function compressAdminImage(file) {
+    if (!file || !/^image\/(?:png|jpeg|gif|webp)$/i.test(file.type)) {
+      throw new Error('Choose a PNG, JPEG, GIF, or WebP image.');
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      throw new Error('Image must be smaller than 12 MB.');
+    }
+
+    const bitmap = await decodeAdminImage(file);
+    let width = bitmap.width;
+    let height = bitmap.height;
+    const maxDimension = 1500;
+    const scale = Math.min(1, maxDimension / Math.max(width, height));
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    let quality = 0.82;
+    let dataUrl = canvas.toDataURL('image/webp', quality);
+    while (dataUrl.length > 620_000 && quality > 0.42) {
+      quality -= 0.1;
+      dataUrl = canvas.toDataURL('image/webp', quality);
+    }
+    if (dataUrl.length > 720_000) {
+      throw new Error('This image remains too large after compression.');
+    }
+    return dataUrl;
+  }
+
+  function insertAdminImage(dataUrl, fileName) {
+    if (!selectedEditable) {
+      showAdminToast('Select a highlighted text block first.', true);
+      return;
+    }
+
+    const media = document.createElement('span');
+    media.className = 'admin-added-media media-center';
+    media.contentEditable = 'false';
+    media.draggable = true;
+
+    const image = document.createElement('img');
+    image.src = dataUrl;
+    image.alt = fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+
+    const caption = document.createElement('span');
+    caption.className = 'admin-image-caption';
+    caption.contentEditable = 'true';
+    caption.textContent = 'Click to add a caption';
+
+    media.append(image, caption);
+    selectedEditable.append(media);
+    selectMedia(media);
+    markAdminDirty('New image added — drag or align it, then save');
+    media.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
+  }
+
+  async function saveAdminChanges() {
+    const button = $('#admin-save');
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    setAdminStatus('Saving changes to the site…');
+    try {
+      const sections = captureManagedSections();
+      const response = await fetch('/game-theory/api/content', {
+        method: 'PUT',
+        headers: {
+          Authorization: adminAuthHeader,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sections })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Save failed (${response.status})`);
+      selectMedia(null);
+      applyManagedSections(sections);
+      adminSnapshot = { ...sections };
+      adminDirty = false;
+      setAdminStatus(`Saved ${new Date(payload.updatedAt).toLocaleTimeString()}`);
+      showAdminToast('Changes saved. They are now live on this site.');
+      beep(760, 0.14, 'triangle');
+    } catch (error) {
+      setAdminStatus('Save failed');
+      showAdminToast(error.message || 'Changes could not be saved.', true);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Save changes';
+    }
+  }
+
+  function showAdminLogin() {
+    $('#admin-login-error').hidden = true;
+    $('#admin-password').value = '';
+    $('#admin-login').hidden = false;
+    document.body.classList.add('modal-open');
+    requestAnimationFrame(() => $('#admin-password').focus());
+  }
+
+  function hideAdminLogin() {
+    $('#admin-login').hidden = true;
+    $('#admin-login-error').hidden = true;
+    $('#admin-password').value = '';
+    if (infoModal?.hidden !== false) document.body.classList.remove('modal-open');
+  }
+
+  function enterAdminMode() {
+    adminSnapshot = captureManagedSections();
+    adminDirty = false;
+    setEditableMode(true);
+    setAdminStatus('Select any highlighted text block to edit');
+    showAdminToast('Editing mode enabled. Changes are private until you press Save.');
+  }
+
+  function discardAdminChanges() {
+    if (!adminDirty) {
+      showAdminToast('There are no unsaved changes.');
+      return;
+    }
+    if (!window.confirm('Discard all unsaved Game Theory edits?')) return;
+    if (!infoModal.hidden) closeInfo();
+    restoreManagedSections(adminSnapshot);
+    adminDirty = false;
+    setAdminStatus('Unsaved changes discarded');
+    showAdminToast('Unsaved changes were discarded.');
+  }
+
+  function exitAdminMode() {
+    if (adminDirty && !window.confirm('Exit editing mode and discard unsaved changes?')) return;
+    if (!infoModal.hidden) closeInfo();
+    if (adminDirty) restoreManagedSections(adminSnapshot);
+    adminDirty = false;
+    adminAuthHeader = '';
+    setEditableMode(false);
+    showAdminToast('Editing mode closed.');
+  }
+
+  registerManagedContent();
+  const managedContentReady = loadManagedContent();
 
   function beep(frequency = 440, duration = 0.08, type = 'sine') {
     if (!soundEnabled) return;
@@ -96,6 +508,7 @@
     $('#info-title').textContent = template.dataset.title || 'Explanation';
     $('#info-type').textContent = template.dataset.type || 'Game guide';
     $('#info-content').replaceChildren(template.content.cloneNode(true));
+    enableOpenTemplateEditing(template);
     infoModal.hidden = false;
     document.body.classList.add('modal-open');
     trigger.setAttribute('aria-expanded', 'true');
@@ -105,6 +518,10 @@
 
   function closeInfo() {
     if (infoModal.hidden) return;
+    commitOpenTemplateEdits();
+    if (selectedEditable === $('#info-content')) selectedEditable = null;
+    selectMedia(null);
+    clearOpenTemplateEditing();
     infoModal.hidden = true;
     document.body.classList.remove('modal-open');
     $('#info-content').replaceChildren();
@@ -118,7 +535,10 @@
   $$('[data-info]').forEach(button => {
     button.setAttribute('aria-haspopup', 'dialog');
     button.setAttribute('aria-expanded', 'false');
-    button.addEventListener('click', () => openInfo(button.dataset.info, button));
+    button.addEventListener('click', async () => {
+      await managedContentReady;
+      openInfo(button.dataset.info, button);
+    });
   });
   $$('[data-close-info]').forEach(button => button.addEventListener('click', closeInfo));
   infoDialog.addEventListener('keydown', event => {
@@ -138,6 +558,131 @@
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !infoModal.hidden) closeInfo();
+    if (event.key === 'Escape' && !$('#admin-login').hidden) hideAdminLogin();
+  });
+
+  managedRegions.forEach(record => {
+    record.element.addEventListener('focus', () => selectEditable(record.element));
+    record.element.addEventListener('click', event => {
+      if (!adminEditing || event.target.closest('.admin-added-media')) return;
+      selectEditable(record.element);
+    });
+    record.element.addEventListener('input', () => markAdminDirty('Unsaved text changes'));
+  });
+
+  $('#admin-entry').addEventListener('click', async () => {
+    await managedContentReady;
+    showAdminLogin();
+  });
+  $('#admin-login-cancel').addEventListener('click', hideAdminLogin);
+  $('#admin-login-backdrop').addEventListener('click', hideAdminLogin);
+  $('#admin-login-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const password = $('#admin-password').value;
+    const submit = $('#admin-login-submit');
+    if (!password) return;
+    submit.disabled = true;
+    submit.textContent = 'Checking…';
+    $('#admin-login-error').hidden = true;
+    try {
+      const authorization = basicAuthorization(password);
+      const response = await fetch('/game-theory/api/admin/verify', {
+        method: 'POST',
+        headers: { Authorization: authorization }
+      });
+      if (!response.ok) throw new Error('Incorrect password');
+      adminAuthHeader = authorization;
+      hideAdminLogin();
+      enterAdminMode();
+    } catch (error) {
+      $('#admin-login-error').textContent = error.message || 'Admin login failed.';
+      $('#admin-login-error').hidden = false;
+      $('#admin-password').select();
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Enter editing mode';
+    }
+  });
+
+  $('#admin-add-image').addEventListener('click', () => {
+    if (!selectedEditable) {
+      showAdminToast('Select a highlighted text block before adding an image.', true);
+      return;
+    }
+    $('#admin-image-input').click();
+  });
+  $('#admin-image-input').addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setAdminStatus('Compressing image…');
+    try {
+      const dataUrl = await compressAdminImage(file);
+      insertAdminImage(dataUrl, file.name);
+    } catch (error) {
+      showAdminToast(error.message || 'Image could not be added.', true);
+      setAdminStatus('Image upload failed');
+    }
+  });
+
+  $$('[data-image-align]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (!selectedMedia) return;
+      selectedMedia.classList.remove('media-left', 'media-center', 'media-right', 'media-wide');
+      selectedMedia.classList.add(`media-${button.dataset.imageAlign}`);
+      markAdminDirty(`Image aligned ${button.dataset.imageAlign}`);
+    });
+  });
+  $('#admin-remove-image').addEventListener('click', () => {
+    if (!selectedMedia) return;
+    const media = selectedMedia;
+    selectMedia(null);
+    media.remove();
+    markAdminDirty('Image removed');
+  });
+
+  document.addEventListener('click', event => {
+    if (!adminEditing) return;
+    const media = event.target.closest('.admin-added-media');
+    if (media) {
+      event.stopPropagation();
+      selectMedia(media);
+    }
+  });
+  document.addEventListener('dragstart', event => {
+    if (!adminEditing) return;
+    const media = event.target.closest('.admin-added-media');
+    if (!media) return;
+    selectMedia(media);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', 'game-theory-admin-image');
+  });
+  document.addEventListener('dragover', event => {
+    if (!adminEditing || !selectedMedia) return;
+    const target = event.target.closest('[data-cms-key], [data-cms-template-key]');
+    if (!target) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  });
+  document.addEventListener('drop', event => {
+    if (!adminEditing || !selectedMedia) return;
+    const target = event.target.closest('[data-cms-key], [data-cms-template-key]');
+    if (!target) return;
+    event.preventDefault();
+    target.append(selectedMedia);
+    selectedEditable?.classList.remove('admin-selected');
+    selectedEditable = target;
+    target.classList.add('admin-selected');
+    markAdminDirty('Image moved to a new section');
+  });
+
+  $('#admin-save').addEventListener('click', saveAdminChanges);
+  $('#admin-discard').addEventListener('click', discardAdminChanges);
+  $('#admin-exit').addEventListener('click', exitAdminMode);
+  window.addEventListener('beforeunload', event => {
+    if (!adminEditing || !adminDirty) return;
+    event.preventDefault();
+    event.returnValue = '';
   });
 
   document.addEventListener('pointermove', event => {

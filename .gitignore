@@ -2,3 +2,5 @@ node_modules/
 simulator_data/
 planner-data.json
 planner-data.json.*.tmp
+game-theory-data.json
+game-theory-data.json.*.tmp

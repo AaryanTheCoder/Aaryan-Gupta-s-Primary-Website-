@@ -422,7 +422,47 @@
       <a href="https://commons.wikimedia.org/wiki/File:Domestic_goat_2016_G1.jpg" target="_blank" rel="noopener">Goat · George Chernilevsky · Public Domain</a>
       <a href="https://commons.wikimedia.org/wiki/File:Wikimedia_Foundation_Servers_2015-63.jpg" target="_blank" rel="noopener">Servers · Victor Grigas/WMF · CC BY-SA 3.0</a>
     </p>
+    <button class="tiny-admin" id="admin-entry" type="button">admin</button>
   </footer>
+
+  <aside class="admin-toolbar" id="admin-toolbar" hidden aria-label="Game Theory editor">
+    <div class="admin-mode-label">
+      <span></span>
+      <div><b>Editing site</b><small id="admin-status">Select highlighted text to edit</small></div>
+    </div>
+    <div class="admin-image-tools" id="admin-image-tools" hidden>
+      <span>Image:</span>
+      <button type="button" data-image-align="left" title="Place left">←</button>
+      <button type="button" data-image-align="center" title="Place center">↔</button>
+      <button type="button" data-image-align="right" title="Place right">→</button>
+      <button type="button" data-image-align="wide" title="Full width">□</button>
+      <button type="button" id="admin-remove-image" title="Remove image">×</button>
+    </div>
+    <div class="admin-actions">
+      <button class="admin-tool-button" id="admin-add-image" type="button">＋ Image</button>
+      <button class="admin-tool-button" id="admin-discard" type="button">Discard</button>
+      <button class="admin-tool-button" id="admin-exit" type="button">Exit</button>
+      <button class="admin-save-button" id="admin-save" type="button">Save changes</button>
+    </div>
+    <input id="admin-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+  </aside>
+  <div class="admin-toast" id="admin-toast" role="status" aria-live="polite" hidden></div>
+
+  <div class="admin-login" id="admin-login" hidden>
+    <button class="modal-backdrop" id="admin-login-backdrop" type="button" aria-label="Cancel admin login"></button>
+    <form class="admin-login-card" id="admin-login-form">
+      <p class="mono-label">Private controls</p>
+      <h2>Game Theory admin</h2>
+      <p>Enter the same password used by the other protected sections of this site.</p>
+      <label for="admin-password">Password</label>
+      <input id="admin-password" type="password" autocomplete="current-password" required>
+      <p class="admin-login-error" id="admin-login-error" role="alert" hidden>Incorrect password.</p>
+      <div>
+        <button class="admin-tool-button" id="admin-login-cancel" type="button">Cancel</button>
+        <button class="admin-save-button" id="admin-login-submit" type="submit">Enter editing mode</button>
+      </div>
+    </form>
+  </div>
 
   <div class="info-modal" id="info-modal" hidden>
     <button class="modal-backdrop" type="button" data-close-info aria-label="Close explanation"></button>
