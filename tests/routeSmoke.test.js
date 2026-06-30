@@ -70,6 +70,17 @@ function invoke(pathname, options = {}) {
   const shooterTraversal = await invoke('/shooter-game/../Server2.js');
   assert.notStrictEqual(shooterTraversal.statusCode, 200);
 
+  const gameTheory = await invoke('/game-theory');
+  assert.strictEqual(gameTheory.statusCode, 200);
+  assert.match(gameTheory.body, /Game Theory Arcade/);
+
+  const gameTheoryJs = await invoke('/game-theory/app.js');
+  assert.strictEqual(gameTheoryJs.statusCode, 200);
+  assert.match(gameTheoryJs.headers['content-type'], /^application\/javascript/);
+
+  const gameTheoryTraversal = await invoke('/game-theory/../Server2.js');
+  assert.notStrictEqual(gameTheoryTraversal.statusCode, 200);
+
   const simulatorTraversal = await invoke('/simulator/../simulatorRoutes.js', {
     headers: { authorization: basicAuth() }
   });

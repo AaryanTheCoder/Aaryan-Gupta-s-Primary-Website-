@@ -12,6 +12,7 @@ const plannerRoutes = require('./plannerRoutes');
 const tablockerRoutes = require('./tablockerRoutes');
 const privacyRoutes = require('./privacyRoutes');
 const shooterGameRoutes = require('./shooterGameRoutes');
+const gameTheoryRoutes = require('./gameTheoryRoutes');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -28,6 +29,10 @@ if (requestPathname === '/tablocker' || requestPathname.startsWith('/tablocker/'
 
 if (requestPathname === '/shooter-game' || requestPathname.startsWith('/shooter-game/')) {
   return shooterGameRoutes.handle(request, response);
+}
+
+if (requestPathname === '/game-theory' || requestPathname.startsWith('/game-theory/')) {
+  return gameTheoryRoutes.handle(request, response);
 }
 
 if (requestPathname === '/sandbox' || requestPathname.startsWith('/sandbox/')) { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
@@ -819,6 +824,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <div class="route">/shooter-game</div>
         <h2>Square Shooter Online</h2>
         <p>Play the web version of the square shooter game in a live 1v1 room.</p>
+      </a>
+
+      <a class="widget" href="/game-theory">
+        <div class="route">/game-theory</div>
+        <h2>Game Theory Arcade</h2>
+        <p>Play through Monty Hall, the Prisoner’s Dilemma, Newcomb’s Paradox, and the 100 Prisoners problem.</p>
       </a>
 
       <a class="widget" href="/aaryan">

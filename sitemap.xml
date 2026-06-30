@@ -38,6 +38,11 @@
   <priority>0.80</priority>
 </url>
 <url>
+  <loc>https://aaryangupta.azurewebsites.net/game-theory</loc>
+  <lastmod>2026-06-30T00:00:00+00:00</lastmod>
+  <priority>0.90</priority>
+</url>
+<url>
   <loc>https://aaryangupta.azurewebsites.net/aaryan</loc>
   <lastmod>2026-05-11T11:53:52+00:00</lastmod>
   <priority>0.80</priority>

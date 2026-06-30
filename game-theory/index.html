@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b12">
+  <meta name="description" content="Play four interactive game theory thought experiments: Monty Hall, Prisoner's Dilemma, Newcomb's Paradox, and the 100 Prisoners problem.">
+  <title>Game Theory Arcade — Aaryan Gupta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/game-theory/styles.css">
+  <script src="/game-theory/app.js" defer></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="cursor-glow" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#home" aria-label="Game Theory Arcade home">
+      <span class="brand-mark">GT</span>
+      <span>Game Theory <em>Arcade</em></span>
+    </a>
+    <div class="header-actions">
+      <div class="score-chip" title="Experiments completed">
+        <span class="score-dot"></span>
+        <span id="completed-count">0</span>/4 solved
+      </div>
+      <button class="icon-button" id="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false">
+        <span class="sound-off">♪</span>
+        <span class="sound-on">♫</span>
+      </button>
+      <a class="exit-link" href="/">Exit</a>
+    </div>
+  </header>
+
+  <nav class="progress-nav" aria-label="Experiment progress">
+    <button class="progress-item active" type="button" data-target="monty" aria-current="step">
+      <span>01</span><i></i><b>Monty Hall</b>
+    </button>
+    <button class="progress-item" type="button" data-target="prisoner" disabled>
+      <span>02</span><i></i><b>Prisoner’s Dilemma</b>
+    </button>
+    <button class="progress-item" type="button" data-target="newcomb" disabled>
+      <span>03</span><i></i><b>Newcomb’s Paradox</b>
+    </button>
+    <button class="progress-item" type="button" data-target="hundred" disabled>
+      <span>04</span><i></i><b>100 Prisoners</b>
+    </button>
+  </nav>
+
+  <main>
+    <section class="hero" id="home">
+      <img src="/game-theory/assets/game-theory-hero.png" alt="" class="hero-art">
+      <div class="hero-shade"></div>
+      <div class="hero-copy">
+        <p class="kicker"><span></span> An interactive field guide</p>
+        <h1>Your instincts<br>are about to be<br><em>put on trial.</em></h1>
+        <p class="hero-intro">Four famous dilemmas. No lectures first. Make the call, watch the consequences, then crack open the maths.</p>
+        <button class="primary-button hero-cta" type="button" data-scroll="monty">
+          Enter experiment 01 <span>↘</span>
+        </button>
+      </div>
+      <div class="hero-stats" aria-label="Experience summary">
+        <span><b>04</b> experiments</span>
+        <span><b>∞</b> replays</span>
+        <span><b>01</b> brain at risk</span>
+      </div>
+      <p class="hero-credit">Original artwork generated for this experience</p>
+    </section>
+
+    <section class="experiment monty-section" id="monty" data-chapter="0">
+      <div class="chapter-heading">
+        <div>
+          <p class="kicker"><span></span> Experiment 01 · Probability</p>
+          <h2>The Monty Hall <em>Problem</em></h2>
+        </div>
+        <p>You’re on a game show. One door hides a dream car. Two hide goats. Pick before you overthink it.</p>
+      </div>
+
+      <div class="stage-card monty-stage">
+        <div class="stage-lights" aria-hidden="true"></div>
+        <div class="host-zone">
+          <div class="host-avatar" aria-hidden="true">
+            <div class="host-hair"></div>
+            <div class="host-head"><span></span><span></span><i></i></div>
+            <div class="host-body"><b></b></div>
+            <div class="host-mic">●</div>
+          </div>
+          <div class="speech-bubble" id="monty-speech" aria-live="polite">
+            One hides the car. Choose a door.
+          </div>
+        </div>
+
+        <div class="doors" id="doors" aria-label="Choose one of three doors">
+          <button class="door-wrap" type="button" data-door="0" aria-label="Choose door 1">
+            <span class="chosen-ribbon">Your pick</span>
+            <span class="door-frame">
+              <span class="prize"><img alt="Prize behind door 1"><b></b></span>
+              <span class="door-face"><span class="door-number">1</span><i></i></span>
+            </span>
+          </button>
+          <button class="door-wrap" type="button" data-door="1" aria-label="Choose door 2">
+            <span class="chosen-ribbon">Your pick</span>
+            <span class="door-frame">
+              <span class="prize"><img alt="Prize behind door 2"><b></b></span>
+              <span class="door-face"><span class="door-number">2</span><i></i></span>
+            </span>
+          </button>
+          <button class="door-wrap" type="button" data-door="2" aria-label="Choose door 3">
+            <span class="chosen-ribbon">Your pick</span>
+            <span class="door-frame">
+              <span class="prize"><img alt="Prize behind door 3"><b></b></span>
+              <span class="door-face"><span class="door-number">3</span><i></i></span>
+            </span>
+          </button>
+        </div>
+
+        <div class="choice-dock hidden" id="monty-choice">
+          <p>Monty revealed a goat. Final answer?</p>
+          <div>
+            <button class="secondary-button" type="button" id="stay-button">Stay with door <span></span></button>
+            <button class="primary-button" type="button" id="switch-button">Switch to door <span></span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal-panel" id="monty-reveal" hidden>
+        <div class="result-banner">
+          <span class="result-icon">↗</span>
+          <div>
+            <p id="monty-result-label">You won the car!</p>
+            <h3 id="monty-result-title">Switching paid off.</h3>
+          </div>
+          <button class="text-button" type="button" id="monty-replay">Play again ↻</button>
+        </div>
+        <div class="math-grid monty-math">
+          <article class="math-lead">
+            <p class="mono-label">Why switching wins</p>
+            <strong><span class="count-up" data-value="66.7">66.7</span>%</strong>
+            <p>Your first pick is right only 1 time in 3. Monty must reveal a goat, so the other unopened door carries the remaining 2-in-3 chance.</p>
+          </article>
+          <div class="truth-table" aria-label="Monty Hall outcome table">
+            <div class="table-head"><span>Car starts behind</span><span>If you stay</span><span>If you switch</span></div>
+            <div><span>Door 1</span><span class="lose">Goat</span><span class="win">Car</span></div>
+            <div><span>Door 2</span><span class="lose">Goat</span><span class="win">Car</span></div>
+            <div><span>Door 3</span><span class="win">Car</span><span class="lose">Goat</span></div>
+          </div>
+        </div>
+        <button class="next-button" type="button" data-next="prisoner">Next: trust a prisoner <span>→</span></button>
+      </div>
+    </section>
+
+    <section class="experiment prisoner-section" id="prisoner" data-chapter="1">
+      <div class="chapter-heading">
+        <div>
+          <p class="kicker"><span></span> Experiment 02 · Cooperation</p>
+          <h2>The Prisoner’s <em>Dilemma</em></h2>
+        </div>
+        <p>You and a stranger are questioned separately. You cannot coordinate. Silence might save you both—or let them exploit you.</p>
+      </div>
+
+      <div class="prison-scene" id="prison-scene">
+        <div class="interrogation-room player-room">
+          <span class="room-label">You</span>
+          <div class="prisoner-character coral">
+            <span class="head"></span><span class="body"></span>
+          </div>
+          <div class="table-prop"></div>
+          <div class="bars" aria-hidden="true"></div>
+        </div>
+        <div class="prison-divider">
+          <span>NO<br>CONTACT</span>
+          <i></i>
+        </div>
+        <div class="interrogation-room rival-room">
+          <span class="room-label">Stranger</span>
+          <div class="prisoner-character blue">
+            <span class="head"></span><span class="body"></span>
+          </div>
+          <div class="table-prop"></div>
+          <div class="bars" aria-hidden="true"></div>
+        </div>
+        <div class="prison-prompt" id="one-shot-prompt">
+          <p class="mono-label">One shot. No second chances.</p>
+          <h3>Do you stay silent or snitch?</h3>
+          <div class="decision-buttons">
+            <button type="button" class="cooperate-button" data-one-shot="cooperate"><span>🤐</span> Stay silent</button>
+            <button type="button" class="defect-button" data-one-shot="defect"><span>📣</span> Snitch</button>
+          </div>
+        </div>
+        <div class="prison-result hidden" id="one-shot-result" aria-live="polite">
+          <p class="mono-label">Interrogation complete</p>
+          <h3 id="jail-outcome">Both stayed silent.</h3>
+          <p id="jail-detail">You both get reduced time.</p>
+          <button class="primary-button" type="button" id="start-tft">Now play for coins →</button>
+        </div>
+      </div>
+
+      <div class="tft-game" id="tft-game" hidden>
+        <div class="tft-topbar">
+          <div>
+            <p class="mono-label">Repeated game · 10 rounds</p>
+            <h3>You versus <span>Tit for Tat</span></h3>
+          </div>
+          <div class="round-counter">Round <b id="round-number">1</b>/10</div>
+        </div>
+        <div class="scoreboard">
+          <div class="player-score"><span>You</span><strong id="player-score">0</strong><small>coins</small></div>
+          <div class="versus-pulse">VS</div>
+          <div class="bot-score"><span>Tit for Tat</span><strong id="bot-score">0</strong><small>coins</small></div>
+        </div>
+        <div class="round-track" id="round-track" aria-label="Round history"></div>
+        <p class="bot-clue" id="bot-clue">The bot begins nicely. After that, it remembers.</p>
+        <div class="decision-buttons tft-actions">
+          <button type="button" class="cooperate-button" data-tft="cooperate"><span>🤝</span> Cooperate</button>
+          <button type="button" class="defect-button" data-tft="defect"><span>⚡</span> Defect</button>
+        </div>
+      </div>
+
+      <div class="reveal-panel" id="prisoner-reveal" hidden>
+        <div class="result-banner">
+          <span class="result-icon">◎</span>
+          <div><p>10 rounds complete</p><h3 id="tft-verdict">You found the equilibrium.</h3></div>
+          <button class="text-button" type="button" id="prisoner-replay">Replay both games ↻</button>
+        </div>
+        <div class="prisoner-explain">
+          <div class="payoff-matrix">
+            <div></div><b>Bot cooperates</b><b>Bot defects</b>
+            <b>You cooperate</b><span class="good">3 / 3</span><span class="bad">0 / 5</span>
+            <b>You defect</b><span class="hot">5 / 0</span><span>1 / 1</span>
+          </div>
+          <div class="principles">
+            <p class="mono-label">Why Tit for Tat works</p>
+            <ul>
+              <li><b>Nice</b><span>Cooperates first.</span></li>
+              <li><b>Retaliatory</b><span>Punishes the next round.</span></li>
+              <li><b>Forgiving</b><span>Returns to cooperation fast.</span></li>
+              <li><b>Clear</b><span>Easy to understand and trust.</span></li>
+            </ul>
+          </div>
+        </div>
+        <p class="insight"><b>Nash equilibrium:</b> in a one-shot game, defection dominates—5 beats 3 and 1 beats 0. In a repeated game, the future cost of lost trust changes the strategy.</p>
+        <button class="next-button" type="button" data-next="newcomb">Next: meet the predictor <span>→</span></button>
+      </div>
+    </section>
+
+    <section class="experiment newcomb-section" id="newcomb" data-chapter="2">
+      <div class="chapter-heading">
+        <div>
+          <p class="kicker"><span></span> Experiment 03 · Prediction</p>
+          <h2>Newcomb’s <em>Paradox</em></h2>
+        </div>
+        <p>A nearly perfect supercomputer has already predicted your choice—and filled the mystery box accordingly. The money is already there.</p>
+      </div>
+
+      <div class="newcomb-stage">
+        <div class="server-wall">
+          <img src="/game-theory/assets/supercomputer-servers.jpg" alt="Rows of real server hardware lit by blue status lights">
+          <div class="server-scan"></div>
+          <div class="computer-face" aria-hidden="true"><span></span><span></span><i></i></div>
+          <div class="prediction-slip" id="prediction-slip">
+            <span>PREDICTION LOCKED</span>
+            <b>••••••••</b>
+          </div>
+        </div>
+        <div class="newcomb-copy">
+          <p class="mono-label">The offer</p>
+          <h3>Box A is transparent: <b>$1,000.</b><br>Box B is opaque: <b>$0 or $1,000,000.</b></h3>
+          <p>If the computer predicted you’d take only B, it put $1 million in B. If it predicted you’d take both, B is empty. It is right 90% of the time.</p>
+        </div>
+        <div class="boxes">
+          <div class="newcomb-box box-a" id="box-a">
+            <span class="box-lid"></span>
+            <span class="cash-stack">$1K</span>
+            <b>BOX A</b>
+            <small>transparent</small>
+          </div>
+          <div class="newcomb-box box-b" id="box-b">
+            <span class="box-lid"></span>
+            <span class="mystery">?</span>
+            <span class="box-money" id="box-b-money">$1M</span>
+            <b>BOX B</b>
+            <small>opaque</small>
+          </div>
+        </div>
+        <div class="newcomb-actions" id="newcomb-actions">
+          <button class="secondary-button" type="button" data-newcomb="both">Take both <span>A + B</span></button>
+          <button class="primary-button" type="button" data-newcomb="one">Take only <span>B</span></button>
+        </div>
+      </div>
+
+      <div class="reveal-panel" id="newcomb-reveal" hidden>
+        <div class="result-banner">
+          <span class="result-icon">$</span>
+          <div><p>The boxes are open</p><h3 id="newcomb-verdict">You took home $1,000,000.</h3></div>
+          <button class="text-button" type="button" id="newcomb-replay">Reset boxes ↻</button>
+        </div>
+        <div class="newcomb-math">
+          <article>
+            <p class="mono-label">One-box expected value</p>
+            <strong>$900,000</strong>
+            <code>(0.90 × $1,000,000) + (0.10 × $0)</code>
+            <p>Follow the evidence: your choice strongly tracks what the accurate predictor put in B.</p>
+          </article>
+          <div class="paradox-vs">VS</div>
+          <article>
+            <p class="mono-label">Two-box expected value</p>
+            <strong>$101,000</strong>
+            <code>(0.90 × $1,000) + (0.10 × $1,001,000)</code>
+            <p>Follow dominance: the money is fixed, so taking A always adds another $1,000.</p>
+          </article>
+        </div>
+        <p class="insight"><b>That’s the paradox:</b> one-boxing maximises expected value when prediction accuracy matters; two-boxing seems to dominate after the boxes are already filled. Rational thinkers still disagree.</p>
+        <button class="next-button" type="button" data-next="hundred">Final experiment: 100 prisoners <span>→</span></button>
+      </div>
+    </section>
+
+    <section class="experiment hundred-section" id="hundred" data-chapter="3">
+      <div class="chapter-heading">
+        <div>
+          <p class="kicker"><span></span> Experiment 04 · Loops</p>
+          <h2>100 Prisoners,<br><em>100 Boxes</em></h2>
+        </div>
+        <p>Each prisoner may open 50 of 100 boxes. Everyone must find their own number—or nobody escapes. What chance do they have?</p>
+      </div>
+
+      <div class="probability-guess" id="probability-guess">
+        <div class="prisoner-crowd" id="prisoner-crowd" aria-hidden="true"></div>
+        <div class="guess-card">
+          <p class="mono-label">Lock in your instinct</p>
+          <h3>Chance that all 100 escape?</h3>
+          <div class="guess-readout"><output id="guess-output">10</output><span>%</span></div>
+          <input type="range" id="guess-range" min="0" max="100" value="10" aria-label="Your probability guess">
+          <div class="range-labels"><span>Impossible</span><span>Coin flip</span><span>Certain</span></div>
+          <button class="primary-button" type="button" id="lock-guess">Lock in 10%</button>
+        </div>
+      </div>
+
+      <div class="hundred-reveal" id="hundred-reveal" hidden>
+        <div class="big-reveal">
+          <p>The loop strategy gives them</p>
+          <strong>31.18<span>%</span></strong>
+          <p id="guess-reaction">That is far higher than random guessing.</p>
+        </div>
+        <div class="loop-lab">
+          <div class="lab-copy">
+            <p class="mono-label">A 12-box miniature</p>
+            <h3>Follow the loop—not random boxes.</h3>
+            <p>Prisoner 1 opens box 1. The slip inside points to the next box. They follow that chain until they find slip 1 or use half the boxes.</p>
+            <button class="secondary-button" type="button" id="run-loop">Run the loop demo <span>→</span></button>
+            <p class="loop-status" id="loop-status" aria-live="polite">Waiting for prisoner 1…</p>
+          </div>
+          <div class="box-grid" id="box-grid" aria-label="Twelve numbered boxes"></div>
+        </div>
+        <div class="hundred-math">
+          <article>
+            <p class="mono-label">Random strategy</p>
+            <strong>(½)<sup>100</sup></strong>
+            <span>≈ 7.89 × 10<sup>−31</sup></span>
+            <p>Every prisoner independently has a 50% chance. Multiply ½ one hundred times: effectively zero.</p>
+          </article>
+          <article class="loop-equation">
+            <p class="mono-label">Loop strategy</p>
+            <strong>1 − <span>(1/51 + 1/52 + … + 1/100)</span></strong>
+            <span>= 31.18%</span>
+            <p>They succeed exactly when the random permutation contains no loop longer than 50.</p>
+          </article>
+        </div>
+        <div class="simulation-card">
+          <div>
+            <p class="mono-label">Don’t take the formula’s word for it</p>
+            <h3>Simulate 1,000 prisons</h3>
+          </div>
+          <div class="simulation-meter"><i id="simulation-fill"></i><span id="simulation-label">Ready</span></div>
+          <button class="primary-button" type="button" id="run-simulation">Run simulation</button>
+        </div>
+        <div class="finish-card">
+          <p class="kicker"><span></span> All four solved</p>
+          <h2>You made it out.<br><em>Probably.</em></h2>
+          <p>Game theory is not a machine for always winning. It is a way to expose the incentives, information, and hidden structure inside a decision.</p>
+          <button class="primary-button" type="button" id="restart-all">Replay the arcade ↻</button>
+          <a href="/" class="secondary-button">Back to Aaryan’s site</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built from Aaryan Gupta’s “Not a Complete Guide to Game Theory.”</p>
+    <p class="image-credits">
+      Photo credits:
+      <a href="https://commons.wikimedia.org/wiki/File:Yellow_Lamborghini_Murci%C3%A9lago.jpg" target="_blank" rel="noopener">Lamborghini · Brian Snelson · CC BY 2.0</a>
+      <a href="https://commons.wikimedia.org/wiki/File:Domestic_goat_2016_G1.jpg" target="_blank" rel="noopener">Goat · George Chernilevsky · Public Domain</a>
+      <a href="https://commons.wikimedia.org/wiki/File:Wikimedia_Foundation_Servers_2015-63.jpg" target="_blank" rel="noopener">Servers · Victor Grigas/WMF · CC BY-SA 3.0</a>
+    </p>
+  </footer>
+
+  <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
+</body>
+</html>
