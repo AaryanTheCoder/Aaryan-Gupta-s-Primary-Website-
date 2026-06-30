@@ -8,7 +8,7 @@
   <title>Game Theory Arcade — Aaryan Gupta</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/game-theory/styles.css">
   <script src="/game-theory/app.js" defer></script>
 </head>
@@ -75,7 +75,10 @@
           <p class="kicker"><span></span> Experiment 01 · Probability</p>
           <h2>The Monty Hall <em>Problem</em></h2>
         </div>
-        <p>You’re on a game show. One door hides a dream car. Two hide goats. Pick before you overthink it.</p>
+        <div class="chapter-side">
+          <p>You’re on a game show. One door hides a dream car. Two hide goats. Pick before you overthink it.</p>
+          <button class="info-trigger" type="button" data-info="monty-rules">Rules <span>?</span></button>
+        </div>
       </div>
 
       <div class="stage-card monty-stage">
@@ -147,6 +150,9 @@
             <div><span>Door 3</span><span class="win">Car</span><span class="lose">Goat</span></div>
           </div>
         </div>
+        <div class="explanation-actions">
+          <button class="info-trigger deeper-trigger" type="button" data-info="monty-deeper">Deeper explanation <span>＋</span></button>
+        </div>
         <button class="next-button" type="button" data-next="prisoner">Next: trust a prisoner <span>→</span></button>
       </div>
     </section>
@@ -184,6 +190,7 @@
         <div class="prison-prompt" id="one-shot-prompt">
           <p class="mono-label">One shot. No second chances.</p>
           <h3>Do you stay silent or snitch?</h3>
+          <button class="info-trigger inline-info" type="button" data-info="prisoner-original-rules">Rules <span>?</span></button>
           <div class="decision-buttons">
             <button type="button" class="cooperate-button" data-one-shot="cooperate"><span>🤐</span> Stay silent</button>
             <button type="button" class="defect-button" data-one-shot="defect"><span>📣</span> Snitch</button>
@@ -193,7 +200,10 @@
           <p class="mono-label">Interrogation complete</p>
           <h3 id="jail-outcome">Both stayed silent.</h3>
           <p id="jail-detail">You both get reduced time.</p>
-          <button class="primary-button" type="button" id="start-tft">Now play for coins →</button>
+          <div class="result-inline-actions">
+            <button class="info-trigger deeper-trigger" type="button" data-info="prisoner-original-deeper">Deeper explanation <span>＋</span></button>
+            <button class="primary-button" type="button" id="start-tft">Now play for coins →</button>
+          </div>
         </div>
       </div>
 
@@ -203,7 +213,10 @@
             <p class="mono-label">Repeated game · 10 rounds</p>
             <h3>You versus <span>Tit for Tat</span></h3>
           </div>
-          <div class="round-counter">Round <b id="round-number">1</b>/10</div>
+          <div class="tft-meta">
+            <button class="info-trigger" type="button" data-info="tft-rules">Rules <span>?</span></button>
+            <div class="round-counter">Round <b id="round-number">1</b>/10</div>
+          </div>
         </div>
         <div class="scoreboard">
           <div class="player-score"><span>You</span><strong id="player-score">0</strong><small>coins</small></div>
@@ -241,6 +254,9 @@
           </div>
         </div>
         <p class="insight"><b>Nash equilibrium:</b> in a one-shot game, defection dominates—5 beats 3 and 1 beats 0. In a repeated game, the future cost of lost trust changes the strategy.</p>
+        <div class="explanation-actions">
+          <button class="info-trigger deeper-trigger" type="button" data-info="tft-deeper">Deeper explanation: Tit for Tat <span>＋</span></button>
+        </div>
         <button class="next-button" type="button" data-next="newcomb">Next: meet the predictor <span>→</span></button>
       </div>
     </section>
@@ -251,7 +267,10 @@
           <p class="kicker"><span></span> Experiment 03 · Prediction</p>
           <h2>Newcomb’s <em>Paradox</em></h2>
         </div>
-        <p>A nearly perfect supercomputer has already predicted your choice—and filled the mystery box accordingly. The money is already there.</p>
+        <div class="chapter-side">
+          <p>A nearly perfect supercomputer has already predicted your choice—and filled the mystery box accordingly. The money is already there.</p>
+          <button class="info-trigger" type="button" data-info="newcomb-rules">Rules <span>?</span></button>
+        </div>
       </div>
 
       <div class="newcomb-stage">
@@ -312,6 +331,9 @@
           </article>
         </div>
         <p class="insight"><b>That’s the paradox:</b> one-boxing maximises expected value when prediction accuracy matters; two-boxing seems to dominate after the boxes are already filled. Rational thinkers still disagree.</p>
+        <div class="explanation-actions">
+          <button class="info-trigger deeper-trigger" type="button" data-info="newcomb-deeper">Deeper explanation <span>＋</span></button>
+        </div>
         <button class="next-button" type="button" data-next="hundred">Final experiment: 100 prisoners <span>→</span></button>
       </div>
     </section>
@@ -322,7 +344,10 @@
           <p class="kicker"><span></span> Experiment 04 · Loops</p>
           <h2>100 Prisoners,<br><em>100 Boxes</em></h2>
         </div>
-        <p>Each prisoner may open 50 of 100 boxes. Everyone must find their own number—or nobody escapes. What chance do they have?</p>
+        <div class="chapter-side">
+          <p>Each prisoner may open 50 of 100 boxes. Everyone must find their own number—or nobody escapes. What chance do they have?</p>
+          <button class="info-trigger" type="button" data-info="hundred-rules">Rules <span>?</span></button>
+        </div>
       </div>
 
       <div class="probability-guess" id="probability-guess">
@@ -367,6 +392,9 @@
             <p>They succeed exactly when the random permutation contains no loop longer than 50.</p>
           </article>
         </div>
+        <div class="explanation-actions">
+          <button class="info-trigger deeper-trigger" type="button" data-info="hundred-deeper">Deeper explanation <span>＋</span></button>
+        </div>
         <div class="simulation-card">
           <div>
             <p class="mono-label">Don’t take the formula’s word for it</p>
@@ -395,6 +423,157 @@
       <a href="https://commons.wikimedia.org/wiki/File:Wikimedia_Foundation_Servers_2015-63.jpg" target="_blank" rel="noopener">Servers · Victor Grigas/WMF · CC BY-SA 3.0</a>
     </p>
   </footer>
+
+  <div class="info-modal" id="info-modal" hidden>
+    <button class="modal-backdrop" type="button" data-close-info aria-label="Close explanation"></button>
+    <section class="info-dialog" role="dialog" aria-modal="true" aria-labelledby="info-title" tabindex="-1">
+      <header>
+        <div>
+          <p class="mono-label" id="info-type">How to play</p>
+          <h2 id="info-title">Rules</h2>
+        </div>
+        <button class="modal-close" type="button" data-close-info aria-label="Close">×</button>
+      </header>
+      <div class="info-content" id="info-content"></div>
+    </section>
+  </div>
+
+  <template id="info-monty-rules" data-title="Monty Hall rules" data-type="How to play">
+    <p class="info-lead">You are a contestant on a game show. The host—Monty—knows what is behind every door.</p>
+    <ol class="rule-list">
+      <li><b>Three doors are closed.</b><span>One contains a Lamborghini. The other two contain goats.</span></li>
+      <li><b>Choose one door.</b><span>Your first selection stays closed and begins with a 1-in-3 chance of hiding the car.</span></li>
+      <li><b>Monty reveals a goat.</b><span>He must open an unchosen door containing a goat. He will never reveal the car and never open your selected door.</span></li>
+      <li><b>Make the final decision.</b><span>Stay with your original door or switch to the only other unopened door.</span></li>
+      <li><b>All doors open.</b><span>You win only if your final selected door contains the car.</span></li>
+    </ol>
+    <div class="info-callout"><b>The crucial rule</b> Monty’s reveal is not random. His knowledge forces him to remove a losing option.</div>
+  </template>
+
+  <template id="info-monty-deeper" data-title="Why switching doubles your chance" data-type="Deeper explanation">
+    <p class="info-lead">At the moment of your first pick, that door has probability <b>1/3</b>. The pair of doors you did not choose has probability <b>2/3</b>.</p>
+    <div class="formula-card"><span>First door</span><strong>1/3</strong><i>versus</i><span>Other two doors</span><strong>2/3</strong></div>
+    <p>Monty then opens a goat door from the 2/3 group. Because he is required to avoid the car, the full 2/3 chance is concentrated on the one unopened door in that group.</p>
+    <h3>List every possible starting position</h3>
+    <ul class="explain-list">
+      <li>If your first pick is the car—1 case out of 3—staying wins and switching loses.</li>
+      <li>If your first pick is a goat—2 cases out of 3—Monty exposes the other goat, so switching wins.</li>
+    </ul>
+    <p>Therefore staying wins <b>1/3 ≈ 33.33%</b> of the time, while switching wins <b>2/3 ≈ 66.67%</b>.</p>
+    <figure class="journal-figure">
+      <img src="/game-theory/assets/journal-monty-table.jpg" alt="Aaryan’s original handwritten Monty Hall outcome table from the journal">
+      <figcaption>From Aaryan’s journal: Monty’s intention and the three-case outcome table.</figcaption>
+    </figure>
+  </template>
+
+  <template id="info-prisoner-original-rules" data-title="Original Prisoner’s Dilemma rules" data-type="How to play">
+    <p class="info-lead">Two prisoners are questioned in separate rooms. Neither knows what the other will decide.</p>
+    <ol class="rule-list">
+      <li><b>Choose stay silent or snitch.</b><span>You make one decision with no communication.</span></li>
+      <li><b>If both stay silent:</b><span>Both cooperate and receive reduced jail time.</span></li>
+      <li><b>If you snitch and they stay silent:</b><span>You walk free; they receive the long sentence.</span></li>
+      <li><b>If you stay silent and they snitch:</b><span>They walk free; you receive the long sentence.</span></li>
+      <li><b>If both snitch:</b><span>Both are convicted and receive long jail time.</span></li>
+    </ol>
+    <div class="info-callout"><b>Your opponent is random in this version.</b> You must decide without knowing their move.</div>
+  </template>
+
+  <template id="info-prisoner-original-deeper" data-title="Why rational choices can hurt everyone" data-type="Deeper explanation">
+    <p class="info-lead">The dilemma separates what is best for one player from what is best for the pair.</p>
+    <div class="info-payoff">
+      <div></div><b>They stay silent</b><b>They snitch</b>
+      <b>You stay silent</b><span>Reduced / Reduced</span><span class="danger">Long / Free</span>
+      <b>You snitch</b><span class="reward">Free / Long</span><span>Long / Long</span>
+    </div>
+    <h3>Follow one player’s logic</h3>
+    <p>If the other prisoner stays silent, snitching gives you the better personal result. If the other prisoner snitches, snitching protects you from being the only silent prisoner. So snitching is the dominant one-shot strategy.</p>
+    <p>But when both follow that individually sensible logic, both receive a worse shared result than mutual silence. That conflict—individual incentive versus collective benefit—is the dilemma.</p>
+  </template>
+
+  <template id="info-tft-rules" data-title="Tit for Tat match rules" data-type="How to play">
+    <p class="info-lead">The dilemma is repeated for ten rounds. Each round, choose <b>Cooperate</b> or <b>Defect</b>.</p>
+    <ol class="rule-list">
+      <li><b>Both cooperate:</b><span>Each player receives 3 coins.</span></li>
+      <li><b>You defect; the bot cooperates:</b><span>You receive 5 coins and the bot receives 0.</span></li>
+      <li><b>You cooperate; the bot defects:</b><span>You receive 0 coins and the bot receives 5.</span></li>
+      <li><b>Both defect:</b><span>Each player receives 1 coin.</span></li>
+      <li><b>Tit for Tat’s strategy:</b><span>It cooperates in round one, then copies the move you made in the previous round.</span></li>
+    </ol>
+    <div class="info-callout"><b>Goal:</b> finish ten rounds with as many coins as possible. Notice how today’s move changes the bot’s next move.</div>
+  </template>
+
+  <template id="info-tft-deeper" data-title="Why Tit for Tat became famous" data-type="Deeper explanation">
+    <p class="info-lead">In Robert Axelrod’s repeated-dilemma tournaments, Anatol Rapoport’s remarkably short Tit for Tat strategy performed extremely well.</p>
+    <div class="principle-grid">
+      <article><b>01 · Nice</b><p>It cooperates first and never starts unnecessary conflict.</p></article>
+      <article><b>02 · Retaliatory</b><p>It answers defection immediately, so exploitation is costly.</p></article>
+      <article><b>03 · Forgiving</b><p>As soon as its opponent cooperates again, it restores cooperation.</p></article>
+      <article><b>04 · Clear</b><p>Its predictable behaviour lets opponents learn how to earn mutual rewards.</p></article>
+    </div>
+    <h3>The repeated-game change</h3>
+    <p>In one round, defection dominates: 5 beats 3 when the other player cooperates, and 1 beats 0 when they defect. Across repeated rounds, a defection can destroy future 3-and-3 outcomes. Trust now has measurable future value.</p>
+    <p>If both cooperate for all ten rounds, each earns <b>30 coins</b>. If both defect every round, each earns only <b>10 coins</b>.</p>
+  </template>
+
+  <template id="info-newcomb-rules" data-title="Newcomb’s Paradox rules" data-type="How to play">
+    <p class="info-lead">Before you enter the room, a highly accurate supercomputer predicts which of two actions you will take.</p>
+    <ol class="rule-list">
+      <li><b>Box A is transparent.</b><span>You can see exactly $1,000 inside. There are no tricks.</span></li>
+      <li><b>Box B is opaque.</b><span>It contains either $1,000,000 or nothing.</span></li>
+      <li><b>The computer fills B first.</b><span>If it predicts “only B,” it puts $1,000,000 in B. If it predicts “both boxes,” it leaves B empty.</span></li>
+      <li><b>The prediction is already locked.</b><span>You cannot change what is now inside either box.</span></li>
+      <li><b>Choose one action.</b><span>Take only Box B, or take both Box A and Box B.</span></li>
+    </ol>
+    <div class="info-callout"><b>This simulation uses 90% accuracy</b> to make occasional wrong predictions visible. The classic version usually assumes near-perfect accuracy.</div>
+  </template>
+
+  <template id="info-newcomb-deeper" data-title="Two rational arguments collide" data-type="Deeper explanation">
+    <p class="info-lead">Newcomb’s Paradox produces two incompatible-looking recommendations.</p>
+    <h3>Dominance reasoning says: take both</h3>
+    <p>The contents are already fixed. Whatever sits in Box B, adding transparent Box A gives you exactly $1,000 more. If B is empty, both gives $1,000 instead of $0. If B is full, both gives $1,001,000 instead of $1,000,000.</p>
+    <h3>Expected-value reasoning says: take only B</h3>
+    <p>Your decision is powerful evidence about the predictor’s earlier action. At 90% accuracy:</p>
+    <div class="formula-stack">
+      <code>Only B: (0.90 × $1,000,000) + (0.10 × $0) = $900,000</code>
+      <code>Both: (0.90 × $1,000) + (0.10 × $1,001,000) = $101,000</code>
+    </div>
+    <p>One-boxers maximise expected value using predictive evidence. Two-boxers focus on the causal fact that a present choice cannot change money already placed in the past.</p>
+    <figure class="journal-figure">
+      <img src="/game-theory/assets/journal-newcomb-table.jpg" alt="Aaryan’s handwritten Newcomb payoff and probability table">
+      <figcaption>From Aaryan’s journal: outcomes after adding the predictor’s accuracy.</figcaption>
+    </figure>
+  </template>
+
+  <template id="info-hundred-rules" data-title="100 Prisoners rules" data-type="How to play">
+    <p class="info-lead">One hundred numbered prisoners face a room containing one hundred numbered boxes.</p>
+    <ol class="rule-list">
+      <li><b>Prepare the boxes.</b><span>Each box contains one slip numbered 1–100. Every number appears exactly once, in a random arrangement.</span></li>
+      <li><b>Plan beforehand.</b><span>The prisoners may agree on a strategy before anyone enters.</span></li>
+      <li><b>Enter one at a time.</b><span>Each prisoner enters alone and may open at most 50 boxes.</span></li>
+      <li><b>Find your own number.</b><span>Prisoner 37 succeeds only by finding slip 37; prisoner 82 needs slip 82, and so on.</span></li>
+      <li><b>No communication during play.</b><span>Boxes are restored and prisoners cannot pass information after the process begins.</span></li>
+      <li><b>All or nothing.</b><span>All 100 escape only if every single prisoner finds their number. One failure means everyone loses.</span></li>
+    </ol>
+    <div class="info-callout"><b>Loop strategy:</b> each prisoner first opens the box bearing their own number, then opens the box named by the slip they just found.</div>
+  </template>
+
+  <template id="info-hundred-deeper" data-title="Where the 31.18% comes from" data-type="Deeper explanation">
+    <p class="info-lead">The slips form a permutation of 1–100. Every permutation breaks into closed loops.</p>
+    <h3>Why following numbers works</h3>
+    <p>Prisoner 1 starts at Box 1. If it contains slip 31, they open Box 31 next. If that contains 67, they open Box 67. Because every number appears once, this path must eventually loop back to slip 1.</p>
+    <p>Everyone succeeds exactly when <b>every loop has length 50 or less</b>. If a loop has length 51 or more, every prisoner whose number belongs to that loop fails.</p>
+    <h3>Calculate the chance of failure first</h3>
+    <p>For a random permutation and <i>L</i> greater than 50, the probability of a loop of exact length <i>L</i> is 1/<i>L</i>. There cannot be two loops longer than 50, so these failure probabilities can be added:</p>
+    <div class="formula-stack">
+      <code>P(failure) = 1/51 + 1/52 + … + 1/100 ≈ 0.6882</code>
+      <code>P(success) = 1 − 0.6882 ≈ 0.3118 = 31.18%</code>
+    </div>
+    <p>Random independent box choices give only <b>(1/2)<sup>100</sup> ≈ 7.89 × 10<sup>−31</sup></b>. The loop strategy succeeds about 31 times in 100 because all prisoners coordinate around the same global loop structure.</p>
+    <figure class="journal-figure">
+      <img src="/game-theory/assets/journal-prisoner-loops.jpg" alt="Aaryan’s journal page deriving the probability of long loops">
+      <figcaption>From Aaryan’s journal: add the probabilities of loops from length 51 through 100, then subtract from 1.</figcaption>
+    </figure>
+  </template>
 
   <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
 </body>

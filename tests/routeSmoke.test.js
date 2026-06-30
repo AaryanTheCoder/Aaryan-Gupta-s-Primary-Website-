@@ -73,10 +73,16 @@ function invoke(pathname, options = {}) {
   const gameTheory = await invoke('/game-theory');
   assert.strictEqual(gameTheory.statusCode, 200);
   assert.match(gameTheory.body, /Game Theory Arcade/);
+  assert.match(gameTheory.body, /data-info="monty-rules"/);
+  assert.match(gameTheory.body, /data-info="hundred-deeper"/);
 
   const gameTheoryJs = await invoke('/game-theory/app.js');
   assert.strictEqual(gameTheoryJs.statusCode, 200);
   assert.match(gameTheoryJs.headers['content-type'], /^application\/javascript/);
+
+  const gameTheoryJournalImage = await invoke('/game-theory/assets/journal-monty-table.jpg');
+  assert.strictEqual(gameTheoryJournalImage.statusCode, 200);
+  assert.match(gameTheoryJournalImage.headers['content-type'], /^image\/jpeg/);
 
   const gameTheoryTraversal = await invoke('/game-theory/../Server2.js');
   assert.notStrictEqual(gameTheoryTraversal.statusCode, 200);

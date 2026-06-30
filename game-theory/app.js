@@ -85,6 +85,61 @@
     });
   });
 
+  const infoModal = $('#info-modal');
+  const infoDialog = $('.info-dialog', infoModal);
+  let lastInfoTrigger = null;
+
+  function openInfo(key, trigger) {
+    const template = document.getElementById(`info-${key}`);
+    if (!template) return;
+    lastInfoTrigger = trigger;
+    $('#info-title').textContent = template.dataset.title || 'Explanation';
+    $('#info-type').textContent = template.dataset.type || 'Game guide';
+    $('#info-content').replaceChildren(template.content.cloneNode(true));
+    infoModal.hidden = false;
+    document.body.classList.add('modal-open');
+    trigger.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => infoDialog.focus());
+    beep(560, 0.08, 'triangle');
+  }
+
+  function closeInfo() {
+    if (infoModal.hidden) return;
+    infoModal.hidden = true;
+    document.body.classList.remove('modal-open');
+    $('#info-content').replaceChildren();
+    if (lastInfoTrigger) {
+      lastInfoTrigger.setAttribute('aria-expanded', 'false');
+      lastInfoTrigger.focus();
+    }
+    lastInfoTrigger = null;
+  }
+
+  $$('[data-info]').forEach(button => {
+    button.setAttribute('aria-haspopup', 'dialog');
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', () => openInfo(button.dataset.info, button));
+  });
+  $$('[data-close-info]').forEach(button => button.addEventListener('click', closeInfo));
+  infoDialog.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const focusable = $$('button, a[href], input, [tabindex]:not([tabindex="-1"])', infoDialog)
+      .filter(element => !element.disabled && element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !infoModal.hidden) closeInfo();
+  });
+
   document.addEventListener('pointermove', event => {
     const glow = $('.cursor-glow');
     glow.style.left = `${event.clientX}px`;
