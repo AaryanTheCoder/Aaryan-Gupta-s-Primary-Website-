@@ -1071,7 +1071,7 @@ function getPlannerHtml() {
           widgets: [
             { id: uid(), type: 'weather', title: 'Singapore Weather', x: 0, y: 0, w: 330, h: 250, data: {} },
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
-            { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '- Finish homework\\n- Pack bag\\n- Revise one topic', fontSize: '18', format: 'lined' } },
+            { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '- Finish homework\n- Pack bag\n- Revise one topic', fontSize: '18', format: 'lined' } },
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
             { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
@@ -1409,16 +1409,16 @@ function getPlannerHtml() {
             return item;
           });
         } else {
-          var lines = String(widget.data.text || '').split('\\n');
+          var lines = String(widget.data.text || '').split(/\r?\n|\\n/);
           widget.data.noteItems = lines.filter(function (line, index) {
             return line.trim() || index === 0;
           }).map(function (line) {
-            var leading = line.match(/^\\s*/)[0].replace(/\\t/g, '  ').length;
+            var leading = line.match(/^\s*/)[0].replace(/\t/g, '  ').length;
             var clean = line.trim();
-            var done = /^[-*]\\s*\\[[xX]\\]\\s*/.test(clean);
+            var done = /^[-*]\s*\[[xX]\]\s*/.test(clean);
             clean = clean
-              .replace(/^[-*]\\s*\\[[ xX]\\]\\s*/, '')
-              .replace(/^[-*]\\s*/, '');
+              .replace(/^[-*]\s*\[[ xX]\]\s*/, '')
+              .replace(/^[-*]\s*/, '');
             return {
               id: uid(),
               text: clean,
@@ -1437,7 +1437,7 @@ function getPlannerHtml() {
       function syncNotesText(widget) {
         widget.data.text = widget.data.noteItems.map(function (item) {
           return Array(item.indent + 1).join('  ') + (item.done ? '- [x] ' : '- [ ] ') + item.text;
-        }).join('\\n');
+        }).join('\n');
       }
 
       function bindAppleNotes(widget, body) {
