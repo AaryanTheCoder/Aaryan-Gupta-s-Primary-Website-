@@ -566,71 +566,6 @@ function getPlannerHtml() {
       line-height: 30px;
     }
 
-    .apple-notes-editor {
-      height: calc(100% - 44px);
-      min-height: 160px;
-      overflow: auto;
-      border: 1px solid rgba(35, 90, 59, 0.13);
-      border-radius: 18px;
-      padding: 10px;
-      background:
-        repeating-linear-gradient(0deg, transparent 0 35px, rgba(35, 90, 59, 0.08) 35px 36px),
-        rgba(255, 255, 255, 0.70);
-      font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Verdana, sans-serif;
-    }
-
-    .apple-note-row {
-      display: grid;
-      grid-template-columns: 28px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      min-height: 36px;
-      border-radius: 11px;
-      transition: background 0.14s ease;
-    }
-
-    .apple-note-row:focus-within {
-      background: rgba(35, 90, 59, 0.07);
-    }
-
-    .apple-note-check {
-      width: 24px;
-      height: 24px;
-      border: 2px solid rgba(35, 52, 42, 0.42);
-      border-radius: 50%;
-      color: #173525;
-      background: rgba(255, 255, 255, 0.52);
-      cursor: pointer;
-      font-size: 0.95rem;
-      font-weight: 900;
-      line-height: 1;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-    }
-
-    .apple-note-check.checked {
-      border-color: #f0b84f;
-      background: #f0b84f;
-    }
-
-    .apple-note-input {
-      width: 100%;
-      min-width: 0;
-      border: 0;
-      color: var(--ink);
-      background: transparent;
-      outline: none;
-      font-weight: 700;
-      line-height: 1.45;
-    }
-
-    .apple-note-row.done .apple-note-input {
-      color: var(--muted);
-      text-decoration: line-through;
-    }
-
     .note-tools {
       display: flex;
       gap: 8px;
@@ -1071,7 +1006,7 @@ function getPlannerHtml() {
           widgets: [
             { id: uid(), type: 'weather', title: 'Singapore Weather', x: 0, y: 0, w: 330, h: 250, data: {} },
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
-            { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '- Finish homework\n- Pack bag\n- Revise one topic', fontSize: '18', format: 'lined' } },
+            { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '', fontSize: '18', notesFormat: 'plain-v1' } },
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
             { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
@@ -1309,9 +1244,9 @@ function getPlannerHtml() {
         }
 
         if (widget.type === 'notes') {
-          normalizeNotes(widget);
+          normalizeTextNotes(widget);
           var fontSize = widget.data.fontSize || '18';
-          return '<div class="note-tools"><select data-note-size><option value="15">Small</option><option value="18">Normal</option><option value="22">Large</option><option value="28">Huge</option></select><button type="button" data-note-add>New task</button><button type="button" data-note-clear>Clear</button></div><div class="apple-notes-editor" data-note-list style="font-size:' + escapeAttr(fontSize) + 'px;"></div>';
+          return '<div class="note-tools"><select data-note-size aria-label="Note text size"><option value="15">Small</option><option value="18">Normal</option><option value="22">Large</option><option value="28">Huge</option></select><button type="button" data-note-clear>Clear</button></div><textarea class="notes" data-note-text placeholder="Write anything here..." style="font-size:' + escapeAttr(fontSize) + 'px;">' + escapeHtml(widget.data.text) + '</textarea>';
         }
 
         if (widget.type === 'urgency') {
@@ -1357,7 +1292,7 @@ function getPlannerHtml() {
         }
 
         if (widget.type === 'notes') {
-          bindAppleNotes(widget, body);
+          bindTextNotes(widget, body);
         }
 
         if (widget.type === 'pomodoro') {
@@ -1397,157 +1332,50 @@ function getPlannerHtml() {
         }
       }
 
-      function normalizeNotes(widget) {
+      function normalizeTextNotes(widget) {
         widget.data = widget.data || {};
-        if (Array.isArray(widget.data.noteItems)) {
-          widget.data.noteItems = widget.data.noteItems.map(function (item) {
-            item = item && typeof item === 'object' ? item : { text: String(item || '') };
-            item.id = item.id || uid();
-            item.text = item.text || '';
-            item.done = Boolean(item.done);
-            item.indent = clampNumber(item.indent, 0, 5, 0);
-            return item;
-          });
-        } else {
-          var lines = String(widget.data.text || '').split(/\r?\n|\\n/);
-          widget.data.noteItems = lines.filter(function (line, index) {
-            return line.trim() || index === 0;
-          }).map(function (line) {
-            var leading = line.match(/^\s*/)[0].replace(/\t/g, '  ').length;
-            var clean = line.trim();
-            var done = /^[-*]\s*\[[xX]\]\s*/.test(clean);
-            clean = clean
-              .replace(/^[-*]\s*\[[ xX]\]\s*/, '')
-              .replace(/^[-*]\s*/, '');
-            return {
-              id: uid(),
-              text: clean,
-              done: done,
-              indent: Math.min(5, Math.floor(leading / 2))
-            };
-          });
-        }
-
-        if (!widget.data.noteItems.length) {
-          widget.data.noteItems.push({ id: uid(), text: '', done: false, indent: 0 });
-        }
-        syncNotesText(widget);
-      }
-
-      function syncNotesText(widget) {
-        widget.data.text = widget.data.noteItems.map(function (item) {
-          return Array(item.indent + 1).join('  ') + (item.done ? '- [x] ' : '- [ ] ') + item.text;
-        }).join('\n');
-      }
-
-      function bindAppleNotes(widget, body) {
-        normalizeNotes(widget);
-
-        var list = body.querySelector('[data-note-list]');
-        var size = body.querySelector('[data-note-size]');
-        size.value = widget.data.fontSize || '18';
-
-        function renderNoteRows(focusId) {
-          list.innerHTML = widget.data.noteItems.map(function (item) {
-            var offset = item.indent * 34;
-            return '<div class="apple-note-row ' + (item.done ? 'done' : '') + '" data-note-id="' + item.id + '" style="padding-left:' + offset + 'px;"><button class="apple-note-check ' + (item.done ? 'checked' : '') + '" type="button" aria-label="Mark task done">' + (item.done ? '&#10003;' : '') + '</button><input class="apple-note-input" data-note-input value="' + escapeAttr(item.text) + '" placeholder="Task"></div>';
-          }).join('');
-
-          if (focusId) {
-            var focusInput = list.querySelector('[data-note-id="' + focusId + '"] [data-note-input]');
-            if (focusInput) {
-              focusInput.focus();
-              focusInput.setSelectionRange(focusInput.value.length, focusInput.value.length);
-            }
+        if (widget.data.notesFormat !== 'plain-v1') {
+          if (Array.isArray(widget.data.noteItems)) {
+            widget.data.text = widget.data.noteItems.map(function (item) {
+              item = item && typeof item === 'object' ? item : { text: String(item || '') };
+              var indent = clampNumber(item.indent, 0, 5, 0);
+              return Array(indent + 1).join('  ') + String(item.text || '');
+            }).join('\n');
+          } else {
+            widget.data.text = String(widget.data.text || '').replace(/\\n/g, '\n');
           }
+          delete widget.data.noteItems;
+          delete widget.data.format;
+          widget.data.notesFormat = 'plain-v1';
         }
 
-        function findNoteItem(id) {
-          return widget.data.noteItems.find(function (item) {
-            return item.id === id;
-          });
-        }
+        widget.data.text = String(widget.data.text || '');
+        widget.data.fontSize = String(clampNumber(widget.data.fontSize, 15, 28, 18));
+      }
 
-        renderNoteRows();
+      function bindTextNotes(widget, body) {
+        normalizeTextNotes(widget);
+        var textarea = body.querySelector('[data-note-text]');
+        var size = body.querySelector('[data-note-size]');
+        size.value = widget.data.fontSize;
 
         size.addEventListener('change', function () {
-          widget.data.fontSize = size.value;
-          list.style.fontSize = size.value + 'px';
+          widget.data.fontSize = String(clampNumber(size.value, 15, 28, 18));
+          size.value = widget.data.fontSize;
+          textarea.style.fontSize = widget.data.fontSize + 'px';
           scheduleSave();
         });
 
-        body.querySelector('[data-note-add]').addEventListener('click', function () {
-          var item = { id: uid(), text: '', done: false, indent: 0 };
-          widget.data.noteItems.push(item);
-          syncNotesText(widget);
-          renderNoteRows(item.id);
+        textarea.addEventListener('input', function () {
+          widget.data.text = textarea.value;
           scheduleSave();
         });
 
         body.querySelector('[data-note-clear]').addEventListener('click', function () {
-          widget.data.noteItems = [{ id: uid(), text: '', done: false, indent: 0 }];
-          syncNotesText(widget);
-          renderNoteRows(widget.data.noteItems[0].id);
+          textarea.value = '';
+          widget.data.text = '';
+          textarea.focus();
           scheduleSave();
-        });
-
-        list.addEventListener('click', function (event) {
-          if (!event.target.closest) return;
-          var check = event.target.closest('.apple-note-check');
-          if (!check) return;
-          var row = check.closest('[data-note-id]');
-          var item = findNoteItem(row.dataset.noteId);
-          if (!item) return;
-          item.done = !item.done;
-          syncNotesText(widget);
-          renderNoteRows(item.id);
-          scheduleSave();
-        });
-
-        list.addEventListener('input', function (event) {
-          if (!event.target.matches) return;
-          if (!event.target.matches('[data-note-input]')) return;
-          var row = event.target.closest('[data-note-id]');
-          var item = findNoteItem(row.dataset.noteId);
-          if (!item) return;
-          item.text = event.target.value;
-          syncNotesText(widget);
-          scheduleSave();
-        });
-
-        list.addEventListener('keydown', function (event) {
-          if (!event.target.matches) return;
-          if (!event.target.matches('[data-note-input]')) return;
-          var row = event.target.closest('[data-note-id]');
-          var item = findNoteItem(row.dataset.noteId);
-          if (!item) return;
-          var index = widget.data.noteItems.indexOf(item);
-
-          if (event.key === 'Tab') {
-            event.preventDefault();
-            item.indent = clamp(item.indent + (event.shiftKey ? -1 : 1), 0, 5);
-            syncNotesText(widget);
-            renderNoteRows(item.id);
-            scheduleSave();
-          }
-
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            var nextItem = { id: uid(), text: '', done: false, indent: item.indent };
-            widget.data.noteItems.splice(index + 1, 0, nextItem);
-            syncNotesText(widget);
-            renderNoteRows(nextItem.id);
-            scheduleSave();
-          }
-
-          if (event.key === 'Backspace' && !event.target.value && widget.data.noteItems.length > 1) {
-            event.preventDefault();
-            widget.data.noteItems.splice(index, 1);
-            var fallback = widget.data.noteItems[Math.max(0, index - 1)] || widget.data.noteItems[0];
-            syncNotesText(widget);
-            renderNoteRows(fallback.id);
-            scheduleSave();
-          }
         });
       }
 

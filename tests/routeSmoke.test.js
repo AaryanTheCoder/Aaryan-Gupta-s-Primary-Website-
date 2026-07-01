@@ -145,16 +145,8 @@ function invoke(pathname, options = {}) {
   const plannerScript = planner.body.match(/<script>\s*([\s\S]*?)\s*<\/script>/);
   assert.ok(plannerScript, 'Planner browser script should exist');
   assert.doesNotThrow(() => new Function(plannerScript[1]));
-  assert.match(
-    plannerScript[1],
-    /line\.match\(\/\^\\s\*\/\)\[0\]/,
-    'Planner note whitespace regex should be emitted with browser-safe escaping'
-  );
-  assert.doesNotMatch(
-    plannerScript[1],
-    /line\.match\(\/\^\\\\s\*\/\)/,
-    'Planner note whitespace regex must not look for a literal backslash'
-  );
+  assert.match(planner.body, /data-note-text/, 'Planner should render a plain-text notes field');
+  assert.doesNotMatch(planner.body, /data-note-add/, 'Planner notes should not require task rows');
 
   const plannerDataBefore = await invoke('/planner-data', {
     headers: { authorization: basicAuth() }
