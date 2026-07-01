@@ -1,14 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 
-const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
+const PLANNER_PASSWORD = process.env.PLANNER_PASSWORD || process.env.STORAGE_PASSWORD;
+const IS_MANAGED_PRODUCTION = Boolean(process.env.WEBSITE_SITE_NAME || process.env.NODE_ENV === 'production');
+const DEFAULT_PLANNER_DATA_PATH = process.env.WEBSITE_SITE_NAME && process.env.HOME
+  ? path.join(process.env.HOME, 'data', 'planner-data.json')
+  : path.join(__dirname, 'planner-data.json');
+const LEGACY_PLANNER_DATA_PATH = path.join(__dirname, 'planner-data.json');
 const PLANNER_DATA_PATH = process.env.PLANNER_DATA_PATH
   ? path.resolve(process.env.PLANNER_DATA_PATH)
-  : path.join(__dirname, 'planner-data.json');
+  : DEFAULT_PLANNER_DATA_PATH;
 const MAX_PLANNER_DATA_BYTES = 2 * 1024 * 1024;
 
 function isAuthorized(req) {
-  if (!STORAGE_PASSWORD) return false;
+  if (!PLANNER_PASSWORD) return !IS_MANAGED_PRODUCTION;
 
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Basic ')) return false;
@@ -17,34 +22,51 @@ function isAuthorized(req) {
   const colonIndex = decoded.indexOf(':');
   const password = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
 
-  return password === STORAGE_PASSWORD;
+  return password === PLANNER_PASSWORD;
 }
 
 function requireAuth(req, res) {
   if (isAuthorized(req)) return true;
 
+  if (!PLANNER_PASSWORD) {
+    res.writeHead(503, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store'
+    });
+    res.end('Daily Planner is not configured. Set PLANNER_PASSWORD or STORAGE_PASSWORD.');
+    return false;
+  }
+
   res.writeHead(401, {
     'Content-Type': 'text/plain; charset=utf-8',
-    'WWW-Authenticate': 'Basic realm="Daily Planner"'
+    'WWW-Authenticate': 'Basic realm="Daily Planner"',
+    'Cache-Control': 'no-store'
   });
   res.end('Daily Planner password required');
   return false;
 }
 
 function readPlannerData() {
-  try {
-    const raw = fs.readFileSync(PLANNER_DATA_PATH, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.state && Array.isArray(parsed.state.widgets)) {
-      return {
-        exists: true,
-        savedAt: parsed.savedAt || null,
-        state: parsed.state
-      };
-    }
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      console.error('Failed to read planner data:', error);
+  const candidatePaths = [PLANNER_DATA_PATH];
+  if (LEGACY_PLANNER_DATA_PATH !== PLANNER_DATA_PATH) {
+    candidatePaths.push(LEGACY_PLANNER_DATA_PATH);
+  }
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      const raw = fs.readFileSync(candidatePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.state && Array.isArray(parsed.state.widgets)) {
+        return {
+          exists: true,
+          savedAt: parsed.savedAt || null,
+          state: parsed.state
+        };
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`Failed to read planner data from ${candidatePath}:`, error);
+      }
     }
   }
 
@@ -60,7 +82,8 @@ function writePlannerData(state) {
     savedAt: new Date().toISOString(),
     state
   };
-  const tempPath = `${PLANNER_DATA_PATH}.${process.pid}.tmp`;
+  fs.mkdirSync(path.dirname(PLANNER_DATA_PATH), { recursive: true });
+  const tempPath = `${PLANNER_DATA_PATH}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2));
   fs.renameSync(tempPath, PLANNER_DATA_PATH);
   return payload;
@@ -895,6 +918,19 @@ function getPlannerHtml() {
       line-height: 1.55;
     }
 
+    .save-status {
+      min-width: 120px;
+      color: var(--muted);
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+      font-size: 0.86rem;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .save-status.error {
+      color: #a83d2b;
+    }
+
     @media (max-width: 900px) {
       .hero {
         grid-template-columns: 1fr;
@@ -950,6 +986,7 @@ function getPlannerHtml() {
         <button class="btn" id="addWidgetBtn" type="button">Add widget</button>
       </div>
       <div class="toolbar-group">
+        <span class="save-status" id="saveStatus" role="status" aria-live="polite">Loading planner...</span>
         <button class="btn secondary" id="tidyBtn" type="button">Tidy layout</button>
         <button class="btn secondary" id="resetBtn" type="button">Reset planner</button>
         <a class="btn secondary" href="/" style="display:inline-flex; align-items:center; text-decoration:none;">Back home</a>
@@ -971,6 +1008,7 @@ function getPlannerHtml() {
       var resetBtn = document.getElementById('resetBtn');
       var liveClock = document.getElementById('liveClock');
       var liveDate = document.getElementById('liveDate');
+      var saveStatus = document.getElementById('saveStatus');
       var state = defaultState();
       var saveTimer = null;
       var activeDrag = null;
@@ -1060,19 +1098,36 @@ function getPlannerHtml() {
           return;
         }
 
-        fetch('/planner-data', {
+        setSaveStatus('Saving...', false);
+        return fetch('/planner-data', {
           method: 'PUT',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state: state })
-        }).catch(function () {
-          pendingSave = true;
-        });
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('Planner save failed with status ' + response.status);
+            return response.json();
+          })
+          .then(function () {
+            pendingSave = false;
+            setSaveStatus('Saved', false);
+          })
+          .catch(function () {
+            pendingSave = true;
+            setSaveStatus('Saved locally - server unavailable', true);
+          });
       }
 
       function scheduleSave() {
         clearTimeout(saveTimer);
+        setSaveStatus('Unsaved changes', false);
         saveTimer = setTimeout(saveState, 400);
+      }
+
+      function setSaveStatus(message, isError) {
+        saveStatus.textContent = message;
+        saveStatus.classList.toggle('error', Boolean(isError));
       }
 
       function loadRemoteState() {
@@ -1093,11 +1148,13 @@ function getPlannerHtml() {
               pendingSave = true;
             }
             pendingSave = addDayRemainingWidgetOnce(state) || pendingSave;
+            setSaveStatus(data.exists ? 'Loaded from server' : 'Ready', false);
           })
           .catch(function () {
             state = normalizePlannerState(loadLocalState());
             addDayRemainingWidgetOnce(state);
             pendingSave = true;
+            setSaveStatus('Using local copy - server unavailable', true);
           })
           .finally(function () {
             remoteReady = true;

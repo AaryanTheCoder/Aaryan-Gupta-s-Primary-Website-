@@ -6,7 +6,10 @@ const { Readable } = require('stream');
 
 process.env.STORAGE_PASSWORD = process.env.STORAGE_PASSWORD || 'test-password';
 const gameTheoryDataPath = path.join(os.tmpdir(), `game-theory-route-smoke-${process.pid}.json`);
+const plannerDataDirectory = path.join(os.tmpdir(), `planner-route-smoke-${process.pid}`);
+const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
 process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
+process.env.PLANNER_DATA_PATH = plannerDataPath;
 
 const server = require('../Server2');
 const requestHandler = server.listeners('request')[0];
@@ -129,6 +132,68 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(simulatorTraversal.statusCode, 404);
 
+  const plannerDenied = await invoke('/planner');
+  assert.strictEqual(plannerDenied.statusCode, 401);
+  assert.match(plannerDenied.headers['www-authenticate'], /Daily Planner/);
+
+  const planner = await invoke('/planner', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(planner.statusCode, 200);
+  assert.match(planner.body, /Personal Daily Planner/);
+  assert.match(planner.body, /id="saveStatus"/);
+  const plannerScript = planner.body.match(/<script>\s*([\s\S]*?)\s*<\/script>/);
+  assert.ok(plannerScript, 'Planner browser script should exist');
+  assert.doesNotThrow(() => new Function(plannerScript[1]));
+
+  const plannerDataBefore = await invoke('/planner-data', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(plannerDataBefore.statusCode, 200);
+  assert.strictEqual(JSON.parse(plannerDataBefore.body).exists, false);
+
+  const plannerState = {
+    widgets: [
+      {
+        id: 'test-note',
+        type: 'notes',
+        title: 'Test note',
+        x: 10,
+        y: 20,
+        w: 300,
+        h: 240,
+        data: { text: 'Planner persistence works' }
+      }
+    ]
+  };
+  const plannerSave = await invoke('/planner-data', {
+    method: 'PUT',
+    headers: {
+      authorization: basicAuth(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ state: plannerState })
+  });
+  assert.strictEqual(plannerSave.statusCode, 200);
+  assert.strictEqual(JSON.parse(plannerSave.body).ok, true);
+  assert.strictEqual(fs.existsSync(plannerDataPath), true);
+
+  const plannerDataAfter = await invoke('/planner-data', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(plannerDataAfter.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(plannerDataAfter.body).state, plannerState);
+
+  const invalidPlannerSave = await invoke('/planner-data', {
+    method: 'PUT',
+    headers: {
+      authorization: basicAuth(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ state: { widgets: 'invalid' } })
+  });
+  assert.strictEqual(invalidPlannerSave.statusCode, 400);
+
   const cloudUnauthed = await invoke('/cloudconsole');
   assert.strictEqual(cloudUnauthed.statusCode, 200);
 
@@ -180,4 +245,5 @@ function invoke(pathname, options = {}) {
   process.exitCode = 1;
 }).finally(() => {
   fs.rmSync(gameTheoryDataPath, { force: true });
+  fs.rmSync(plannerDataDirectory, { force: true, recursive: true });
 });
