@@ -13,6 +13,10 @@ const tablockerRoutes = require('./pages/tablocker/routes');
 const privacyRoutes = require('./pages/privacy/routes');
 const shooterGameRoutes = require('./pages/shooter-game/routes');
 const gameTheoryRoutes = require('./pages/game-theory/routes');
+const {
+  injectWidgetIntoHtmlResponses,
+  serveWidget
+} = require('./shared/siteWideGemini');
 
 const HOME_DIR = path.join(__dirname, 'pages', 'home');
 
@@ -20,7 +24,12 @@ const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
   console.log('Request Method: ' + request.method); // The console (I think the Azure One,) Will report all requests, like if they requested a specific subsite /kaomoji for example and if they GET or POST (like when uploading)
 response.setHeader('X-Content-Type-Options', 'nosniff');
+injectWidgetIntoHtmlResponses(request, response);
 const requestPathname = request.url.split('?')[0];
+if (serveWidget(request, response)) {
+  return;
+}
+
 if (requestPathname === '/storage' || requestPathname.startsWith('/storage/')) {
   return storageRoutes.handle(request, response); // If they request / storage takes them to the storageRoutes.js File 
 }

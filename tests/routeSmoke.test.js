@@ -67,6 +67,13 @@ function invoke(pathname, options = {}) {
   const home = await invoke('/');
   assert.strictEqual(home.statusCode, 200);
   assert.match(home.body, /Welcome to my website/);
+  assert.match(home.body, /src="\/assets\/gemini-widget\.js"/);
+
+  const geminiWidget = await invoke('/assets/gemini-widget.js');
+  assert.strictEqual(geminiWidget.statusCode, 200);
+  assert.match(geminiWidget.headers['content-type'], /^application\/javascript/);
+  assert.match(geminiWidget.body, /getDisplayMedia/);
+  assert.match(geminiWidget.body, /fetch\('\/api\/gemini'/);
 
   const selfie = await invoke('/Selfie.JPG');
   assert.strictEqual(selfie.statusCode, 200);
@@ -87,6 +94,26 @@ function invoke(pathname, options = {}) {
   const kaomoji = await invoke('/kaomoji');
   assert.strictEqual(kaomoji.statusCode, 200);
   assert.match(kaomoji.body, /Simple Kaomoji Table/);
+  assert.match(kaomoji.body, /src="\/assets\/gemini-widget\.js"/);
+
+  const gemini = await invoke('/gemini');
+  assert.strictEqual(gemini.statusCode, 200);
+  assert.match(gemini.body, /Gemini AI Chat/);
+  assert.match(gemini.body, /src="\/assets\/gemini-widget\.js"/);
+
+  const privacy = await invoke('/privacy');
+  assert.strictEqual(privacy.statusCode, 200);
+  assert.match(privacy.body, /src="\/assets\/gemini-widget\.js"/);
+
+  const tablocker = await invoke('/tablocker');
+  assert.strictEqual(tablocker.statusCode, 200);
+  assert.match(tablocker.body, /src="\/assets\/gemini-widget\.js"/);
+
+  const storage = await invoke('/storage', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(storage.statusCode, 200);
+  assert.match(storage.body, /src="\/assets\/gemini-widget\.js"/);
 
   const kaomojiCursor = await invoke('/7d2e594b9e08ab2fba15ece12d239457.png');
   assert.strictEqual(kaomojiCursor.statusCode, 200);
@@ -99,6 +126,7 @@ function invoke(pathname, options = {}) {
   const sandbox = await invoke('/sandbox');
   assert.strictEqual(sandbox.statusCode, 200);
   assert.match(sandbox.body, /\/sandbox\/assets\//);
+  assert.match(sandbox.body, /src="\/assets\/gemini-widget\.js"/);
 
   const sandboxCss = await invoke('/sandbox/assets/index-BQ2BYKP8.css');
   assert.strictEqual(sandboxCss.statusCode, 200);
@@ -113,12 +141,14 @@ function invoke(pathname, options = {}) {
   const shooterGame = await invoke('/shooter-game');
   assert.strictEqual(shooterGame.statusCode, 200);
   assert.match(shooterGame.body, /Square Shooter/);
+  assert.match(shooterGame.body, /src="\/assets\/gemini-widget\.js"/);
 
   const gameTheory = await invoke('/game-theory');
   assert.strictEqual(gameTheory.statusCode, 200);
   assert.match(gameTheory.body, /Game Theory Arcade/);
   assert.match(gameTheory.body, /data-info="monty-rules"/);
   assert.match(gameTheory.body, /data-info="hundred-deeper"/);
+  assert.match(gameTheory.body, /src="\/assets\/gemini-widget\.js"/);
 
   const gameTheoryJs = await invoke('/game-theory/app.js');
   assert.strictEqual(gameTheoryJs.statusCode, 200);
@@ -173,6 +203,7 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(simulator.statusCode, 200);
   assert.match(simulator.body, /Market Simulator/);
+  assert.match(simulator.body, /src="\/assets\/gemini-widget\.js"/);
 
   const plannerDenied = await invoke('/planner');
   assert.strictEqual(plannerDenied.statusCode, 401);
@@ -184,6 +215,7 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(planner.statusCode, 200);
   assert.match(planner.body, /Personal Daily Planner/);
   assert.match(planner.body, /id="saveStatus"/);
+  assert.match(planner.body, /src="\/assets\/gemini-widget\.js"/);
   const plannerScript = planner.body.match(/<script>\s*([\s\S]*?)\s*<\/script>/);
   assert.ok(plannerScript, 'Planner browser script should exist');
   assert.doesNotThrow(() => new Function(plannerScript[1]));
@@ -240,6 +272,7 @@ function invoke(pathname, options = {}) {
 
   const cloudUnauthed = await invoke('/cloudconsole');
   assert.strictEqual(cloudUnauthed.statusCode, 200);
+  assert.match(cloudUnauthed.body, /src="\/assets\/gemini-widget\.js"/);
 
   const execute = await invoke('/api/cloudconsole/execute', {
     method: 'POST',

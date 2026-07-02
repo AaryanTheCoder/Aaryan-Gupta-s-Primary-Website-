@@ -1,6 +1,59 @@
 const { readJsonBody } = require('../../shared/routeHelpers');
 
-const MAX_GEMINI_BODY_BYTES = 64 * 1024;
+const MAX_GEMINI_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_GEMINI_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_GEMINI_MESSAGE_CHARS = 8000;
+const MAX_GEMINI_HISTORY_ITEMS = 10;
+const MAX_GEMINI_HISTORY_CHARS = 24000;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function invalidRequest(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function parseHistory(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw invalidRequest('History must be an array.');
+
+  let totalCharacters = 0;
+  return value.slice(-MAX_GEMINI_HISTORY_ITEMS).map(item => {
+    const role = item?.role === 'assistant' ? 'model' : item?.role;
+    const text = typeof item?.text === 'string' ? item.text.trim() : '';
+    if ((role !== 'user' && role !== 'model') || !text) {
+      throw invalidRequest('History contains an invalid message.');
+    }
+
+    totalCharacters += text.length;
+    if (totalCharacters > MAX_GEMINI_HISTORY_CHARS) {
+      throw invalidRequest('Conversation history is too long.');
+    }
+
+    return { role, parts: [{ text }] };
+  });
+}
+
+function parseImage(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw invalidRequest('Image attachment is invalid.');
+  }
+
+  const mimeType = typeof value.mimeType === 'string' ? value.mimeType.toLowerCase() : '';
+  const data = typeof value.data === 'string' ? value.data : '';
+  if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
+    throw invalidRequest('Screenshot must be a JPEG, PNG, or WebP image.');
+  }
+  if (!data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    throw invalidRequest('Screenshot data is invalid.');
+  }
+  if (Buffer.from(data, 'base64').length > MAX_GEMINI_IMAGE_BYTES) {
+    throw invalidRequest('Screenshot is too large.');
+  }
+
+  return { mimeType, data };
+}
 
 function serveGeminiPage(response) {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -346,6 +399,15 @@ async function handleGeminiApi(request, response, GEMINI_API_KEY) {
       return;
     }
 
+    if (message.length > MAX_GEMINI_MESSAGE_CHARS) {
+      response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'Message is too long.' }));
+      return;
+    }
+
+    const history = parseHistory(parsed.history);
+    const image = parseImage(parsed.image);
+
     if (!GEMINI_API_KEY) {
       response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       response.end(JSON.stringify({ error: 'Gemini API key is not configured.' }));
@@ -359,11 +421,19 @@ async function handleGeminiApi(request, response, GEMINI_API_KEY) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
+            ...history,
             {
+              role: 'user',
               parts: [
-                {
-                  text: message
-                }
+                ...(image
+                  ? [{
+                      inline_data: {
+                        mime_type: image.mimeType,
+                        data: image.data
+                      }
+                    }]
+                  : []),
+                { text: message }
               ]
             }
           ]
