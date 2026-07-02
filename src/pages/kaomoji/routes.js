@@ -1,4 +1,4 @@
-const { readJsonBody } = require('./routeHelpers');
+const { readJsonBody } = require('../../shared/routeHelpers');
 
 const MAX_GEMINI_BODY_BYTES = 64 * 1024;
 
@@ -263,7 +263,7 @@ function serveKaomojiPage(response) {
 }
 
 function serveCursorImage(response, fs, path) {
-  const filePath = path.join(__dirname, '7d2e594b9e08ab2fba15ece12d239457.png');
+  const filePath = path.join(__dirname, 'assets', 'cursor.png');
   fs.readFile(filePath, (err, data) => {
     if (err) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -279,7 +279,7 @@ function serveCursorImage(response, fs, path) {
 }
 
 function serveSound(response, fs, path) {
-  const filePath = path.join(__dirname, 'freesound_community-evil-laugh-89423.mp3');
+  const filePath = path.join(__dirname, 'assets', 'evil-laugh.mp3');
   fs.readFile(filePath, (err, data) => {
     if (err) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

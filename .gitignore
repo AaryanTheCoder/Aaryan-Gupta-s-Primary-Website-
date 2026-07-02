@@ -1,6 +1,8 @@
 node_modules/
-simulator_data/
+.DS_Store
+src/pages/simulator/data/
+src/pages/sandbox/saves/
+src/pages/storage/uploads/
+src/pages/planner/data/
+src/pages/game-theory/data/
 planner-data.json
-planner-data.json.*.tmp
-game-theory-data.json
-game-theory-data.json.*.tmp

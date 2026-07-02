@@ -5,13 +5,13 @@ const {
   readJsonBody,
   requireBasicAuth,
   sendJson
-} = require('./routeHelpers');
+} = require('../../shared/routeHelpers');
 
-const PUBLIC_DIR = path.join(__dirname, 'game-theory');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const DEFAULT_DATA_PATH = process.env.WEBSITE_SITE_NAME && process.env.HOME
   ? path.join(process.env.HOME, 'data', 'game-theory-data.json')
-  : path.join(__dirname, 'game-theory-data.json');
+  : path.join(__dirname, 'data', 'game-theory-data.json');
 const GAME_THEORY_DATA_PATH = process.env.GAME_THEORY_DATA_PATH
   ? path.resolve(process.env.GAME_THEORY_DATA_PATH)
   : DEFAULT_DATA_PATH;

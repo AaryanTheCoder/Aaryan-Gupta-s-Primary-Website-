@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
-const { isPathInside } = require('./routeHelpers');
+const { isPathInside } = require('../../shared/routeHelpers');
 
-const PUBLIC_DIR = path.join(__dirname, 'shooter-game');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // ---------- Easy game settings ----------
 // Change these values to tune the online 1v1 match.

@@ -1,4 +1,4 @@
-const { readJsonBody } = require('./routeHelpers');
+const { readJsonBody } = require('../../shared/routeHelpers');
 
 const MAX_GEMINI_BODY_BYTES = 64 * 1024;
 

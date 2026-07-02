@@ -3,7 +3,7 @@ const mime = require('mime-types');
 const path = require('path');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
-const STORAGE_DIR = path.join(__dirname, 'storage_uploads');
+const STORAGE_DIR = path.join(__dirname, 'uploads');
 const MAX_STORAGE_UPLOAD_BYTES = Number(process.env.MAX_STORAGE_UPLOAD_BYTES || 200 * 1024 * 1024);
 
 if (!fs.existsSync(STORAGE_DIR)) {

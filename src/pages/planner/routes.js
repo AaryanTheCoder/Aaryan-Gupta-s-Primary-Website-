@@ -5,8 +5,8 @@ const PLANNER_PASSWORD = process.env.PLANNER_PASSWORD || process.env.STORAGE_PAS
 const IS_MANAGED_PRODUCTION = Boolean(process.env.WEBSITE_SITE_NAME || process.env.NODE_ENV === 'production');
 const DEFAULT_PLANNER_DATA_PATH = process.env.WEBSITE_SITE_NAME && process.env.HOME
   ? path.join(process.env.HOME, 'data', 'planner-data.json')
-  : path.join(__dirname, 'planner-data.json');
-const LEGACY_PLANNER_DATA_PATH = path.join(__dirname, 'planner-data.json');
+  : path.join(__dirname, 'data', 'planner-data.json');
+const LEGACY_PLANNER_DATA_PATH = path.resolve(__dirname, '..', '..', '..', 'planner-data.json');
 const PLANNER_DATA_PATH = process.env.PLANNER_DATA_PATH
   ? path.resolve(process.env.PLANNER_DATA_PATH)
   : DEFAULT_PLANNER_DATA_PATH;

@@ -1,11 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { isPathInside, readJsonBody } = require('./routeHelpers');
+const { isPathInside, readJsonBody } = require('../../shared/routeHelpers');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const SANDBOX_DIR = path.join(__dirname, 'sandbox');
-const SAVES_DIR = path.join(__dirname, 'sandbox_saves');
+const SANDBOX_DIR = path.join(__dirname, 'public');
+const SAVES_DIR = path.join(__dirname, 'saves');
 const MAX_SANDBOX_BODY_BYTES = 2 * 1024 * 1024;
 
 if (!fs.existsSync(SAVES_DIR)) {

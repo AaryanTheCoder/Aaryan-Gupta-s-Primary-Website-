@@ -2,9 +2,9 @@
   "name": "part-3-servers",
   "version": "1.0.0",
   "description": "",
-  "main": "Server2.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node Server2.js",
+    "start": "node src/server.js",
     "test": "node tests/routeSmoke.test.js && node tests/tablockerRoutes.test.js",
     "test:routes": "node tests/routeSmoke.test.js",
     "test:tablocker": "node tests/tablockerRoutes.test.js"

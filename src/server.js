@@ -2,17 +2,19 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // API key has been set as an environment variable in Azure for Security, Allowing Users of Kaomoji Website to Ask Gemini Questions
-const storageRoutes = require('./storageRoutes');
-const kaomojiRoutes = require('./kaomoji');
-const sandboxRoutes = require('./sandboxRoutes');
-const cloudConsoleRoutes = require('./cloudConsoleRoutes');
-const geminiRoutes = require('./geminiRoutes');
-const simulatorRoutes = require('./simulatorRoutes');
-const plannerRoutes = require('./plannerRoutes');
-const tablockerRoutes = require('./tablockerRoutes');
-const privacyRoutes = require('./privacyRoutes');
-const shooterGameRoutes = require('./shooterGameRoutes');
-const gameTheoryRoutes = require('./gameTheoryRoutes');
+const storageRoutes = require('./pages/storage/routes');
+const kaomojiRoutes = require('./pages/kaomoji/routes');
+const sandboxRoutes = require('./pages/sandbox/routes');
+const cloudConsoleRoutes = require('./pages/cloud-console/routes');
+const geminiRoutes = require('./pages/gemini/routes');
+const simulatorRoutes = require('./pages/simulator/routes');
+const plannerRoutes = require('./pages/planner/routes');
+const tablockerRoutes = require('./pages/tablocker/routes');
+const privacyRoutes = require('./pages/privacy/routes');
+const shooterGameRoutes = require('./pages/shooter-game/routes');
+const gameTheoryRoutes = require('./pages/game-theory/routes');
+
+const HOME_DIR = path.join(__dirname, 'pages', 'home');
 
 const server = http.createServer((request, response) => {
   console.log('Requested URL: ' + request.url);
@@ -65,7 +67,7 @@ if (request.url === '/gemini' || request.url === '/api/gemini') {
 }
 
 if (requestPathname === '/sitemap' && (request.method === 'GET' || request.method === 'HEAD')) {
-  const filePath = path.join(__dirname, 'sitemap.xml');
+  const filePath = path.join(HOME_DIR, 'sitemap.xml');
   fs.readFile(filePath, (err, data) => {
     if (err) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -490,7 +492,7 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
     response.end();
   }
       else if (request.url === '/Selfie.JPG' && request.method === 'GET') {
-  const filePath = path.join(__dirname, 'Selfie.JPG');
+  const filePath = path.join(HOME_DIR, 'assets', 'Selfie.JPG');
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
@@ -504,7 +506,7 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
   });
 }
   else if (request.url === '/games/pong.py' && request.method === 'GET') {
-    const filePath = path.join(__dirname, 'games', 'pong.py');
+    const filePath = path.join(HOME_DIR, 'downloads', 'pong.py');
     fs.readFile(filePath, (err, data) => {
       if (err) {
         response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -520,7 +522,7 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
   }
   // Serve Google Search Console verification file at the exact root path
   else if (request.url === '/google39fdc9cf51b98b51.html' && request.method === 'GET') {
-    const filePath = path.join(__dirname, 'google39fdc9cf51b98b51.html');
+    const filePath = path.join(HOME_DIR, 'google39fdc9cf51b98b51.html');
     fs.readFile(filePath, (err, data) => {
       if (err) {
         response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -579,7 +581,7 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
     response.end('<!DOCTYPE html><title>Aaryan</title><img src=/aaryan/photo alt=Aaryan width=240>');
   }
   else if (request.url === '/aaryan/photo' && request.method === 'GET') {
-    const photoFile = path.join(__dirname, 'Photo on 24-3-26 at 10.30 AM.jpg');    response.writeHead(200, { 'Content-Type': 'image/jpeg' });    fs.createReadStream(photoFile)
+    const photoFile = path.join(HOME_DIR, 'assets', 'profile-photo.jpg');    response.writeHead(200, { 'Content-Type': 'image/jpeg' });    fs.createReadStream(photoFile)
       .on('error', () => { response.writeHead(404, {'Content-Type':'text/plain; charset=utf-8'}); response.end('Photo not found'); })
       .pipe(response);
   }

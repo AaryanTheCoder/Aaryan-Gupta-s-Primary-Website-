@@ -1,7 +1,7 @@
 const assert = require('assert');
 const http = require('http');
 const WebSocket = require('ws');
-const tablockerRoutes = require('../tablockerRoutes');
+const tablockerRoutes = require('../src/pages/tablocker/routes');
 
 function listen(server) {
   return new Promise((resolve, reject) => {

@@ -11,7 +11,7 @@ const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
 process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
 process.env.PLANNER_DATA_PATH = plannerDataPath;
 
-const server = require('../Server2');
+const server = require('../src/server');
 const requestHandler = server.listeners('request')[0];
 
 function basicAuth(password = process.env.STORAGE_PASSWORD) {
@@ -64,6 +64,38 @@ function invoke(pathname, options = {}) {
 }
 
 (async () => {
+  const home = await invoke('/');
+  assert.strictEqual(home.statusCode, 200);
+  assert.match(home.body, /Welcome to my website/);
+
+  const selfie = await invoke('/Selfie.JPG');
+  assert.strictEqual(selfie.statusCode, 200);
+  assert.match(selfie.headers['content-type'], /^image\/jpeg/);
+
+  const sitemap = await invoke('/sitemap');
+  assert.strictEqual(sitemap.statusCode, 200);
+  assert.match(sitemap.headers['content-type'], /^application\/xml/);
+
+  const googleVerification = await invoke('/google39fdc9cf51b98b51.html');
+  assert.strictEqual(googleVerification.statusCode, 200);
+  assert.match(googleVerification.body, /google-site-verification/);
+
+  const pongDownload = await invoke('/games/pong.py');
+  assert.strictEqual(pongDownload.statusCode, 200);
+  assert.match(pongDownload.headers['content-type'], /^text\/x-python/);
+
+  const kaomoji = await invoke('/kaomoji');
+  assert.strictEqual(kaomoji.statusCode, 200);
+  assert.match(kaomoji.body, /Simple Kaomoji Table/);
+
+  const kaomojiCursor = await invoke('/7d2e594b9e08ab2fba15ece12d239457.png');
+  assert.strictEqual(kaomojiCursor.statusCode, 200);
+  assert.match(kaomojiCursor.headers['content-type'], /^image\/png/);
+
+  const kaomojiSound = await invoke('/freesound_community-evil-laugh-89423.mp3');
+  assert.strictEqual(kaomojiSound.statusCode, 200);
+  assert.match(kaomojiSound.headers['content-type'], /^audio\/mpeg/);
+
   const sandbox = await invoke('/sandbox');
   assert.strictEqual(sandbox.statusCode, 200);
   assert.match(sandbox.body, /\/sandbox\/assets\//);
@@ -77,6 +109,10 @@ function invoke(pathname, options = {}) {
 
   const shooterTraversal = await invoke('/shooter-game/../Server2.js');
   assert.notStrictEqual(shooterTraversal.statusCode, 200);
+
+  const shooterGame = await invoke('/shooter-game');
+  assert.strictEqual(shooterGame.statusCode, 200);
+  assert.match(shooterGame.body, /Square Shooter/);
 
   const gameTheory = await invoke('/game-theory');
   assert.strictEqual(gameTheory.statusCode, 200);
@@ -131,6 +167,12 @@ function invoke(pathname, options = {}) {
     headers: { authorization: basicAuth() }
   });
   assert.strictEqual(simulatorTraversal.statusCode, 404);
+
+  const simulator = await invoke('/simulator/', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(simulator.statusCode, 200);
+  assert.match(simulator.body, /Market Simulator/);
 
   const plannerDenied = await invoke('/planner');
   assert.strictEqual(plannerDenied.statusCode, 401);

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const os = require('os');
-const { readJsonBody, requireBasicAuth, sendJson } = require('./routeHelpers');
+const { readJsonBody, requireBasicAuth, sendJson } = require('../../shared/routeHelpers');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const MAX_CODE_REQUEST_BYTES = 256 * 1024;
