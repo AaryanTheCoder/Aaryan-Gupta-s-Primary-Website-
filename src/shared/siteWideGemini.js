@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const WIDGET_ROUTE = '/assets/gemini-widget.js';
-const WIDGET_TAG = `<script src="${WIDGET_ROUTE}" defer></script>`;
+const WIDGET_ASSET_URL = `${WIDGET_ROUTE}?v=gpt5`;
+const WIDGET_TAG = `<script src="${WIDGET_ASSET_URL}" defer></script>`;
 const WIDGET_FILE = path.join(__dirname, 'public', 'gemini-widget.js');
 
 function headerValue(headers, name) {
@@ -71,7 +72,7 @@ function serveWidget(request, response) {
 
     response.writeHead(200, {
       'Content-Type': 'application/javascript; charset=utf-8',
-      'Cache-Control': 'public, max-age=300'
+      'Cache-Control': 'no-store'
     });
     response.end(request.method === 'HEAD' ? undefined : data);
   });
