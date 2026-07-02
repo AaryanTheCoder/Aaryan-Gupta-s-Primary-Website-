@@ -6,6 +6,7 @@ const MAX_GEMINI_MESSAGE_CHARS = 8000;
 const MAX_GEMINI_HISTORY_ITEMS = 10;
 const MAX_GEMINI_HISTORY_CHARS = 24000;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const GPT5_MODEL = 'GPT-5';
 
 function invalidRequest(message) {
   const error = new Error(message);
@@ -53,6 +54,35 @@ function parseImage(value) {
   }
 
   return { mimeType, data };
+}
+
+function getProviderConfig(config) {
+  if (typeof config === 'string' || config === undefined) {
+    return { geminiApiKey: config };
+  }
+  return config || {};
+}
+
+function getAzureResponsesUrl(endpoint) {
+  const normalized = String(endpoint || '').trim().replace(/\/+$/, '');
+  if (!normalized) return '';
+  if (/\/openai\/v1\/responses$/i.test(normalized)) return normalized;
+  if (/\/openai\/v1$/i.test(normalized)) return `${normalized}/responses`;
+  return `${normalized}/openai/v1/responses`;
+}
+
+function getAzureReply(data) {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  return (Array.isArray(data?.output) ? data.output : [])
+    .filter(item => item?.type === 'message')
+    .flatMap(item => Array.isArray(item.content) ? item.content : [])
+    .filter(part => part?.type === 'output_text' && typeof part.text === 'string')
+    .map(part => part.text)
+    .join('')
+    .trim();
 }
 
 function serveGeminiPage(response) {
@@ -388,10 +418,12 @@ function serveGeminiPage(response) {
 </html>`);
 }
 
-async function handleGeminiApi(request, response, GEMINI_API_KEY) {
+async function handleGeminiApi(request, response, config) {
   try {
     const parsed = await readJsonBody(request, { maxBytes: MAX_GEMINI_BODY_BYTES });
     const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+    const provider = parsed.provider === undefined ? 'gemini' : parsed.provider;
+    const providerConfig = getProviderConfig(config);
 
     if (!message) {
       response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -405,17 +437,77 @@ async function handleGeminiApi(request, response, GEMINI_API_KEY) {
       return;
     }
 
-    const history = parseHistory(parsed.history);
     const image = parseImage(parsed.image);
 
-    if (!GEMINI_API_KEY) {
+    if (provider === 'gpt5') {
+      const responsesUrl = getAzureResponsesUrl(providerConfig.azureOpenAiEndpoint);
+      if (!providerConfig.azureOpenAiApiKey || !responsesUrl) {
+        response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({
+          error: 'Azure OpenAI is not configured. Set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT.'
+        }));
+        return;
+      }
+
+      const input = image
+        ? [{
+            role: 'user',
+            content: [
+              { type: 'input_text', text: message },
+              {
+                type: 'input_image',
+                image_url: `data:${image.mimeType};base64,${image.data}`
+              }
+            ]
+          }]
+        : message;
+
+      const azureResponse = await fetch(responsesUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': providerConfig.azureOpenAiApiKey
+        },
+        body: JSON.stringify({
+          model: GPT5_MODEL,
+          tools: [{ type: 'web_search' }],
+          input,
+          store: false
+        })
+      });
+      const azureData = await azureResponse.json();
+
+      if (!azureResponse.ok) {
+        response.writeHead(azureResponse.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({
+          error: azureData?.error?.message || 'Azure OpenAI request failed.'
+        }));
+        return;
+      }
+
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({
+        reply: getAzureReply(azureData) || 'GPT-5 returned an empty reply.'
+      }));
+      return;
+    }
+
+    if (provider !== 'gemini') {
+      response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'Unknown AI provider.' }));
+      return;
+    }
+
+    const history = parseHistory(parsed.history);
+
+    if (!providerConfig.geminiApiKey) {
       response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       response.end(JSON.stringify({ error: 'Gemini API key is not configured.' }));
       return;
     }
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${providerConfig.geminiApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -458,13 +550,13 @@ async function handleGeminiApi(request, response, GEMINI_API_KEY) {
   }
 }
 
-function handle(request, response, GEMINI_API_KEY) {
+function handle(request, response, config) {
   if (request.url === '/gemini' && request.method === 'GET') {
     return serveGeminiPage(response);
   }
 
   if (request.url === '/api/gemini' && request.method === 'POST') {
-    return handleGeminiApi(request, response, GEMINI_API_KEY);
+    return handleGeminiApi(request, response, config);
   }
 
   response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

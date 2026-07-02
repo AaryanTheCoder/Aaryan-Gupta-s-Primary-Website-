@@ -2,6 +2,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // API key has been set as an environment variable in Azure for Security, Allowing Users of Kaomoji Website to Ask Gemini Questions
+const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY;
+const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
 const storageRoutes = require('./pages/storage/routes');
 const kaomojiRoutes = require('./pages/kaomoji/routes');
 const sandboxRoutes = require('./pages/sandbox/routes');
@@ -72,7 +74,11 @@ if (requestPathname === '/planner' || requestPathname === '/daily-planner' || re
 }
 
 if (request.url === '/gemini' || request.url === '/api/gemini') {
-  return geminiRoutes.handle(request, response, GEMINI_API_KEY);
+  return geminiRoutes.handle(request, response, {
+    geminiApiKey: GEMINI_API_KEY,
+    azureOpenAiApiKey: AZURE_OPENAI_API_KEY,
+    azureOpenAiEndpoint: AZURE_OPENAI_ENDPOINT
+  });
 }
 
 if (requestPathname === '/sitemap' && (request.method === 'GET' || request.method === 'HEAD')) {

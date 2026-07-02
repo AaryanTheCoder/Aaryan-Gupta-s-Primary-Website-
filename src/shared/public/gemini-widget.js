@@ -122,6 +122,42 @@
       .close:hover, .icon-button:hover { color: white; background: rgba(255, 255, 255, .1); }
       .close svg { width: 19px; height: 19px; }
 
+      .model-picker {
+        display: flex;
+        gap: 6px;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, .08);
+        background: rgba(8, 12, 24, .52);
+      }
+
+      .model-option {
+        min-height: 30px;
+        flex: 1;
+        padding: 5px 9px;
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 9px;
+        color: #aeb8d1;
+        background: rgba(255, 255, 255, .04);
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .model-option:hover:not(:disabled) {
+        color: white;
+        background: rgba(255, 255, 255, .08);
+      }
+
+      .model-option.active {
+        border-color: rgba(129, 140, 248, .65);
+        color: white;
+        background: rgba(79, 70, 229, .3);
+      }
+
+      .model-option:disabled { opacity: .55; cursor: not-allowed; }
+      .model-option:focus-visible { outline: 3px solid rgba(147, 197, 253, .8); outline-offset: 1px; }
+      .model-option small { margin-left: 3px; color: #93c5fd; font-size: 9px; font-weight: 700; }
+
       .messages {
         flex: 1;
         min-height: 0;
@@ -289,7 +325,7 @@
       }
     </style>
 
-    <section class="panel" aria-label="Gemini chat" aria-hidden="true">
+    <section class="panel" aria-label="AI chat" aria-hidden="true">
       <header class="header">
         <span class="gemini-mark" aria-hidden="true">
           <svg viewBox="0 0 32 32" fill="none">
@@ -299,12 +335,17 @@
         </span>
         <span class="heading">
           <strong>Ask Gemini</strong>
-          <span>Chat about this page or attach your screen</span>
+          <span>Conversation context enabled</span>
         </span>
-        <button class="close" type="button" aria-label="Close Gemini chat">
+        <button class="close" type="button" aria-label="Close AI chat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
         </button>
       </header>
+
+      <div class="model-picker" role="radiogroup" aria-label="Choose AI model">
+        <button class="model-option active" type="button" role="radio" aria-checked="true" data-provider="gemini">Gemini 2.5 Flash</button>
+        <button class="model-option" type="button" role="radio" aria-checked="false" data-provider="gpt5">GPT-5 <small>WEB</small></button>
+      </div>
 
       <div class="messages" aria-live="polite">
         <div class="message assistant">Hi! Ask me anything. Use the screen button to include what you are viewing.</div>
@@ -332,7 +373,7 @@
       </div>
     </section>
 
-    <button class="launcher" type="button" aria-label="Open Gemini chat" aria-expanded="false">
+    <button class="launcher" type="button" aria-label="Open AI chat" aria-expanded="false">
       <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
         <path d="M16 2c1.5 8.1 5.9 12.5 14 14-8.1 1.5-12.5 5.9-14 14C14.5 21.9 10.1 17.5 2 16 10.1 14.5 14.5 10.1 16 2Z" fill="url(#gemini-gradient-launcher)"/>
         <defs><linearGradient id="gemini-gradient-launcher" x1="5" y1="5" x2="27" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#BEE9FF"/><stop offset=".48" stop-color="#E3D2FF"/><stop offset="1" stop-color="#FFD1E1"/></linearGradient></defs>
@@ -343,6 +384,9 @@
   const panel = root.querySelector('.panel');
   const launcher = root.querySelector('.launcher');
   const closeButton = root.querySelector('.close');
+  const heading = root.querySelector('.heading strong');
+  const headingDetail = root.querySelector('.heading span');
+  const modelButtons = [...root.querySelectorAll('.model-option')];
   const messages = root.querySelector('.messages');
   const textarea = root.querySelector('textarea');
   const sendButton = root.querySelector('.send');
@@ -352,7 +396,8 @@
   const removeScreenshotButton = root.querySelector('.remove-shot');
   const status = root.querySelector('.status');
 
-  const conversation = [];
+  const geminiConversation = [];
+  let selectedProvider = 'gemini';
   let screenshot = null;
   let requestInProgress = false;
 
@@ -360,12 +405,31 @@
     panel.classList.toggle('open', open);
     panel.setAttribute('aria-hidden', String(!open));
     launcher.setAttribute('aria-expanded', String(open));
-    launcher.setAttribute('aria-label', open ? 'Close Gemini chat' : 'Open Gemini chat');
+    launcher.setAttribute('aria-label', open ? 'Close AI chat' : 'Open AI chat');
     if (open) window.setTimeout(() => textarea.focus(), 30);
   }
 
   function scrollToLatest() {
     messages.scrollTop = messages.scrollHeight;
+  }
+
+  function setProvider(provider) {
+    if (requestInProgress || (provider !== 'gemini' && provider !== 'gpt5')) return;
+    selectedProvider = provider;
+    const isGpt5 = provider === 'gpt5';
+    modelButtons.forEach(button => {
+      const active = button.dataset.provider === provider;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-checked', String(active));
+    });
+    heading.textContent = isGpt5 ? 'Ask GPT-5' : 'Ask Gemini';
+    headingDetail.textContent = isGpt5
+      ? 'Web search · current message only'
+      : 'Conversation context enabled';
+    textarea.setAttribute('aria-label', isGpt5 ? 'Message GPT-5' : 'Message Gemini');
+    textarea.placeholder = isGpt5 ? 'Ask GPT-5…' : 'Ask Gemini…';
+    status.textContent = '';
+    textarea.focus();
   }
 
   function appendMessage(role, text, imageUrl) {
@@ -489,7 +553,9 @@
     requestInProgress = true;
     sendButton.disabled = true;
     captureButton.disabled = true;
-    status.textContent = 'Gemini is thinking…';
+    modelButtons.forEach(button => { button.disabled = true; });
+    const isGpt5 = selectedProvider === 'gpt5';
+    status.textContent = isGpt5 ? 'GPT-5 is thinking and may search the web…' : 'Gemini is thinking…';
     const typing = appendMessage('assistant typing', '');
 
     try {
@@ -497,38 +563,49 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: selectedProvider,
           message,
-          history: conversation.slice(-10),
+          history: isGpt5 ? undefined : geminiConversation.slice(-10),
           image: outgoingScreenshot
             ? { mimeType: outgoingScreenshot.mimeType, data: outgoingScreenshot.data }
             : undefined
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Gemini did not return a reply.');
+      if (!response.ok) {
+        throw new Error(data.error || `${isGpt5 ? 'GPT-5' : 'Gemini'} did not return a reply.`);
+      }
 
       typing.remove();
       appendMessage('assistant', data.reply);
-      conversation.push(
-        { role: 'user', text: message },
-        { role: 'assistant', text: data.reply }
-      );
-      if (conversation.length > 20) conversation.splice(0, conversation.length - 20);
+      if (!isGpt5) {
+        geminiConversation.push(
+          { role: 'user', text: message },
+          { role: 'assistant', text: data.reply }
+        );
+        if (geminiConversation.length > 20) {
+          geminiConversation.splice(0, geminiConversation.length - 20);
+        }
+      }
       status.textContent = '';
     } catch (error) {
       typing.remove();
-      appendMessage('error', error.message || 'Unable to reach Gemini.');
+      appendMessage('error', error.message || `Unable to reach ${isGpt5 ? 'GPT-5' : 'Gemini'}.`);
       status.textContent = '';
     } finally {
       requestInProgress = false;
       sendButton.disabled = false;
       captureButton.disabled = false;
+      modelButtons.forEach(button => { button.disabled = false; });
       textarea.focus();
     }
   }
 
   launcher.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
   closeButton.addEventListener('click', () => setOpen(false));
+  modelButtons.forEach(button => {
+    button.addEventListener('click', () => setProvider(button.dataset.provider));
+  });
   captureButton.addEventListener('click', captureScreen);
   removeScreenshotButton.addEventListener('click', clearScreenshot);
   sendButton.addEventListener('click', sendMessage);

@@ -74,6 +74,7 @@ function invoke(pathname, options = {}) {
   assert.match(geminiWidget.headers['content-type'], /^application\/javascript/);
   assert.match(geminiWidget.body, /getDisplayMedia/);
   assert.match(geminiWidget.body, /fetch\('\/api\/gemini'/);
+  assert.match(geminiWidget.body, /data-provider="gpt5"/);
 
   const selfie = await invoke('/Selfie.JPG');
   assert.strictEqual(selfie.statusCode, 200);
