@@ -6,7 +6,7 @@ const MAX_GEMINI_MESSAGE_CHARS = 8000;
 const MAX_GEMINI_HISTORY_ITEMS = 10;
 const MAX_GEMINI_HISTORY_CHARS = 24000;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const GPT5_MODEL = 'GPT-5';
+const DEFAULT_GPT5_DEPLOYMENT = 'gpt-5';
 
 function invalidRequest(message) {
   const error = new Error(message);
@@ -469,7 +469,7 @@ async function handleGeminiApi(request, response, config) {
           'api-key': providerConfig.azureOpenAiApiKey
         },
         body: JSON.stringify({
-          model: GPT5_MODEL,
+          model: providerConfig.azureOpenAiDeployment || DEFAULT_GPT5_DEPLOYMENT,
           tools: [{ type: 'web_search' }],
           input,
           store: false

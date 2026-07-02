@@ -122,7 +122,8 @@ function invokeApi(payload, config = 'test-gemini-key') {
     }, {
       geminiApiKey: 'test-gemini-key',
       azureOpenAiApiKey: 'test-azure-key',
-      azureOpenAiEndpoint: 'https://example-resource.openai.azure.com/'
+      azureOpenAiEndpoint: 'https://example-resource.openai.azure.com/',
+      azureOpenAiDeployment: 'my-gpt5-deployment'
     });
 
     assert.strictEqual(gpt5Response.statusCode, 200);
@@ -130,7 +131,7 @@ function invokeApi(payload, config = 'test-gemini-key') {
     assert.strictEqual(requests[1].url, 'https://example-resource.openai.azure.com/openai/v1/responses');
     assert.strictEqual(requests[1].options.headers['api-key'], 'test-azure-key');
     assert.deepStrictEqual(requests[1].payload, {
-      model: 'GPT-5',
+      model: 'my-gpt5-deployment',
       tools: [{ type: 'web_search' }],
       input: [{
         role: 'user',
