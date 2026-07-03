@@ -6,7 +6,6 @@ const MAX_GEMINI_MESSAGE_CHARS = 8000;
 const MAX_GEMINI_HISTORY_ITEMS = 10;
 const MAX_GEMINI_HISTORY_CHARS = 24000;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const DEFAULT_GPT5_DEPLOYMENT = 'gpt-5';
 
 function invalidRequest(message) {
   const error = new Error(message);
@@ -441,10 +440,11 @@ async function handleGeminiApi(request, response, config) {
 
     if (provider === 'gpt5') {
       const responsesUrl = getAzureResponsesUrl(providerConfig.azureOpenAiEndpoint);
-      if (!providerConfig.azureOpenAiApiKey || !responsesUrl) {
+      const deployment = String(providerConfig.azureOpenAiDeployment || '').trim();
+      if (!providerConfig.azureOpenAiApiKey || !responsesUrl || !deployment) {
         response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(JSON.stringify({
-          error: 'Azure OpenAI is not configured. Set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT.'
+          error: 'Azure OpenAI is not configured. Set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, and AZURE_OPENAI_DEPLOYMENT. The deployment value must exactly match the deployment name in the same Azure OpenAI resource.'
         }));
         return;
       }
@@ -469,7 +469,7 @@ async function handleGeminiApi(request, response, config) {
           'api-key': providerConfig.azureOpenAiApiKey
         },
         body: JSON.stringify({
-          model: providerConfig.azureOpenAiDeployment || DEFAULT_GPT5_DEPLOYMENT,
+          model: deployment,
           tools: [{ type: 'web_search' }],
           input,
           store: false

@@ -108,6 +108,17 @@ function invokeApi(payload, config = 'test-gemini-key') {
     assert.strictEqual(invalidImage.statusCode, 400);
     assert.match(JSON.parse(invalidImage.body).error, /JPEG, PNG, or WebP/);
 
+    const missingDeployment = await invokeApi({
+      provider: 'gpt5',
+      message: 'Test the Azure configuration.'
+    }, {
+      azureOpenAiApiKey: 'test-azure-key',
+      azureOpenAiEndpoint: 'https://example-resource.openai.azure.com/'
+    });
+    assert.strictEqual(missingDeployment.statusCode, 500);
+    assert.match(JSON.parse(missingDeployment.body).error, /AZURE_OPENAI_DEPLOYMENT/);
+    assert.strictEqual(requests.length, 1);
+
     const gpt5Response = await invokeApi({
       provider: 'gpt5',
       message: 'What changed today?',
