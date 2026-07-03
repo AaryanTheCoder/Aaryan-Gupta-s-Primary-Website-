@@ -52,7 +52,7 @@ function invokeApi(payload, config = 'test-gemini-key') {
       };
     }
 
-    assert.match(url, /gemini-2\.5-flash:generateContent/);
+    assert.match(url, /gemini-3\.5-flash:generateContent/);
     return {
       ok: true,
       status: 200,
@@ -84,6 +84,7 @@ function invokeApi(payload, config = 'test-gemini-key') {
 
     assert.strictEqual(response.statusCode, 200);
     assert.strictEqual(JSON.parse(response.body).reply, 'I can see the attached page.');
+    assert.deepStrictEqual(requests[0].payload.tools, [{ google_search: {} }]);
     assert.deepStrictEqual(requests[0].payload.contents, [
       { role: 'user', parts: [{ text: 'Help me understand this page.' }] },
       { role: 'model', parts: [{ text: 'Attach a screenshot.' }] },

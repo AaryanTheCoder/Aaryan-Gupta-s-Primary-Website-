@@ -343,7 +343,7 @@
       </header>
 
       <div class="model-picker" role="radiogroup" aria-label="Choose AI model">
-        <button class="model-option active" type="button" role="radio" aria-checked="true" data-provider="gemini">Gemini 2.5 Flash</button>
+        <button class="model-option active" type="button" role="radio" aria-checked="true" data-provider="gemini">Gemini 3.5 Flash</button>
         <button class="model-option" type="button" role="radio" aria-checked="false" data-provider="gpt5">GPT-5 <small>WEB</small></button>
       </div>
 
