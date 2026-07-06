@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#10172a">
+  <title>Public Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/chat/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <a class="back-link" href="/">← Aaryan's website</a>
+        <h1>Public chat <span class="live-dot" aria-label="Live"></span></h1>
+        <p>Messages and files here can be seen by everyone.</p>
+      </div>
+      <div class="header-actions">
+        <button id="nameButton" class="quiet-button" type="button">Change name</button>
+        <button id="clearButton" class="danger-button" type="button">Clear chat</button>
+      </div>
+    </header>
+
+    <section class="chat-card" aria-label="Public chat">
+      <div id="messages" class="messages" aria-live="polite">
+        <div class="empty-state">
+          <span>👋</span>
+          <h2>It’s quiet in here</h2>
+          <p>Send the first message!</p>
+        </div>
+      </div>
+
+      <div id="uploadStatus" class="upload-status" hidden>
+        <div>
+          <strong id="uploadLabel">Uploading file…</strong>
+          <span id="uploadPercent">0%</span>
+        </div>
+        <progress id="uploadProgress" max="100" value="0"></progress>
+      </div>
+
+      <form id="messageForm" class="composer">
+        <label class="file-button" for="fileInput" title="Attach a file up to 500 MB">
+          <span aria-hidden="true">＋</span>
+          <span class="sr-only">Attach file</span>
+        </label>
+        <input id="fileInput" type="file" hidden>
+        <textarea id="messageInput" rows="1" maxlength="4000" placeholder="Write a message…" aria-label="Message"></textarea>
+        <button id="sendButton" class="send-button" type="submit">Send</button>
+      </form>
+      <p class="composer-note">Files up to 500 MB · Enter to send · Shift + Enter for a new line</p>
+    </section>
+  </main>
+
+  <dialog id="nameDialog">
+    <form id="nameForm" class="name-form">
+      <span class="dialog-icon">👋</span>
+      <h2>What should we call you?</h2>
+      <p>Your name will appear beside your public messages.</p>
+      <label for="nameInput">Your name</label>
+      <input id="nameInput" maxlength="32" autocomplete="name" placeholder="e.g. Aaryan" required>
+      <p id="nameError" class="form-error" aria-live="polite"></p>
+      <button class="send-button" type="submit">Join the chat</button>
+    </form>
+  </dialog>
+
+  <script src="/chat/app.js" defer></script>
+</body>
+</html>

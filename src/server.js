@@ -16,6 +16,7 @@ const tablockerRoutes = require('./pages/tablocker/routes');
 const privacyRoutes = require('./pages/privacy/routes');
 const shooterGameRoutes = require('./pages/shooter-game/routes');
 const gameTheoryRoutes = require('./pages/game-theory/routes');
+const chatRoutes = require('./pages/chat/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -47,6 +48,10 @@ if (requestPathname === '/shooter-game' || requestPathname.startsWith('/shooter-
 
 if (requestPathname === '/game-theory' || requestPathname.startsWith('/game-theory/')) {
   return gameTheoryRoutes.handle(request, response);
+}
+
+if (requestPathname === '/chat' || requestPathname.startsWith('/chat/')) {
+  return chatRoutes.handle(request, response);
 }
 
 if (requestPathname === '/sandbox' || requestPathname.startsWith('/sandbox/')) { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!
@@ -825,6 +830,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <div class="route">/gemini</div>
         <h2>Gemini Chat</h2>
         <p>Ask Gemini questions from a dedicated page connected through the server API.</p>
+      </a>
+
+      <a class="widget" href="/chat">
+        <div class="route">/chat</div>
+        <h2>Public Chat</h2>
+        <p>Join a shared public conversation, send messages, and exchange files with other visitors.</p>
       </a>
 
       <a class="widget" href="/cloudconsole">

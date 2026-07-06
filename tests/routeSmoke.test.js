@@ -8,8 +8,10 @@ process.env.STORAGE_PASSWORD = process.env.STORAGE_PASSWORD || 'test-password';
 const gameTheoryDataPath = path.join(os.tmpdir(), `game-theory-route-smoke-${process.pid}.json`);
 const plannerDataDirectory = path.join(os.tmpdir(), `planner-route-smoke-${process.pid}`);
 const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
+const chatDataDirectory = path.join(os.tmpdir(), `chat-route-smoke-${process.pid}`);
 process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
 process.env.PLANNER_DATA_PATH = plannerDataPath;
+process.env.CHAT_DATA_DIR = chatDataDirectory;
 
 const server = require('../src/server');
 const requestHandler = server.listeners('request')[0];
@@ -101,6 +103,26 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(gemini.statusCode, 200);
   assert.match(gemini.body, /Gemini AI Chat/);
   assert.match(gemini.body, /src="\/assets\/gemini-widget\.js\?v=gpt5"/);
+
+  const chatMessagesBefore = await invoke('/chat/api/messages');
+  assert.strictEqual(chatMessagesBefore.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(chatMessagesBefore.body).messages, []);
+
+  const chatMessageSave = await invoke('/chat/api/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Route Tester', text: 'Public chat persistence works!' })
+  });
+  assert.strictEqual(chatMessageSave.statusCode, 201);
+  assert.strictEqual(JSON.parse(chatMessageSave.body).message.name, 'Route Tester');
+
+  const chatMessagesAfter = await invoke('/chat/api/messages');
+  assert.strictEqual(chatMessagesAfter.statusCode, 200);
+  assert.strictEqual(JSON.parse(chatMessagesAfter.body).messages.length, 1);
+
+  const chatClear = await invoke('/chat/api/messages', { method: 'DELETE' });
+  assert.strictEqual(chatClear.statusCode, 200);
+  assert.strictEqual(JSON.parse(chatClear.body).ok, true);
 
   const privacy = await invoke('/privacy');
   assert.strictEqual(privacy.statusCode, 200);
@@ -324,4 +346,5 @@ function invoke(pathname, options = {}) {
 }).finally(() => {
   fs.rmSync(gameTheoryDataPath, { force: true });
   fs.rmSync(plannerDataDirectory, { force: true, recursive: true });
+  fs.rmSync(chatDataDirectory, { force: true, recursive: true });
 });
