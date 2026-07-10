@@ -214,8 +214,22 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
           <div class="holiday-left" data-holiday-left-bar></div>
         </div>
         <div class="holiday-percent" data-holiday-percent>Loading holiday progress...</div>
+        <div class="holiday-week" data-holiday-week>Week 1 of holiday</div>
+        <div class="holiday-day-panel" data-holiday-day-panel>
+          <div class="holiday-day-panel-head">
+            <div class="holiday-day-panel-title" data-holiday-day-title>Pick a day</div>
+            <div class="holiday-day-panel-subtitle" data-holiday-day-subtitle>Choose any holiday day to plan it.</div>
+          </div>
+          <form class="holiday-day-form" data-holiday-day-form>
+            <input type="text" name="holidayDayTask" placeholder="Add a plan for this day" data-holiday-day-input>
+            <button class="btn" type="submit">Add</button>
+          </form>
+          <div class="holiday-day-list" data-holiday-day-list></div>
+        </div>
       </div>
-      <div class="holiday-calendar" id="holidayCalendar" data-holiday-calendar></div>
+      <div class="holiday-calendar-wrap">
+        <div class="holiday-calendar" id="holidayCalendar" data-holiday-calendar></div>
+      </div>
     </section>
 ` : '';
 
@@ -466,6 +480,118 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
       margin-top: 9px;
     }
 
+    .holiday-week {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(39, 78, 114, 0.10);
+      color: #274e72;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+      font-size: 0.92rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .holiday-day-panel {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid rgba(39, 78, 114, 0.14);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.62);
+    }
+
+    .holiday-day-panel-head {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-bottom: 10px;
+    }
+
+    .holiday-day-panel-title {
+      font-weight: 900;
+      color: #173525;
+    }
+
+    .holiday-day-panel-subtitle {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .holiday-day-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .holiday-day-form input {
+      flex: 1;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0 10px;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .holiday-day-form button {
+      min-height: 40px;
+      padding: 0 12px;
+    }
+
+    .holiday-day-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .holiday-day-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 8px 9px;
+      border: 1px solid rgba(35, 90, 59, 0.10);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .holiday-day-item.done {
+      opacity: 0.78;
+    }
+
+    .holiday-day-item.done .holiday-plan-text {
+      text-decoration: line-through;
+    }
+
+    .holiday-day-item input[type="checkbox"] {
+      margin-top: 3px;
+      accent-color: #274e72;
+    }
+
+    .holiday-day-item input[type="text"] {
+      flex: 1;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--ink);
+      outline: none;
+    }
+
+    .holiday-day-item button {
+      width: 26px;
+      height: 26px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(217, 91, 67, 0.14);
+      color: var(--red);
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .holiday-calendar-wrap {
+      min-width: 0;
+    }
+
     .holiday-calendar {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -519,6 +645,15 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
       background: rgba(35, 52, 42, 0.05);
     }
 
+    .holiday-day.in-break {
+      cursor: pointer;
+    }
+
+    .holiday-day.in-break:hover {
+      transform: translateY(-1px);
+      box-shadow: inset 0 0 0 1px rgba(39, 78, 114, 0.22);
+    }
+
     .holiday-day.in-break.used {
       color: #f8fff2;
       background: #274e72;
@@ -532,6 +667,11 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
     .holiday-day.today {
       outline: 3px solid #d95b43;
       outline-offset: 1px;
+    }
+
+    .holiday-day.in-break.selected {
+      outline: 2px solid #274e72;
+      outline-offset: 2px;
     }
 
     .toolbar {
@@ -1232,7 +1372,52 @@ ${holidayPanelHtml}
           return widget;
         });
 
+        targetState.holidayPlanner = normalizeHolidayPlannerState(targetState.holidayPlanner);
         return targetState;
+      }
+
+      function defaultHolidayPlannerState() {
+        return {
+          selectedDate: holidayDateKey(new Date(2026, 5, 25)),
+          plans: {}
+        };
+      }
+
+      function normalizeHolidayPlannerState(holidayPlanner) {
+        if (!holidayPlanner || typeof holidayPlanner !== 'object') {
+          return defaultHolidayPlannerState();
+        }
+
+        var normalizedPlans = {};
+        var plans = holidayPlanner.plans && typeof holidayPlanner.plans === 'object' ? holidayPlanner.plans : {};
+        Object.keys(plans).forEach(function (key) {
+          var plan = plans[key] && typeof plans[key] === 'object' ? plans[key] : {};
+          var items = Array.isArray(plan.items) ? plan.items : [];
+          normalizedPlans[key] = {
+            dateLabel: String(plan.dateLabel || ''),
+            items: items.map(function (item) {
+              item = item && typeof item === 'object' ? item : { text: String(item || ''), done: false };
+              return {
+                id: item.id || uid(),
+                text: String(item.text || ''),
+                done: Boolean(item.done)
+              };
+            })
+          };
+        });
+
+        return {
+          selectedDate: normalizeHolidayDateKey(holidayPlanner.selectedDate, defaultHolidayPlannerState().selectedDate),
+          plans: normalizedPlans
+        };
+      }
+
+      function normalizeHolidayDateKey(value, fallback) {
+        if (typeof value !== 'string') return fallback;
+        var match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return fallback;
+        var date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        return Number.isFinite(date.getTime()) ? holidayDateKey(date) : fallback;
       }
 
       function defaultState() {
@@ -1255,6 +1440,7 @@ ${holidayPanelHtml}
       function defaultHolidayState() {
         return {
           dayRemainingWidgetAdded: true,
+          holidayPlanner: defaultHolidayPlannerState(),
           widgets: [
             { id: uid(), type: 'weather', title: 'Singapore Weather', x: 0, y: 0, w: 330, h: 250, data: {} },
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
@@ -1966,11 +2152,18 @@ ${holidayPanelHtml}
       function updateHolidayTracker() {
         if (!HOLIDAY_MODE) return;
 
-        var start = new Date(2026, 5, 25);
-        var endExclusive = new Date(2026, 7, 13);
+        var bounds = holidayBounds();
+        var start = bounds.start;
+        var endExclusive = bounds.endExclusive;
         var now = singaporeNow();
         var today = new Date(now);
         today.setHours(0, 0, 0, 0);
+
+        state.holidayPlanner = normalizeHolidayPlannerState(state.holidayPlanner);
+        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
+        if (selectedDateKey && !state.holidayPlanner.plans[selectedDateKey]) {
+          state.holidayPlanner.selectedDate = selectedDateKey;
+        }
 
         var totalDays = daysBetween(start, endExclusive);
         var usedDays = clamp(daysBetween(start, today), 0, totalDays);
@@ -1984,7 +2177,9 @@ ${holidayPanelHtml}
         setHolidayWidth('[data-holiday-used-bar]', usedPercent);
         setHolidayWidth('[data-holiday-left-bar]', leftPercent);
         setHolidayText('[data-holiday-percent]', Math.round(usedPercent) + '% used - ' + Math.round(leftPercent) + '% left');
+        setHolidayText('[data-holiday-week]', 'Week ' + holidayWeekNumber(today) + ' of holiday');
         renderHolidayCalendar(start, endExclusive, today);
+        renderHolidayDayPanel(today);
       }
 
       function renderHolidayCalendar(start, endExclusive, today) {
@@ -1997,6 +2192,7 @@ ${holidayPanelHtml}
           { label: 'August 2026', year: 2026, month: 7 }
         ];
         var weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
 
         calendar.innerHTML = months.map(function (month) {
           var first = new Date(month.year, month.month, 1);
@@ -2011,20 +2207,148 @@ ${holidayPanelHtml}
 
           for (var dayNumber = 1; dayNumber <= daysInMonth; dayNumber += 1) {
             var date = new Date(month.year, month.month, dayNumber);
+            var dateKey = holidayDateKey(date);
             var inBreak = date >= start && date < endExclusive;
             var isUsed = inBreak && date < today;
             var isLeft = inBreak && date >= today;
             var isToday = sameCalendarDay(date, today);
+            var isSelected = selectedDateKey === dateKey;
             var classes = ['holiday-day'];
             if (inBreak) classes.push('in-break');
             if (isUsed) classes.push('used');
             if (isLeft) classes.push('left');
             if (isToday) classes.push('today');
-            cells.push('<div class="' + classes.join(' ') + '">' + dayNumber + '</div>');
+            if (isSelected) classes.push('selected');
+            var content = '<div class="' + classes.join(' ') + '"' + (inBreak ? ' data-holiday-date="' + dateKey + '" role="button" tabindex="0"' : '') + '>' + dayNumber + '</div>';
+            cells.push(content);
           }
 
           return '<section class="holiday-month"><h3>' + month.label + '</h3><div class="holiday-grid">' + cells.join('') + '</div></section>';
         }).join('');
+
+        calendar.querySelectorAll('[data-holiday-date]').forEach(function (dayCell) {
+          dayCell.addEventListener('click', function () {
+            state.holidayPlanner.selectedDate = dayCell.getAttribute('data-holiday-date');
+            scheduleSave();
+            renderHolidayDayPanel(today);
+            renderHolidayCalendar(start, endExclusive, today);
+          });
+          dayCell.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              state.holidayPlanner.selectedDate = dayCell.getAttribute('data-holiday-date');
+              scheduleSave();
+              renderHolidayDayPanel(today);
+              renderHolidayCalendar(start, endExclusive, today);
+            }
+          });
+        });
+      }
+
+      function renderHolidayDayPanel(today) {
+        var panel = document.querySelector('[data-holiday-day-panel]');
+        if (!panel) return;
+
+        state.holidayPlanner = normalizeHolidayPlannerState(state.holidayPlanner);
+        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
+        var selectedDate = new Date(selectedDateKey + 'T00:00:00');
+        var selectedDateLabel = selectedDate.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        var plan = getHolidayPlanForDateKey(selectedDateKey);
+        state.holidayPlanner.selectedDate = selectedDateKey;
+
+        panel.innerHTML = [
+          '<div class="holiday-day-panel-head">',
+          '<div class="holiday-day-panel-title">' + escapeHtml(selectedDateLabel) + '</div>',
+          '<div class="holiday-day-panel-subtitle">Week ' + holidayWeekNumber(selectedDate) + ' of holiday</div>',
+          '</div>',
+          '<form class="holiday-day-form" data-holiday-day-form>',
+          '<input type="text" name="holidayDayTask" placeholder="Add a plan for this day" data-holiday-day-input>',
+          '<button class="btn" type="submit">Add</button>',
+          '</form>',
+          '<div class="holiday-day-list" data-holiday-day-list>' + (plan.items.length ? plan.items.map(function (item) {
+            return '<div class="holiday-day-item ' + (item.done ? 'done' : '') + '" data-holiday-item-id="' + escapeAttr(item.id) + '"><input type="checkbox" ' + (item.done ? 'checked' : '') + '><input type="text" class="holiday-plan-text" value="' + escapeAttr(item.text) + '"><button type="button" aria-label="Delete item">x</button></div>';
+          }).join('') : '<div class="holiday-day-panel-subtitle">No plans yet — add one for this day.</div>') + '</div>'
+        ].join('');
+
+        var form = panel.querySelector('[data-holiday-day-form]');
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var input = form.querySelector('[data-holiday-day-input]');
+          var text = String(input.value || '').trim();
+          if (!text) return;
+          var planEntry = getHolidayPlanForDateKey(selectedDateKey);
+          planEntry.items.push({ id: uid(), text: text, done: false });
+          input.value = '';
+          scheduleSave();
+          renderHolidayDayPanel(today);
+        });
+
+        panel.querySelectorAll('.holiday-day-item').forEach(function (row) {
+          var itemId = row.getAttribute('data-holiday-item-id');
+          var item = plan.items.find(function (entry) { return entry.id === itemId; });
+          if (!item) return;
+          var checkbox = row.querySelector('input[type="checkbox"]');
+          var textInput = row.querySelector('input[type="text"]');
+          var removeButton = row.querySelector('button');
+          checkbox.addEventListener('change', function () {
+            item.done = checkbox.checked;
+            row.classList.toggle('done', item.done);
+            scheduleSave();
+          });
+          textInput.addEventListener('input', function () {
+            item.text = textInput.value;
+            scheduleSave();
+          });
+          removeButton.addEventListener('click', function () {
+            plan.items = plan.items.filter(function (entry) { return entry.id !== item.id; });
+            scheduleSave();
+            renderHolidayDayPanel(today);
+          });
+        });
+      }
+
+      function getHolidayPlanForDateKey(dateKey) {
+        state.holidayPlanner = normalizeHolidayPlannerState(state.holidayPlanner);
+        if (!state.holidayPlanner.plans[dateKey]) {
+          state.holidayPlanner.plans[dateKey] = {
+            dateLabel: formatHolidayDateLabel(dateKey),
+            items: []
+          };
+        }
+        return state.holidayPlanner.plans[dateKey];
+      }
+
+      function formatHolidayDateLabel(dateKey) {
+        var date = new Date(dateKey + 'T00:00:00');
+        return date.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      }
+
+      function holidayBounds() {
+        return {
+          start: new Date(2026, 5, 25),
+          endExclusive: new Date(2026, 7, 13)
+        };
+      }
+
+      function holidayDateKey(date) {
+        return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+      }
+
+      function holidayWeekNumber(date) {
+        var start = holidayBounds().start;
+        var weekStart = getWeekStart(date);
+        var holidayWeekStart = getWeekStart(start);
+        var daysSinceStart = Math.round((weekStart - holidayWeekStart) / 86400000);
+        return Math.max(1, Math.floor(daysSinceStart / 7) + 1);
+      }
+
+      function getWeekStart(date) {
+        var weekStart = new Date(date);
+        weekStart.setHours(0, 0, 0, 0);
+        var day = weekStart.getDay();
+        var mondayOffset = day === 0 ? -6 : 1 - day;
+        weekStart.setDate(weekStart.getDate() + mondayOffset);
+        return weekStart;
       }
 
       function setHolidayText(selector, value) {

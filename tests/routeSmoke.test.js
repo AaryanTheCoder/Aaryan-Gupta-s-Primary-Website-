@@ -307,6 +307,8 @@ function invoke(pathname, options = {}) {
   assert.match(holidayPlanner.body, /UWCSEA East Summer Holiday/);
   assert.match(holidayPlanner.body, /25 June to 12 August 2026/);
   assert.match(holidayPlanner.body, /data-holiday-calendar/);
+  assert.match(holidayPlanner.body, /data-holiday-week/);
+  assert.match(holidayPlanner.body, /data-holiday-day-panel/);
   assert.match(holidayPlanner.body, /src="\/assets\/gemini-widget\.js\?v=gpt5"/);
   const holidayPlannerScript = holidayPlanner.body.match(/<script>\s*([\s\S]*?)\s*<\/script>/);
   assert.ok(holidayPlannerScript, 'Holiday planner browser script should exist');
