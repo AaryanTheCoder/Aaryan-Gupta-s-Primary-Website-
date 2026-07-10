@@ -6,11 +6,53 @@ const IS_MANAGED_PRODUCTION = Boolean(process.env.WEBSITE_SITE_NAME || process.e
 const DEFAULT_PLANNER_DATA_PATH = process.env.WEBSITE_SITE_NAME && process.env.HOME
   ? path.join(process.env.HOME, 'data', 'planner-data.json')
   : path.join(__dirname, 'data', 'planner-data.json');
+const DEFAULT_HOLIDAY_PLANNER_DATA_PATH = process.env.WEBSITE_SITE_NAME && process.env.HOME
+  ? path.join(process.env.HOME, 'data', 'holiday-planner-data.json')
+  : path.join(__dirname, 'data', 'holiday-planner-data.json');
 const LEGACY_PLANNER_DATA_PATH = path.resolve(__dirname, '..', '..', '..', 'planner-data.json');
 const PLANNER_DATA_PATH = process.env.PLANNER_DATA_PATH
   ? path.resolve(process.env.PLANNER_DATA_PATH)
   : DEFAULT_PLANNER_DATA_PATH;
+const HOLIDAY_PLANNER_DATA_PATH = process.env.HOLIDAY_PLANNER_DATA_PATH
+  ? path.resolve(process.env.HOLIDAY_PLANNER_DATA_PATH)
+  : DEFAULT_HOLIDAY_PLANNER_DATA_PATH;
 const MAX_PLANNER_DATA_BYTES = 2 * 1024 * 1024;
+
+function getPlannerMode(pathname) {
+  const isHolidayPlanner = pathname === '/holiday-planner' || pathname === '/holidayplanner' || pathname === '/summer-planner' || pathname === '/holiday-planner-data';
+  if (isHolidayPlanner) {
+    return {
+      id: 'holiday',
+      dataEndpoint: '/holiday-planner-data',
+      dataPath: HOLIDAY_PLANNER_DATA_PATH,
+      dataPaths: [HOLIDAY_PLANNER_DATA_PATH],
+      documentTitle: 'Holiday Planner',
+      eyebrow: 'Holiday Planner',
+      heading: 'UWCSEA East summer countdown and planning board.',
+      subtitle: 'Track how much of summer is left, then plan the days with the same draggable notes, tasks, timers, weather, and Google Calendar widgets.',
+      storageKey: 'aaryan-holiday-planner-v1',
+      authName: 'Holiday Planner'
+    };
+  }
+
+  const dataPaths = [PLANNER_DATA_PATH];
+  if (LEGACY_PLANNER_DATA_PATH !== PLANNER_DATA_PATH) {
+    dataPaths.push(LEGACY_PLANNER_DATA_PATH);
+  }
+
+  return {
+    id: 'daily',
+    dataEndpoint: '/planner-data',
+    dataPath: PLANNER_DATA_PATH,
+    dataPaths,
+    documentTitle: 'Personal Daily Planner',
+    eyebrow: 'Personal Daily Planner',
+    heading: 'Command center for school, focus, and daily momentum.',
+    subtitle: 'Move widgets by dragging their headers. Resize from the bottom-right corner. Everything autosaves to the server for access on any device.',
+    storageKey: 'aaryan-personal-daily-planner-v1',
+    authName: 'Daily Planner'
+  };
+}
 
 function isAuthorized(req) {
   if (!PLANNER_PASSWORD) return !IS_MANAGED_PRODUCTION;
@@ -25,7 +67,7 @@ function isAuthorized(req) {
   return password === PLANNER_PASSWORD;
 }
 
-function requireAuth(req, res) {
+function requireAuth(req, res, plannerName = 'Daily Planner') {
   if (isAuthorized(req)) return true;
 
   if (!PLANNER_PASSWORD) {
@@ -33,26 +75,21 @@ function requireAuth(req, res) {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-store'
     });
-    res.end('Daily Planner is not configured. Set PLANNER_PASSWORD or STORAGE_PASSWORD.');
+    res.end(`${plannerName} is not configured. Set PLANNER_PASSWORD or STORAGE_PASSWORD.`);
     return false;
   }
 
   res.writeHead(401, {
     'Content-Type': 'text/plain; charset=utf-8',
-    'WWW-Authenticate': 'Basic realm="Daily Planner"',
+    'WWW-Authenticate': `Basic realm="${plannerName}"`,
     'Cache-Control': 'no-store'
   });
-  res.end('Daily Planner password required');
+  res.end(`${plannerName} password required`);
   return false;
 }
 
-function readPlannerData() {
-  const candidatePaths = [PLANNER_DATA_PATH];
-  if (LEGACY_PLANNER_DATA_PATH !== PLANNER_DATA_PATH) {
-    candidatePaths.push(LEGACY_PLANNER_DATA_PATH);
-  }
-
-  for (const candidatePath of candidatePaths) {
+function readPlannerData(mode) {
+  for (const candidatePath of mode.dataPaths) {
     try {
       const raw = fs.readFileSync(candidatePath, 'utf8');
       const parsed = JSON.parse(raw);
@@ -77,15 +114,15 @@ function readPlannerData() {
   };
 }
 
-function writePlannerData(state) {
+function writePlannerData(state, mode) {
   const payload = {
     savedAt: new Date().toISOString(),
     state
   };
-  fs.mkdirSync(path.dirname(PLANNER_DATA_PATH), { recursive: true });
-  const tempPath = `${PLANNER_DATA_PATH}.${process.pid}.${Date.now()}.tmp`;
+  fs.mkdirSync(path.dirname(mode.dataPath), { recursive: true });
+  const tempPath = `${mode.dataPath}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2));
-  fs.renameSync(tempPath, PLANNER_DATA_PATH);
+  fs.renameSync(tempPath, mode.dataPath);
   return payload;
 }
 
@@ -121,16 +158,17 @@ function sendJson(res, statusCode, payload) {
 }
 
 function handle(req, res) {
-  if (!requireAuth(req, res)) return;
-
   const pathname = new URL(req.url, 'http://localhost').pathname;
+  const mode = getPlannerMode(pathname);
 
-  if (pathname === '/planner-data' && req.method === 'GET') {
-    sendJson(res, 200, readPlannerData());
+  if (!requireAuth(req, res, mode.authName)) return;
+
+  if (pathname === mode.dataEndpoint && req.method === 'GET') {
+    sendJson(res, 200, readPlannerData(mode));
     return;
   }
 
-  if (pathname === '/planner-data' && req.method === 'PUT') {
+  if (pathname === mode.dataEndpoint && req.method === 'PUT') {
     readJsonBody(req, (error, payload) => {
       if (error || !payload || !payload.state || !Array.isArray(payload.state.widgets)) {
         sendJson(res, 400, { ok: false, error: 'Invalid planner data' });
@@ -138,7 +176,7 @@ function handle(req, res) {
       }
 
       try {
-        const saved = writePlannerData(payload.state);
+        const saved = writePlannerData(payload.state, mode);
         sendJson(res, 200, { ok: true, savedAt: saved.savedAt });
       } catch (writeError) {
         console.error('Failed to write planner data:', writeError);
@@ -148,9 +186,9 @@ function handle(req, res) {
     return;
   }
 
-  if ((pathname === '/planner' || pathname === '/daily-planner' || pathname === '/dailyplanner') && req.method === 'GET') {
+  if ((pathname === '/planner' || pathname === '/daily-planner' || pathname === '/dailyplanner' || pathname === '/holiday-planner' || pathname === '/holidayplanner' || pathname === '/summer-planner') && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(getPlannerHtml());
+    res.end(getPlannerHtml(mode));
     return;
   }
 
@@ -158,13 +196,35 @@ function handle(req, res) {
   res.end('Planner route not found');
 }
 
-function getPlannerHtml() {
+function getPlannerHtml(mode = getPlannerMode('/planner')) {
+  const isHolidayMode = mode.id === 'holiday';
+  const holidayPanelHtml = isHolidayMode ? String.raw`
+    <section class="holiday-panel" aria-label="UWCSEA East summer holiday progress">
+      <div class="holiday-copy">
+        <div class="eyebrow holiday-eyebrow">UWCSEA East Summer Holiday</div>
+        <h2>25 June to 12 August 2026</h2>
+        <p>School break is counted through 12 August, because the 2026/2027 school year starts on 13 August.</p>
+        <div class="holiday-stats" aria-label="Holiday days used and left">
+          <div><strong data-holiday-used-days>--</strong><span>days used</span></div>
+          <div><strong data-holiday-left-days>--</strong><span>days left</span></div>
+          <div><strong data-holiday-total-days>49</strong><span>total days</span></div>
+        </div>
+        <div class="holiday-bar" aria-label="Percentage of holiday used and left">
+          <div class="holiday-used" data-holiday-used-bar></div>
+          <div class="holiday-left" data-holiday-left-bar></div>
+        </div>
+        <div class="holiday-percent" data-holiday-percent>Loading holiday progress...</div>
+      </div>
+      <div class="holiday-calendar" id="holidayCalendar" data-holiday-calendar></div>
+    </section>
+` : '';
+
   return String.raw`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Personal Daily Planner</title>
+  <title>${mode.documentTitle}</title>
   <style>
     :root {
       --ink: #17201b;
@@ -306,6 +366,172 @@ function getPlannerHtml() {
       color: rgba(248, 255, 242, 0.82);
       font-family: 'Trebuchet MS', Verdana, sans-serif;
       font-size: 1rem;
+    }
+
+    .holiday-panel {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.82fr) minmax(420px, 1.18fr);
+      gap: 18px;
+      margin-top: 18px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 250, 240, 0.78);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .holiday-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+      padding: 8px;
+    }
+
+    .holiday-eyebrow {
+      margin-bottom: 10px;
+      background: #274e72;
+    }
+
+    .holiday-copy h2 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 4rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .holiday-copy p {
+      max-width: 620px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+      font-size: 0.98rem;
+      line-height: 1.55;
+    }
+
+    .holiday-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .holiday-stats div {
+      padding: 13px;
+      border: 1px solid rgba(39, 78, 114, 0.12);
+      border-radius: 18px;
+      background: rgba(39, 78, 114, 0.08);
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+    }
+
+    .holiday-stats strong {
+      display: block;
+      font-size: 2rem;
+      line-height: 1;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .holiday-stats span,
+    .holiday-percent {
+      color: var(--muted);
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+      font-size: 0.82rem;
+      font-weight: 800;
+    }
+
+    .holiday-bar {
+      display: flex;
+      height: 24px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(35, 52, 42, 0.12);
+      box-shadow: inset 0 0 0 1px rgba(35, 90, 59, 0.08);
+    }
+
+    .holiday-used {
+      width: 0;
+      background: linear-gradient(90deg, #274e72, #4e8fb8);
+      transition: width 0.35s ease;
+    }
+
+    .holiday-left {
+      width: 0;
+      background: linear-gradient(90deg, #8fbf74, #f0b84f);
+      transition: width 0.35s ease;
+    }
+
+    .holiday-percent {
+      margin-top: 9px;
+    }
+
+    .holiday-calendar {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      min-width: 0;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+    }
+
+    .holiday-month {
+      min-width: 0;
+      border: 1px solid rgba(35, 90, 59, 0.12);
+      border-radius: 20px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.48);
+    }
+
+    .holiday-month h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .holiday-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .holiday-weekday,
+    .holiday-day,
+    .holiday-blank {
+      min-height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 0.76rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .holiday-weekday {
+      color: var(--muted);
+      font-size: 0.66rem;
+      text-transform: uppercase;
+    }
+
+    .holiday-day {
+      color: rgba(23, 32, 27, 0.36);
+      background: rgba(35, 52, 42, 0.05);
+    }
+
+    .holiday-day.in-break.used {
+      color: #f8fff2;
+      background: #274e72;
+    }
+
+    .holiday-day.in-break.left {
+      color: #173525;
+      background: #c7df9b;
+    }
+
+    .holiday-day.today {
+      outline: 3px solid #d95b43;
+      outline-offset: 1px;
     }
 
     .toolbar {
@@ -871,6 +1097,11 @@ function getPlannerHtml() {
         grid-template-columns: 1fr;
       }
 
+      .holiday-panel,
+      .holiday-calendar {
+        grid-template-columns: 1fr;
+      }
+
       .clock-card {
         min-width: 0;
       }
@@ -893,9 +1124,9 @@ function getPlannerHtml() {
   <main class="page">
     <section class="hero">
       <div>
-        <div class="eyebrow">Personal Daily Planner</div>
-        <h1>Command center for school, focus, and daily momentum.</h1>
-        <p class="subtitle">Move widgets by dragging their headers. Resize from the bottom-right corner. Everything autosaves to the server for access on any device.</p>
+        <div class="eyebrow">${mode.eyebrow}</div>
+        <h1>${mode.heading}</h1>
+        <p class="subtitle">${mode.subtitle}</p>
       </div>
       <aside class="clock-card" aria-label="Singapore time">
         <div class="clock-label">Live Singapore Time</div>
@@ -903,6 +1134,8 @@ function getPlannerHtml() {
         <div class="clock-date" id="liveDate">Loading Asia/Singapore...</div>
       </aside>
     </section>
+
+${holidayPanelHtml}
 
     <section class="toolbar" aria-label="Planner controls">
       <div class="toolbar-group">
@@ -935,7 +1168,9 @@ function getPlannerHtml() {
 
   <script>
     (function () {
-      var STORAGE_KEY = 'aaryan-personal-daily-planner-v1';
+      var STORAGE_KEY = '${mode.storageKey}';
+      var DATA_ENDPOINT = '${mode.dataEndpoint}';
+      var HOLIDAY_MODE = ${isHolidayMode ? 'true' : 'false'};
       var board = document.getElementById('board');
       var widgetType = document.getElementById('widgetType');
       var addWidgetBtn = document.getElementById('addWidgetBtn');
@@ -1001,6 +1236,8 @@ function getPlannerHtml() {
       }
 
       function defaultState() {
+        if (HOLIDAY_MODE) return defaultHolidayState();
+
         return {
           dayRemainingWidgetAdded: true,
           widgets: [
@@ -1008,6 +1245,21 @@ function getPlannerHtml() {
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
             { id: uid(), type: 'notes', title: 'Quick Notes', x: 760, y: 0, w: 410, h: 360, data: { text: '', fontSize: '18', notesFormat: 'plain-v1' } },
             { id: uid(), type: 'tasks', title: 'Homework Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Add assignments here', done: false }] } },
+            { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
+            { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
+            { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 920, h: 280, data: {} }
+          ]
+        };
+      }
+
+      function defaultHolidayState() {
+        return {
+          dayRemainingWidgetAdded: true,
+          widgets: [
+            { id: uid(), type: 'weather', title: 'Singapore Weather', x: 0, y: 0, w: 330, h: 250, data: {} },
+            { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
+            { id: uid(), type: 'notes', title: 'Summer Goals', x: 760, y: 0, w: 410, h: 360, data: { text: 'Write the main things you want to finish this holiday.', fontSize: '18', notesFormat: 'plain-v1' } },
+            { id: uid(), type: 'tasks', title: 'Holiday Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Plan one useful thing for today', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
             { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
             { id: uid(), type: 'dayRemaining', title: 'Day Remaining', x: 0, y: 710, w: 920, h: 280, data: {} }
@@ -1034,7 +1286,7 @@ function getPlannerHtml() {
         }
 
         setSaveStatus('Saving...', false);
-        return fetch('/planner-data', {
+        return fetch(DATA_ENDPOINT, {
           method: 'PUT',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -1066,7 +1318,7 @@ function getPlannerHtml() {
       }
 
       function loadRemoteState() {
-        fetch('/planner-data', {
+        fetch(DATA_ENDPOINT, {
           method: 'GET',
           credentials: 'same-origin',
           cache: 'no-store'
@@ -1416,6 +1668,7 @@ function getPlannerHtml() {
       }
 
       function refreshDynamicWidgets() {
+        updateHolidayTracker();
         updateUrgencyWidgets();
         updateDayRemainingWidgets();
         updateWeatherWidgets();
@@ -1710,6 +1963,88 @@ function getPlannerHtml() {
         });
       }
 
+      function updateHolidayTracker() {
+        if (!HOLIDAY_MODE) return;
+
+        var start = new Date(2026, 5, 25);
+        var endExclusive = new Date(2026, 7, 13);
+        var now = singaporeNow();
+        var today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+
+        var totalDays = daysBetween(start, endExclusive);
+        var usedDays = clamp(daysBetween(start, today), 0, totalDays);
+        var leftDays = totalDays - usedDays;
+        var usedPercent = totalDays ? (usedDays / totalDays) * 100 : 0;
+        var leftPercent = 100 - usedPercent;
+
+        setHolidayText('[data-holiday-used-days]', usedDays);
+        setHolidayText('[data-holiday-left-days]', leftDays);
+        setHolidayText('[data-holiday-total-days]', totalDays);
+        setHolidayWidth('[data-holiday-used-bar]', usedPercent);
+        setHolidayWidth('[data-holiday-left-bar]', leftPercent);
+        setHolidayText('[data-holiday-percent]', Math.round(usedPercent) + '% used - ' + Math.round(leftPercent) + '% left');
+        renderHolidayCalendar(start, endExclusive, today);
+      }
+
+      function renderHolidayCalendar(start, endExclusive, today) {
+        var calendar = document.getElementById('holidayCalendar');
+        if (!calendar) return;
+
+        var months = [
+          { label: 'June 2026', year: 2026, month: 5 },
+          { label: 'July 2026', year: 2026, month: 6 },
+          { label: 'August 2026', year: 2026, month: 7 }
+        ];
+        var weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+        calendar.innerHTML = months.map(function (month) {
+          var first = new Date(month.year, month.month, 1);
+          var daysInMonth = new Date(month.year, month.month + 1, 0).getDate();
+          var cells = weekdayLabels.map(function (day) {
+            return '<div class="holiday-weekday">' + day + '</div>';
+          });
+
+          for (var blank = 0; blank < first.getDay(); blank += 1) {
+            cells.push('<div class="holiday-blank"></div>');
+          }
+
+          for (var dayNumber = 1; dayNumber <= daysInMonth; dayNumber += 1) {
+            var date = new Date(month.year, month.month, dayNumber);
+            var inBreak = date >= start && date < endExclusive;
+            var isUsed = inBreak && date < today;
+            var isLeft = inBreak && date >= today;
+            var isToday = sameCalendarDay(date, today);
+            var classes = ['holiday-day'];
+            if (inBreak) classes.push('in-break');
+            if (isUsed) classes.push('used');
+            if (isLeft) classes.push('left');
+            if (isToday) classes.push('today');
+            cells.push('<div class="' + classes.join(' ') + '">' + dayNumber + '</div>');
+          }
+
+          return '<section class="holiday-month"><h3>' + month.label + '</h3><div class="holiday-grid">' + cells.join('') + '</div></section>';
+        }).join('');
+      }
+
+      function setHolidayText(selector, value) {
+        var target = document.querySelector(selector);
+        if (target) target.textContent = value;
+      }
+
+      function setHolidayWidth(selector, value) {
+        var target = document.querySelector(selector);
+        if (target) target.style.width = clamp(value, 0, 100) + '%';
+      }
+
+      function daysBetween(start, end) {
+        return Math.floor((end - start) / 86400000);
+      }
+
+      function sameCalendarDay(a, b) {
+        return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      }
+
       function plannerDayWindow(now) {
         var calendarDayStart = new Date(now);
         calendarDayStart.setHours(0, 0, 0, 0);
@@ -1878,6 +2213,7 @@ function getPlannerHtml() {
       setInterval(updateClock, 1000);
       setInterval(updatePomodoroWidgets, 1000);
       setInterval(updateTaskTimerWidgets, 1000);
+      setInterval(updateHolidayTracker, 30000);
       setInterval(updateUrgencyWidgets, 30000);
       setInterval(updateDayRemainingWidgets, 30000);
       setInterval(updateWeatherWidgets, 600000);

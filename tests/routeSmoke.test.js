@@ -8,9 +8,11 @@ process.env.STORAGE_PASSWORD = process.env.STORAGE_PASSWORD || 'test-password';
 const gameTheoryDataPath = path.join(os.tmpdir(), `game-theory-route-smoke-${process.pid}.json`);
 const plannerDataDirectory = path.join(os.tmpdir(), `planner-route-smoke-${process.pid}`);
 const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
+const holidayPlannerDataPath = path.join(plannerDataDirectory, 'holiday-planner-data.json');
 const chatDataDirectory = path.join(os.tmpdir(), `chat-route-smoke-${process.pid}`);
 process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
 process.env.PLANNER_DATA_PATH = plannerDataPath;
+process.env.HOLIDAY_PLANNER_DATA_PATH = holidayPlannerDataPath;
 process.env.CHAT_DATA_DIR = chatDataDirectory;
 
 const server = require('../src/server');
@@ -292,6 +294,62 @@ function invoke(pathname, options = {}) {
     body: JSON.stringify({ state: { widgets: 'invalid' } })
   });
   assert.strictEqual(invalidPlannerSave.statusCode, 400);
+
+  const holidayPlannerDenied = await invoke('/holiday-planner');
+  assert.strictEqual(holidayPlannerDenied.statusCode, 401);
+  assert.match(holidayPlannerDenied.headers['www-authenticate'], /Holiday Planner/);
+
+  const holidayPlanner = await invoke('/holiday-planner', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(holidayPlanner.statusCode, 200);
+  assert.match(holidayPlanner.body, /Holiday Planner/);
+  assert.match(holidayPlanner.body, /UWCSEA East Summer Holiday/);
+  assert.match(holidayPlanner.body, /25 June to 12 August 2026/);
+  assert.match(holidayPlanner.body, /data-holiday-calendar/);
+  assert.match(holidayPlanner.body, /src="\/assets\/gemini-widget\.js\?v=gpt5"/);
+  const holidayPlannerScript = holidayPlanner.body.match(/<script>\s*([\s\S]*?)\s*<\/script>/);
+  assert.ok(holidayPlannerScript, 'Holiday planner browser script should exist');
+  assert.doesNotThrow(() => new Function(holidayPlannerScript[1]));
+
+  const holidayPlannerDataBefore = await invoke('/holiday-planner-data', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(holidayPlannerDataBefore.statusCode, 200);
+  assert.strictEqual(JSON.parse(holidayPlannerDataBefore.body).exists, false);
+
+  const holidayPlannerState = {
+    widgets: [
+      {
+        id: 'holiday-note',
+        type: 'notes',
+        title: 'Holiday note',
+        x: 12,
+        y: 24,
+        w: 320,
+        h: 260,
+        data: { text: 'Holiday persistence works' }
+      }
+    ]
+  };
+  const holidayPlannerSave = await invoke('/holiday-planner-data', {
+    method: 'PUT',
+    headers: {
+      authorization: basicAuth(),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ state: holidayPlannerState })
+  });
+  assert.strictEqual(holidayPlannerSave.statusCode, 200);
+  assert.strictEqual(JSON.parse(holidayPlannerSave.body).ok, true);
+  assert.strictEqual(fs.existsSync(holidayPlannerDataPath), true);
+  assert.strictEqual(fs.existsSync(plannerDataPath), true);
+
+  const holidayPlannerDataAfter = await invoke('/holiday-planner-data', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(holidayPlannerDataAfter.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(holidayPlannerDataAfter.body).state, holidayPlannerState);
 
   const cloudUnauthed = await invoke('/cloudconsole');
   assert.strictEqual(cloudUnauthed.statusCode, 200);

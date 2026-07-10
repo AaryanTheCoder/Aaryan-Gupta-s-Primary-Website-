@@ -75,7 +75,7 @@ if (request.url === '/simulator' || request.url.startsWith('/simulator/')) {
   return simulatorRoutes.handle(request, response);
 }
 
-if (requestPathname === '/planner' || requestPathname === '/daily-planner' || requestPathname === '/dailyplanner' || requestPathname === '/planner-data') {
+if (requestPathname === '/planner' || requestPathname === '/daily-planner' || requestPathname === '/dailyplanner' || requestPathname === '/planner-data' || requestPathname === '/holiday-planner' || requestPathname === '/holidayplanner' || requestPathname === '/summer-planner' || requestPathname === '/holiday-planner-data') {
   return plannerRoutes.handle(request, response);
 }
 
@@ -890,6 +890,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <div class="route">/planner</div>
         <h2>Daily Planner</h2>
         <p>A password-protected personal school dashboard with Singapore time, notes, weather, tasks, calendar, and urgency widgets.</p>
+      </a>
+
+      <a class="widget" href="/holiday-planner">
+        <div class="route">/holiday-planner</div>
+        <h2>Holiday Planner</h2>
+        <p>A summer planning dashboard with UWCSEA East holiday progress, a calendar countdown, notes, tasks, timers, weather, and Google Calendar.</p>
       </a>
     </section>
 
