@@ -709,6 +709,26 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
       margin: 0;
     }
 
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .hero-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 999px;
+      color: #07111f;
+      background: linear-gradient(90deg, var(--accent), #ffffff);
+      text-decoration: none;
+      font-weight: 800;
+      box-shadow: 0 12px 30px rgba(142, 216, 255, 0.24);
+    }
+
     .section-title {
       margin: 30px 0 14px;
       font-size: 1.3rem;
@@ -797,6 +817,9 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
       <p class="lead">
         Hi, I'm Aaryan Gupta. This website is a collection of projects, pages, and fun experiments I’ve built — from my personal profile page to games, kaomoji tools, and more. Click any widget below to explore the different parts of the site.
       </p>
+      <div class="hero-actions">
+        <a class="hero-link" href="/holiday-planner">Open Holiday Planner</a>
+      </div>
     </section>
 
     <h2 class="section-title">Explore the site</h2>

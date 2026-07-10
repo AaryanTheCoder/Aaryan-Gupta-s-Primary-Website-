@@ -507,7 +507,7 @@ async function handleGeminiApi(request, response, config) {
     }
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${providerConfig.geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${providerConfig.geminiApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -529,7 +529,7 @@ async function handleGeminiApi(request, response, config) {
               ]
             }
           ],
-          tools: [{ google_search: {} }]
+          tools: [{ google_search_retrieval: {} }]
         })
       }
     );
