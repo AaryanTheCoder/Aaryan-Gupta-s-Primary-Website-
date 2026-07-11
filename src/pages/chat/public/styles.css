@@ -166,6 +166,11 @@ h1 { margin: 8px 0 3px; font-size: clamp(2rem, 6vw, 3rem); }
 .file-details strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-details span { color: var(--muted); font-size: 0.8rem; }
 .download-icon { margin-left: auto; color: var(--accent-2); }
+.folder-card { display: block; }
+.folder-card summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; }
+.folder-card summary::-webkit-details-marker { display: none; }
+.folder-files { display: grid; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.folder-files a { overflow: hidden; color: var(--accent-2); font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .upload-status {
   padding: 12px 22px;

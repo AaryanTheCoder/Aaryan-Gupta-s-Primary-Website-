@@ -47,10 +47,15 @@
           <span class="sr-only">Attach file</span>
         </label>
         <input id="fileInput" type="file" hidden>
+        <label class="file-button" for="folderInput" title="Attach a folder up to 500 MB">
+          <span aria-hidden="true">📁</span>
+          <span class="sr-only">Attach folder</span>
+        </label>
+        <input id="folderInput" type="file" webkitdirectory directory multiple hidden>
         <textarea id="messageInput" rows="1" maxlength="4000" placeholder="Write a message…" aria-label="Message"></textarea>
         <button id="sendButton" class="send-button" type="submit">Send</button>
       </form>
-      <p class="composer-note">Files up to 500 MB · Enter to send · Shift + Enter for a new line</p>
+      <p class="composer-note">Files or folders up to 500 MB · Enter to send · Shift + Enter for a new line</p>
     </section>
   </main>
 

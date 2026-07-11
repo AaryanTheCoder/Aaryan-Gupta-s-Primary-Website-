@@ -3,6 +3,7 @@ const messageForm = document.querySelector('#messageForm');
 const messageInput = document.querySelector('#messageInput');
 const sendButton = document.querySelector('#sendButton');
 const fileInput = document.querySelector('#fileInput');
+const folderInput = document.querySelector('#folderInput');
 const clearButton = document.querySelector('#clearButton');
 const nameButton = document.querySelector('#nameButton');
 const nameDialog = document.querySelector('#nameDialog');
@@ -77,6 +78,30 @@ function makeMessageElement(message) {
     download.textContent = '↓';
     link.append(details, download);
     content.append(link);
+  } else if (message.type === 'folder' && message.folder) {
+    const folder = document.createElement('details');
+    folder.className = 'file-card folder-card';
+    const summary = document.createElement('summary');
+    summary.innerHTML = '<span class="file-icon">📁</span>';
+    const details = document.createElement('span');
+    details.className = 'file-details';
+    const folderName = document.createElement('strong');
+    folderName.textContent = message.folder.name;
+    const folderSize = document.createElement('span');
+    folderSize.textContent = `${message.folder.fileCount} files · ${formatBytes(message.folder.size)}`;
+    details.append(folderName, folderSize);
+    summary.append(details);
+    folder.append(summary);
+    const files = document.createElement('div');
+    files.className = 'folder-files';
+    message.folder.files.forEach(item => {
+      const link = document.createElement('a');
+      link.href = `/chat/folders/${encodeURIComponent(message.id)}?path=${encodeURIComponent(item.path)}`;
+      link.textContent = `${item.path} (${formatBytes(item.size)})`;
+      files.append(link);
+    });
+    folder.append(files);
+    content.append(folder);
   } else {
     const text = document.createElement('p');
     text.className = 'message-text';
@@ -226,6 +251,65 @@ fileInput.addEventListener('change', () => {
     alert('The upload failed. Please check your connection and try again.');
   });
   request.send(file);
+});
+
+folderInput.addEventListener('change', async () => {
+  const files = Array.from(folderInput.files || []);
+  folderInput.value = '';
+  if (!files.length) return;
+  if (!displayName) {
+    showNameDialog();
+    return;
+  }
+
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_FILE_BYTES) {
+    alert('That folder is larger than 500 MB in total.');
+    return;
+  }
+
+  const firstPath = files[0].webkitRelativePath || files[0].name;
+  const folderName = firstPath.split('/')[0] || 'Folder';
+  uploadStatus.hidden = false;
+  uploadProgress.value = 0;
+  uploadPercent.textContent = '0%';
+
+  try {
+    const startResponse = await fetch('/chat/api/folders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: displayName, folderName, totalSize, fileCount: files.length })
+    });
+    const startData = await startResponse.json();
+    if (!startResponse.ok) throw new Error(startData.error || 'The folder upload could not start.');
+
+    let uploadedBytes = 0;
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      const relativePath = (file.webkitRelativePath || file.name).split('/').slice(1).join('/') || file.name;
+      uploadLabel.textContent = `Uploading ${folderName} (${index + 1}/${files.length})`;
+      const response = await fetch(`/chat/api/folders/${startData.uploadId}/files?path=${encodeURIComponent(relativePath)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Could not upload ${relativePath}.`);
+      uploadedBytes += file.size;
+      const percent = totalSize ? Math.round((uploadedBytes / totalSize) * 100) : Math.round(((index + 1) / files.length) * 100);
+      uploadProgress.value = percent;
+      uploadPercent.textContent = `${percent}%`;
+    }
+
+    const finishResponse = await fetch(`/chat/api/folders/${startData.uploadId}/finish`, { method: 'POST' });
+    const finishData = await finishResponse.json();
+    if (!finishResponse.ok) throw new Error(finishData.error || 'The folder upload could not finish.');
+    await refreshMessages();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    uploadStatus.hidden = true;
+  }
 });
 
 clearButton.addEventListener('click', async () => {

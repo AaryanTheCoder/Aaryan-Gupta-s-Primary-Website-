@@ -122,6 +122,30 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(chatMessagesAfter.statusCode, 200);
   assert.strictEqual(JSON.parse(chatMessagesAfter.body).messages.length, 1);
 
+  const folderStart = await invoke('/chat/api/folders', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Route Tester', folderName: 'school-project', totalSize: 5, fileCount: 1 })
+  });
+  assert.strictEqual(folderStart.statusCode, 201);
+  const folderUploadId = JSON.parse(folderStart.body).uploadId;
+
+  const folderFile = await invoke(`/chat/api/folders/${folderUploadId}/files?path=notes%2Fhello.txt`, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain', 'content-length': '5' },
+    body: 'hello'
+  });
+  assert.strictEqual(folderFile.statusCode, 201);
+
+  const folderFinish = await invoke(`/chat/api/folders/${folderUploadId}/finish`, { method: 'POST' });
+  assert.strictEqual(folderFinish.statusCode, 201);
+  const folderMessage = JSON.parse(folderFinish.body).message;
+  assert.strictEqual(folderMessage.type, 'folder');
+  assert.strictEqual(folderMessage.folder.files[0].path, 'notes/hello.txt');
+
+  const chatWithFolder = await invoke('/chat/api/messages');
+  assert.strictEqual(JSON.parse(chatWithFolder.body).messages.length, 2);
+
   const chatClear = await invoke('/chat/api/messages', { method: 'DELETE' });
   assert.strictEqual(chatClear.statusCode, 200);
   assert.strictEqual(JSON.parse(chatClear.body).ok, true);

@@ -15,6 +15,7 @@ const MAX_FILE_BYTES = 500 * 1024 * 1024;
 const MAX_TEXT_CHARS = 4000;
 const MAX_NAME_CHARS = 32;
 const MAX_FILENAME_CHARS = 180;
+const folderUploads = new Map();
 
 const PUBLIC_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -158,6 +159,128 @@ function uploadFile(req, res, url) {
   req.pipe(output);
 }
 
+function safeFolderPath(value) {
+  const cleaned = String(value || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!cleaned || cleaned.includes('\0') || cleaned.split('/').some(part => !part || part === '.' || part === '..')) return '';
+  return cleaned.slice(0, 500);
+}
+
+async function startFolderUpload(req, res) {
+  try {
+    const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
+    const name = cleanSingleLine(body.name, MAX_NAME_CHARS);
+    const folderName = cleanSingleLine(body.folderName, MAX_FILENAME_CHARS);
+    const totalSize = Number(body.totalSize);
+    const fileCount = Number(body.fileCount);
+    if (!name || !folderName || !Number.isSafeInteger(totalSize) || totalSize < 0 || totalSize > MAX_FILE_BYTES ||
+        !Number.isSafeInteger(fileCount) || fileCount < 1 || fileCount > 10000) {
+      sendJson(res, 400, { ok: false, error: 'Choose a valid folder no larger than 500 MB.' });
+      return;
+    }
+    const uploadId = crypto.randomUUID();
+    const temporaryDirectory = path.join(FILES_DIR, `.upload-folder-${uploadId}`);
+    fs.mkdirSync(temporaryDirectory, { recursive: true });
+    folderUploads.set(uploadId, { name, folderName, totalSize, fileCount, receivedBytes: 0, files: [], temporaryDirectory });
+    sendJson(res, 201, { ok: true, uploadId });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
+  }
+}
+
+function uploadFolderFile(req, res, uploadId, url) {
+  const upload = folderUploads.get(uploadId);
+  const relativePath = safeFolderPath(url.searchParams.get('path'));
+  const contentLength = Number(req.headers['content-length'] || 0);
+  if (!upload || !relativePath) {
+    sendJson(res, 404, { ok: false, error: 'Folder upload not found or file path is invalid.' });
+    return;
+  }
+  if (upload.files.some(file => file.path === relativePath) || contentLength < 0 || upload.receivedBytes + contentLength > MAX_FILE_BYTES) {
+    sendJson(res, 413, { ok: false, error: 'The folder must be 500 MB or smaller and cannot contain duplicate paths.' });
+    return;
+  }
+
+  const finalPath = path.resolve(upload.temporaryDirectory, relativePath);
+  if (!isPathInside(upload.temporaryDirectory, finalPath)) {
+    sendJson(res, 400, { ok: false, error: 'Invalid folder file path.' });
+    return;
+  }
+  fs.mkdirSync(path.dirname(finalPath), { recursive: true });
+  const temporaryPath = `${finalPath}.upload`;
+  const output = fs.createWriteStream(temporaryPath, { flags: 'wx' });
+  let receivedBytes = 0;
+  let finished = false;
+
+  const fail = (statusCode, error) => {
+    if (finished) return;
+    finished = true;
+    output.destroy();
+    fs.rmSync(temporaryPath, { force: true });
+    if (!res.headersSent) sendJson(res, statusCode, { ok: false, error });
+  };
+  req.on('data', chunk => {
+    receivedBytes += chunk.length;
+    if (upload.receivedBytes + receivedBytes > MAX_FILE_BYTES) {
+      fail(413, 'The folder must be 500 MB or smaller.');
+      req.destroy();
+    }
+  });
+  req.on('aborted', () => fail(499, 'The upload was cancelled.'));
+  req.on('error', () => fail(500, 'The file could not be received.'));
+  output.on('error', () => fail(500, 'The file could not be saved.'));
+  output.on('finish', () => {
+    if (finished) return;
+    fs.renameSync(temporaryPath, finalPath);
+    upload.receivedBytes += receivedBytes;
+    upload.files.push({ path: relativePath, size: receivedBytes });
+    finished = true;
+    sendJson(res, 201, { ok: true });
+  });
+  req.pipe(output);
+}
+
+function finishFolderUpload(res, uploadId) {
+  const upload = folderUploads.get(uploadId);
+  if (!upload || upload.files.length !== upload.fileCount || upload.receivedBytes !== upload.totalSize) {
+    sendJson(res, 400, { ok: false, error: 'The folder upload is incomplete.' });
+    return;
+  }
+  const message = makeBaseMessage(upload.name, 'folder');
+  const finalDirectory = path.join(FILES_DIR, message.id);
+  try {
+    fs.renameSync(upload.temporaryDirectory, finalDirectory);
+    message.folder = { name: upload.folderName, size: upload.receivedBytes, fileCount: upload.files.length, files: upload.files };
+    addMessage(message);
+    folderUploads.delete(uploadId);
+    sendJson(res, 201, { ok: true, message });
+  } catch (error) {
+    sendJson(res, 500, { ok: false, error: 'The folder could not be saved.' });
+  }
+}
+
+function serveFolderFile(req, res, id, url) {
+  const relativePath = safeFolderPath(url.searchParams.get('path'));
+  const message = readMessages().find(item => item.id === id && item.type === 'folder');
+  const item = message && message.folder && message.folder.files.find(file => file.path === relativePath);
+  const folderDirectory = path.join(FILES_DIR, id);
+  const filePath = path.resolve(folderDirectory, relativePath || '');
+  if (!item || !isPathInside(folderDirectory, filePath) || !fs.existsSync(filePath)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Folder file not found');
+    return;
+  }
+  const fileName = path.basename(relativePath);
+  const safeAsciiName = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const stat = fs.statSync(filePath);
+  res.writeHead(200, {
+    'Content-Type': mime.lookup(fileName) || 'application/octet-stream',
+    'Content-Length': stat.size,
+    'Content-Disposition': `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+  });
+  if (req.method === 'HEAD') res.end();
+  else fs.createReadStream(filePath).pipe(res);
+}
+
 function serveUploadedFile(req, res, id) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -191,7 +314,7 @@ function clearChat(res) {
     fs.mkdirSync(FILES_DIR, { recursive: true });
     for (const fileName of fs.readdirSync(FILES_DIR)) {
       if (!fileName.startsWith('.upload-')) {
-        fs.rmSync(path.join(FILES_DIR, fileName), { force: true });
+        fs.rmSync(path.join(FILES_DIR, fileName), { force: true, recursive: true });
       }
     }
     writeMessages([]);
@@ -231,6 +354,29 @@ async function handle(req, res) {
 
   if (pathname === '/chat/api/files' && req.method === 'POST') {
     uploadFile(req, res, url);
+    return;
+  }
+
+  if (pathname === '/chat/api/folders' && req.method === 'POST') {
+    await startFolderUpload(req, res);
+    return;
+  }
+
+  const folderUploadMatch = pathname.match(/^\/chat\/api\/folders\/([0-9a-f-]{36})\/files$/i);
+  if (folderUploadMatch && req.method === 'POST') {
+    uploadFolderFile(req, res, folderUploadMatch[1], url);
+    return;
+  }
+
+  const folderFinishMatch = pathname.match(/^\/chat\/api\/folders\/([0-9a-f-]{36})\/finish$/i);
+  if (folderFinishMatch && req.method === 'POST') {
+    finishFolderUpload(res, folderFinishMatch[1]);
+    return;
+  }
+
+  const folderDownloadMatch = pathname.match(/^\/chat\/folders\/([0-9a-f-]{36})$/i);
+  if (folderDownloadMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+    serveFolderFile(req, res, folderDownloadMatch[1], url);
     return;
   }
 
