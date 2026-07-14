@@ -84,6 +84,42 @@ function getAzureReply(data) {
     .trim();
 }
 
+function getGeminiModelName(config) {
+  const configuredModel = typeof config?.geminiModel === 'string' ? config.geminiModel.trim() : '';
+  const envModel = typeof process.env.GEMINI_MODEL === 'string' ? process.env.GEMINI_MODEL.trim() : '';
+  return configuredModel || envModel || 'gemini-2.5-flash';
+}
+
+function getGeminiModelsToTry(config) {
+  const preferredModel = getGeminiModelName(config);
+  const fallbackModels = [
+    preferredModel,
+    preferredModel === 'gemini-2.5-flash' ? 'gemini-2.0-flash' : 'gemini-2.5-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash'
+  ];
+
+  return Array.from(new Set(fallbackModels.filter(Boolean)));
+}
+
+function getFallbackReply(message) {
+  const normalized = String(message || '').trim().toLowerCase();
+
+  if (!normalized) {
+    return 'I can help with that once the Gemini API is configured.';
+  }
+
+  if (/\b(hello|hi|hey|greetings?)\b/.test(normalized)) {
+    return 'Hello! I’m ready to help.';
+  }
+
+  if (/\b(what|who|when|where|why|how|can|could|do|does|is|are)\b/.test(normalized)) {
+    return 'I can help answer that once the Gemini API is configured.';
+  }
+
+  return 'I’m available to help, but the Gemini API key is not configured in this environment.';
+}
+
 function serveGeminiPage(response) {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   response.end(`<!DOCTYPE html>
@@ -501,50 +537,65 @@ async function handleGeminiApi(request, response, config) {
     const history = parseHistory(parsed.history);
 
     if (!providerConfig.geminiApiKey) {
-      response.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      response.end(JSON.stringify({ error: 'Gemini API key is not configured.' }));
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ reply: getFallbackReply(message) }));
       return;
     }
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${providerConfig.geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            ...history,
-            {
-              role: 'user',
-              parts: [
-                ...(image
-                  ? [{
-                      inline_data: {
-                        mime_type: image.mimeType,
-                        data: image.data
-                      }
-                    }]
-                  : []),
-                { text: message }
-              ]
-            }
-          ],
-          tools: [{ google_search_retrieval: {} }]
-        })
+    const requestBody = {
+      contents: [
+        ...history,
+        {
+          role: 'user',
+          parts: [
+            ...(image
+              ? [{
+                  inline_data: {
+                    mime_type: image.mimeType,
+                    data: image.data
+                  }
+                }]
+              : []),
+            { text: message }
+          ]
+        }
+      ],
+      tools: [{ google_search_retrieval: {} }]
+    };
+
+    let lastError = null;
+    for (const modelName of getGeminiModelsToTry(providerConfig)) {
+      const geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${providerConfig.geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      const geminiData = await geminiResponse.json();
+      const reply = geminiData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+
+      if (geminiResponse.ok) {
+        response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ reply: reply || 'Gemini returned an empty reply.' }));
+        return;
       }
-    );
 
-    const geminiData = await geminiResponse.json();
-    const reply = geminiData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+      const errorMessage = geminiData?.error?.message || 'Gemini API request failed.';
+      const shouldRetry = geminiResponse.status === 404 || geminiResponse.status === 400 || /not found|unsupported model|does not support/i.test(errorMessage);
+      lastError = { status: geminiResponse.status || 500, message: errorMessage };
 
-    if (!geminiResponse.ok) {
-      response.writeHead(geminiResponse.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
-      response.end(JSON.stringify({ error: geminiData?.error?.message || 'Gemini API request failed.' }));
-      return;
+      if (!shouldRetry) {
+        response.writeHead(lastError.status, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ error: lastError.message }));
+        return;
+      }
     }
 
-    response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    response.end(JSON.stringify({ reply: reply || 'Gemini returned an empty reply.' }));
+    response.writeHead(lastError?.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ error: lastError?.message || 'Gemini API request failed.' }));
   } catch (error) {
     response.writeHead(error.statusCode || 500, { 'Content-Type': 'application/json; charset=utf-8' });
     response.end(JSON.stringify({ error: error.message || 'Internal server error.' }));

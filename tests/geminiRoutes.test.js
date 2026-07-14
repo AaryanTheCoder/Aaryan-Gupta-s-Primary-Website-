@@ -52,7 +52,7 @@ function invokeApi(payload, config = 'test-gemini-key') {
       };
     }
 
-    assert.match(url, /gemini-1\.5-flash:generateContent/);
+    assert.match(url, /gemini-2\.5-flash:generateContent/);
     return {
       ok: true,
       status: 200,
@@ -108,6 +108,12 @@ function invokeApi(payload, config = 'test-gemini-key') {
     });
     assert.strictEqual(invalidImage.statusCode, 400);
     assert.match(JSON.parse(invalidImage.body).error, /JPEG, PNG, or WebP/);
+
+    const missingApiKey = await invokeApi({
+      message: 'Say hello in one short sentence.'
+    }, '');
+    assert.strictEqual(missingApiKey.statusCode, 200);
+    assert.match(JSON.parse(missingApiKey.body).reply, /hello|help|available/i);
 
     const missingDeployment = await invokeApi({
       provider: 'gpt5',
