@@ -161,10 +161,10 @@ function handle(req, res) {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   const mode = getPlannerMode(pathname);
 
-  // Allow unauthenticated access to the holiday planner page and its data (GET requests).
-  // All other planner routes (including PUT to save data) still require authentication.
-  const isHolidayPublicGet = mode.id === 'holiday' && req.method === 'GET';
-  if (!isHolidayPublicGet && !requireAuth(req, res, mode.authName)) return;
+  // Anyone can view the Holiday Planner, but saving changes still needs the password.
+  // Every Daily Planner request remains password protected.
+  const isPublicHolidayRead = mode.id === 'holiday' && req.method === 'GET';
+  if (!isPublicHolidayRead && !requireAuth(req, res, mode.authName)) return;
 
   if (pathname === mode.dataEndpoint && req.method === 'GET') {
     sendJson(res, 200, readPlannerData(mode));

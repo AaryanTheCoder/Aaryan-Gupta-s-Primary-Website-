@@ -319,13 +319,7 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(invalidPlannerSave.statusCode, 400);
 
-  const holidayPlannerDenied = await invoke('/holiday-planner');
-  assert.strictEqual(holidayPlannerDenied.statusCode, 401);
-  assert.match(holidayPlannerDenied.headers['www-authenticate'], /Holiday Planner/);
-
-  const holidayPlanner = await invoke('/holiday-planner', {
-    headers: { authorization: basicAuth() }
-  });
+  const holidayPlanner = await invoke('/holiday-planner');
   assert.strictEqual(holidayPlanner.statusCode, 200);
   assert.match(holidayPlanner.body, /Holiday Planner/);
   assert.match(holidayPlanner.body, /UWCSEA East Summer Holiday/);
@@ -338,9 +332,7 @@ function invoke(pathname, options = {}) {
   assert.ok(holidayPlannerScript, 'Holiday planner browser script should exist');
   assert.doesNotThrow(() => new Function(holidayPlannerScript[1]));
 
-  const holidayPlannerDataBefore = await invoke('/holiday-planner-data', {
-    headers: { authorization: basicAuth() }
-  });
+  const holidayPlannerDataBefore = await invoke('/holiday-planner-data');
   assert.strictEqual(holidayPlannerDataBefore.statusCode, 200);
   assert.strictEqual(JSON.parse(holidayPlannerDataBefore.body).exists, false);
 
@@ -358,6 +350,14 @@ function invoke(pathname, options = {}) {
       }
     ]
   };
+  const holidayPlannerSaveDenied = await invoke('/holiday-planner-data', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ state: holidayPlannerState })
+  });
+  assert.strictEqual(holidayPlannerSaveDenied.statusCode, 401);
+  assert.match(holidayPlannerSaveDenied.headers['www-authenticate'], /Holiday Planner/);
+
   const holidayPlannerSave = await invoke('/holiday-planner-data', {
     method: 'PUT',
     headers: {
@@ -371,9 +371,7 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(fs.existsSync(holidayPlannerDataPath), true);
   assert.strictEqual(fs.existsSync(plannerDataPath), true);
 
-  const holidayPlannerDataAfter = await invoke('/holiday-planner-data', {
-    headers: { authorization: basicAuth() }
-  });
+  const holidayPlannerDataAfter = await invoke('/holiday-planner-data');
   assert.strictEqual(holidayPlannerDataAfter.statusCode, 200);
   assert.deepStrictEqual(JSON.parse(holidayPlannerDataAfter.body).state, holidayPlannerState);
 
