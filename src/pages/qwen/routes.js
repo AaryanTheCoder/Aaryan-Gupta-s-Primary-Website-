@@ -10,12 +10,16 @@ const MAX_HISTORY_CHARS = 24000;
 const MAX_ATTACHMENTS = 4;
 const MAX_ATTACHMENT_CHARS = 12000;
 const OLLAMA_SEARCH_URL = 'https://ollama.com/api/web_search';
+const DEFAULT_KEEP_ALIVE = '10m';
+const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const defaultModelsPath = isAzureAppService ? '/home/ollama-models' : path.join(process.cwd(), '.ollama-models');
 const defaultOllamaBin = isAzureAppService ? '/home/ollama/bin/ollama' : 'ollama';
 
 let chatInProgress = false;
+let managedOllamaProcess = null;
+let idleShutdownTimer = null;
 
 const ASSISTANT_INSTRUCTIONS = `You are Nova, a friendly and capable AI assistant for a Grade 9 student.
 
@@ -65,7 +69,9 @@ function getConfig(overrides = {}) {
     ollamaBin: overrides.ollamaBin || process.env.OLLAMA_BIN || defaultOllamaBin,
     searchApiKey: overrides.searchApiKey || process.env.OLLAMA_SEARCH_API_KEY || process.env.OLLAMA_API_KEY || '',
     fetchImpl: overrides.fetchImpl || fetch,
-    autoStartOllama: overrides.autoStartOllama !== false
+    autoStartOllama: overrides.autoStartOllama !== false,
+    keepAlive: overrides.keepAlive || process.env.OLLAMA_KEEP_ALIVE || DEFAULT_KEEP_ALIVE,
+    idleTimeoutMs: Number(overrides.idleTimeoutMs || process.env.OLLAMA_IDLE_TIMEOUT_MS || DEFAULT_IDLE_TIMEOUT_MS)
   };
 }
 
@@ -135,13 +141,31 @@ async function getOllamaStatus(config) {
     const result = await parseResponse(response);
     const models = (result.models || []).map(item => item.name || item.model);
     const modelInstalled = models.some(name => name === config.model || name === `${config.model}:latest`);
+    const modelLoaded = modelInstalled ? await isModelLoaded(config) : false;
     return {
       running: true,
       modelInstalled,
-      message: modelInstalled ? 'Nova is ready' : `The ${config.model} model is not installed yet.`
+      modelLoaded,
+      managed: Boolean(managedOllamaProcess && !managedOllamaProcess.killed),
+      message: modelLoaded
+        ? 'Nova is loaded and ready'
+        : modelInstalled
+          ? 'Nova is installed but not loaded'
+          : `The ${config.model} model is not installed yet.`
     };
   } catch {
-    return { running: false, modelInstalled: false, message: 'Ollama is not running' };
+    return { running: false, modelInstalled: false, modelLoaded: false, managed: false, message: 'Ollama is not running' };
+  }
+}
+
+async function isModelLoaded(config) {
+  try {
+    const response = await config.fetchImpl(`${config.ollamaUrl}/api/ps`, { signal: AbortSignal.timeout(2000) });
+    const result = await parseResponse(response);
+    const models = (result.models || []).map(item => item.name || item.model);
+    return models.some(name => name === config.model || name === `${config.model}:latest`);
+  } catch {
+    return false;
   }
 }
 
@@ -156,26 +180,103 @@ async function waitForOllama(config) {
 
 async function ensureOllamaIsReady(config) {
   const initialStatus = await getOllamaStatus(config);
-  if (initialStatus.running) return { startedProcess: null, status: initialStatus };
+  if (initialStatus.running) return { status: initialStatus };
 
   if (!config.autoStartOllama) return { startedProcess: null, status: initialStatus };
 
   fs.mkdirSync(config.modelsPath, { recursive: true });
-  const startedProcess = spawn(config.ollamaBin, ['serve'], {
+  managedOllamaProcess = spawn(config.ollamaBin, ['serve'], {
     env: { ...process.env, OLLAMA_MODELS: config.modelsPath },
     stdio: 'ignore'
   });
 
-  startedProcess.once('error', error => {
+  managedOllamaProcess.once('error', error => {
+    managedOllamaProcess = null;
     console.error(`Ollama could not start from ${config.ollamaBin}: ${error.message}`);
+  });
+  managedOllamaProcess.once('close', () => {
+    managedOllamaProcess = null;
   });
 
   const status = await waitForOllama(config);
-  return { startedProcess, status };
+  return { status };
 }
 
-function stopOllama(startedProcess) {
-  if (startedProcess && !startedProcess.killed) startedProcess.kill('SIGTERM');
+function clearIdleShutdown() {
+  if (idleShutdownTimer) clearTimeout(idleShutdownTimer);
+  idleShutdownTimer = null;
+}
+
+function scheduleIdleShutdown(config) {
+  clearIdleShutdown();
+  idleShutdownTimer = setTimeout(() => {
+    stopQwenSession(config).catch(error => {
+      console.error('Could not stop idle Nova session:', error);
+    });
+  }, Math.max(1000, config.idleTimeoutMs));
+  if (idleShutdownTimer.unref) idleShutdownTimer.unref();
+}
+
+async function loadModel(config) {
+  const response = await config.fetchImpl(`${config.ollamaUrl}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: config.model,
+      prompt: '',
+      stream: false,
+      keep_alive: config.keepAlive
+    }),
+    signal: AbortSignal.timeout(180000)
+  });
+  await parseResponse(response);
+}
+
+async function unloadModel(config) {
+  try {
+    const response = await config.fetchImpl(`${config.ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: config.model,
+        prompt: '',
+        stream: false,
+        keep_alive: '0s'
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+    await parseResponse(response);
+  } catch {
+    // If Ollama is already stopped, there is nothing left to unload.
+  }
+}
+
+async function startQwenSession(config) {
+  const ollama = await ensureOllamaIsReady(config);
+  if (!ollama.status.running) {
+    const error = new Error(`${ollama.status.message} Install Ollama or set OLLAMA_BIN correctly.`);
+    error.statusCode = 503;
+    throw error;
+  }
+  if (!ollama.status.modelInstalled) {
+    const error = new Error(`${ollama.status.message} Run: ollama pull ${config.model}`);
+    error.statusCode = 503;
+    throw error;
+  }
+
+  await loadModel(config);
+  scheduleIdleShutdown(config);
+  return getOllamaStatus(config);
+}
+
+async function stopQwenSession(config) {
+  clearIdleShutdown();
+  await unloadModel(config);
+  if (managedOllamaProcess && !managedOllamaProcess.killed) {
+    managedOllamaProcess.kill('SIGTERM');
+  }
+  managedOllamaProcess = null;
+  return getOllamaStatus(config);
 }
 
 const mathFunctions = {
@@ -344,7 +445,7 @@ async function callLocalModel(config, messages, tools) {
         tools,
         stream: false,
         think: false,
-        keep_alive: '0s',
+        keep_alive: config.keepAlive,
         options: { temperature: 0.4, num_ctx: 3072, num_thread: 2 }
       }),
       signal: AbortSignal.timeout(180000)
@@ -451,7 +552,6 @@ async function handleQwenApi(req, res, overrides) {
   }
 
   chatInProgress = true;
-  let startedProcess = null;
 
   try {
     const config = getConfig(overrides);
@@ -466,7 +566,6 @@ async function handleQwenApi(req, res, overrides) {
     }
 
     const ollama = await ensureOllamaIsReady(config);
-    startedProcess = ollama.startedProcess;
 
     if (!ollama.status.running) {
       sendJson(res, 503, { error: `${ollama.status.message} Install Ollama or set OLLAMA_BIN correctly.` });
@@ -477,6 +576,9 @@ async function handleQwenApi(req, res, overrides) {
       sendJson(res, 503, { error: `${ollama.status.message} Run: ollama pull ${config.model}` });
       return;
     }
+    if (!ollama.status.modelLoaded) {
+      await loadModel(config);
+    }
 
     const messages = [
       ...history,
@@ -484,12 +586,45 @@ async function handleQwenApi(req, res, overrides) {
     ];
 
     const result = await createAssistantResponse(config, messages, body.useWebSearch !== false);
+    scheduleIdleShutdown(config);
     sendJson(res, 200, result);
   } catch (error) {
     sendJson(res, error.statusCode || 500, { error: error.message || 'Nova could not answer right now.' });
   } finally {
-    stopOllama(startedProcess);
     chatInProgress = false;
+  }
+}
+
+async function handleStart(req, res, overrides) {
+  try {
+    const config = getConfig(overrides);
+    const status = await startQwenSession(config);
+    sendJson(res, 200, {
+      ok: true,
+      configured: status.running && status.modelInstalled,
+      loaded: status.modelLoaded,
+      managed: status.managed,
+      model: config.model,
+      message: status.modelLoaded ? 'Nova is loaded and ready.' : status.message
+    });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { ok: false, error: error.message || 'Nova could not start.' });
+  }
+}
+
+async function handleStop(req, res, overrides) {
+  try {
+    const config = getConfig(overrides);
+    const status = await stopQwenSession(config);
+    sendJson(res, 200, {
+      ok: true,
+      loaded: status.modelLoaded,
+      managed: status.managed,
+      model: config.model,
+      message: status.running ? 'Nova has been unloaded.' : 'Nova has stopped.'
+    });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { ok: false, error: error.message || 'Nova could not stop.' });
   }
 }
 
@@ -501,6 +636,10 @@ async function handleStatus(req, res, overrides) {
     provider: 'Ollama (local)',
     model: config.model,
     webSearch: Boolean(config.searchApiKey),
+    loaded: status.modelLoaded,
+    managed: status.managed,
+    keepAlive: config.keepAlive,
+    idleTimeoutMs: config.idleTimeoutMs,
     message: status.message
   });
 }
@@ -510,6 +649,14 @@ function handle(req, res, config = {}) {
 
   if (url.pathname === '/api/qwen/status' && req.method === 'GET') {
     return handleStatus(req, res, config);
+  }
+
+  if (url.pathname === '/api/qwen/start' && req.method === 'POST') {
+    return handleStart(req, res, config);
+  }
+
+  if (url.pathname === '/api/qwen/stop' && req.method === 'POST') {
+    return handleStop(req, res, config);
   }
 
   if (url.pathname === '/api/qwen' && req.method === 'POST') {
@@ -527,6 +674,8 @@ module.exports = {
     cleanMessages,
     createAssistantResponse,
     getConfig,
-    getOllamaStatus
+    getOllamaStatus,
+    startQwenSession,
+    stopQwenSession
   }
 };

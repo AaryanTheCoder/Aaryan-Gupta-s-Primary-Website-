@@ -55,7 +55,7 @@ if (requestPathname === '/chat' || requestPathname.startsWith('/chat/')) {
   return chatRoutes.handle(request, response);
 }
 
-if (requestPathname === '/api/qwen' || requestPathname === '/api/qwen/status') {
+if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {
   return qwenRoutes.handle(request, response);
 }
 

@@ -346,6 +346,48 @@
         line-height: 1.4;
       }
 
+      .qwen-session {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 8px;
+        border: 1px solid rgba(129, 140, 248, .24);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, .055);
+      }
+
+      .qwen-session.visible { display: flex; }
+      .qwen-session span {
+        min-width: 0;
+        flex: 1;
+        color: #c5cde0;
+        font-size: 10px;
+        line-height: 1.35;
+      }
+
+      .session-button {
+        min-height: 28px;
+        flex: 0 0 auto;
+        padding: 5px 10px;
+        border: 1px solid rgba(129, 140, 248, .42);
+        border-radius: 9px;
+        color: white;
+        background: rgba(79, 70, 229, .34);
+        font-size: 10px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      .session-button.stop {
+        border-color: rgba(248, 113, 113, .36);
+        background: rgba(127, 29, 29, .32);
+      }
+
+      .session-button:disabled { opacity: .55; cursor: not-allowed; }
+      .session-button:hover:not(:disabled) { background: rgba(99, 102, 241, .44); }
+      .session-button.stop:hover:not(:disabled) { background: rgba(153, 27, 27, .42); }
+
       @media (max-width: 520px) {
         :host { right: 12px; bottom: 12px; }
         .launcher { width: 52px; height: 52px; }
@@ -385,6 +427,10 @@
       </div>
 
       <div class="composer-area">
+        <div class="qwen-session">
+          <span>Nova is not loaded yet.</span>
+          <button class="session-button" type="button">Start</button>
+        </div>
         <div class="shot-preview">
           <img alt="Screenshot ready to send">
           <span>Screenshot attached</span>
@@ -439,6 +485,9 @@
   const preview = root.querySelector('.shot-preview');
   const previewImage = preview.querySelector('img');
   const removeScreenshotButton = root.querySelector('.remove-shot');
+  const qwenSession = root.querySelector('.qwen-session');
+  const qwenSessionText = qwenSession.querySelector('span');
+  const qwenSessionButton = qwenSession.querySelector('.session-button');
   const filePreview = root.querySelector('.file-preview');
   const filePreviewText = filePreview.querySelector('span');
   const removeFileButton = root.querySelector('.remove-file');
@@ -477,6 +526,8 @@
   let screenshot = null;
   let attachedFiles = [];
   let requestInProgress = false;
+  let qwenLoaded = false;
+  let qwenSessionBusy = false;
 
   function setOpen(open) {
     panel.classList.toggle('open', open);
@@ -484,6 +535,7 @@
     launcher.setAttribute('aria-expanded', String(open));
     launcher.setAttribute('aria-label', open ? 'Close AI chat' : 'Open AI chat');
     if (open) window.setTimeout(() => textarea.focus(), 30);
+    if (open && selectedProvider === 'qwen') refreshQwenSession();
   }
 
   function scrollToLatest() {
@@ -503,8 +555,62 @@
     headingDetail.textContent = meta.detail;
     textarea.setAttribute('aria-label', meta.label);
     textarea.placeholder = meta.placeholder;
+    qwenSession.classList.toggle('visible', provider === 'qwen');
     status.textContent = '';
+    if (provider === 'qwen') refreshQwenSession();
     textarea.focus();
+  }
+
+  function setQwenSessionUi({ loaded, message }) {
+    qwenLoaded = Boolean(loaded);
+    qwenSessionText.textContent = message || (qwenLoaded ? 'Nova is loaded. Auto-stops after 10 minutes idle.' : 'Nova is not loaded yet.');
+    qwenSessionButton.textContent = qwenLoaded ? 'Stop' : 'Start';
+    qwenSessionButton.classList.toggle('stop', qwenLoaded);
+    qwenSessionButton.disabled = qwenSessionBusy || requestInProgress;
+  }
+
+  async function refreshQwenSession() {
+    if (qwenSessionBusy) return;
+    try {
+      const response = await fetch('/api/qwen/status', { cache: 'no-store' });
+      const data = await response.json();
+      setQwenSessionUi({
+        loaded: data.loaded,
+        message: data.loaded
+          ? 'Nova is loaded. Auto-stops after 10 minutes idle.'
+          : data.configured
+            ? 'Nova is installed. Press Start to load it.'
+            : data.message || 'Nova setup needed.'
+      });
+    } catch {
+      setQwenSessionUi({ loaded: false, message: 'Nova status is unavailable.' });
+    }
+  }
+
+  async function toggleQwenSession() {
+    if (requestInProgress || qwenSessionBusy) return;
+    qwenSessionBusy = true;
+    qwenSessionButton.disabled = true;
+    qwenSessionText.textContent = qwenLoaded ? 'Stopping Nova…' : 'Starting Nova and loading Qwen…';
+
+    try {
+      const response = await fetch(qwenLoaded ? '/api/qwen/stop' : '/api/qwen/start', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Nova session command failed.');
+      setQwenSessionUi({
+        loaded: data.loaded,
+        message: data.loaded ? 'Nova is loaded. Auto-stops after 10 minutes idle.' : data.message
+      });
+      status.textContent = data.loaded ? 'Nova is ready.' : 'Nova stopped.';
+      appendMessage('assistant', data.loaded
+        ? 'Nova is loaded and ready. I will auto-stop after 10 minutes without prompts.'
+        : 'Nova has stopped.');
+    } catch (error) {
+      qwenSessionText.textContent = error.message || 'Nova session command failed.';
+    } finally {
+      qwenSessionBusy = false;
+      qwenSessionButton.disabled = requestInProgress;
+    }
   }
 
   function appendMessage(role, text, imageUrl) {
@@ -708,11 +814,15 @@
     sendButton.disabled = true;
     captureButton.disabled = true;
     attachButton.disabled = true;
+    qwenSessionButton.disabled = true;
     modelButtons.forEach(button => { button.disabled = true; });
     const isGpt5 = selectedProvider === 'gpt5';
     const isQwen = selectedProvider === 'qwen';
     const meta = providerMeta[selectedProvider] || providerMeta.gemini;
     status.textContent = meta.thinking;
+    if (isQwen && !qwenLoaded) {
+      qwenSessionText.textContent = 'Loading Nova for this message…';
+    }
     const typing = appendMessage('assistant typing', '');
 
     try {
@@ -747,6 +857,7 @@
         : '';
       appendMessage('assistant', `${data.reply || data.answer || ''}${sourceText}`.trim());
       if (isQwen) {
+        setQwenSessionUi({ loaded: true, message: 'Nova is loaded. Auto-stops after 10 minutes idle.' });
         qwenConversation.push(
           { role: 'user', content: messageWithFileText(message || 'Please read the attached file text.', outgoingFiles) },
           { role: 'assistant', content: data.reply || data.answer || '' }
@@ -773,6 +884,7 @@
       sendButton.disabled = false;
       captureButton.disabled = false;
       attachButton.disabled = false;
+      qwenSessionButton.disabled = qwenSessionBusy;
       modelButtons.forEach(button => { button.disabled = false; });
       textarea.focus();
     }
@@ -784,6 +896,7 @@
     button.addEventListener('click', () => setProvider(button.dataset.provider));
   });
   captureButton.addEventListener('click', captureScreen);
+  qwenSessionButton.addEventListener('click', toggleQwenSession);
   attachButton.addEventListener('click', attachFiles);
   removeScreenshotButton.addEventListener('click', clearScreenshot);
   removeFileButton.addEventListener('click', clearFiles);
