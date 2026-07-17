@@ -1,4 +1,5 @@
 node_modules/
+.ollama-models/
 .DS_Store
 src/pages/simulator/data/
 src/pages/sandbox/saves/

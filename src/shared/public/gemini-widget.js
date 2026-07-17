@@ -47,7 +47,7 @@
       }
 
       .launcher:focus-visible, .icon-button:focus-visible, .send:focus-visible,
-      .close:focus-visible, .remove-shot:focus-visible {
+      .close:focus-visible, .remove-shot:focus-visible, .remove-file:focus-visible {
         outline: 3px solid rgba(147, 197, 253, .8);
         outline-offset: 2px;
       }
@@ -252,6 +252,38 @@
         font-size: 18px;
       }
 
+      .file-preview {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 7px 8px;
+        border: 1px solid rgba(56, 189, 248, .28);
+        border-radius: 11px;
+        color: #dfe4f1;
+        background: rgba(14, 165, 233, .10);
+        font-size: 11px;
+      }
+
+      .file-preview.visible { display: flex; }
+      .file-preview span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .remove-file {
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        padding: 0;
+        border: 0;
+        border-radius: 7px;
+        color: #cfd6e7;
+        background: transparent;
+        cursor: pointer;
+        font-size: 18px;
+      }
+
+      .remove-file:hover { color: white; background: rgba(255, 255, 255, .1); }
+
       .composer {
         display: flex;
         align-items: flex-end;
@@ -345,6 +377,7 @@
       <div class="model-picker" role="radiogroup" aria-label="Choose AI model">
         <button class="model-option active" type="button" role="radio" aria-checked="true" data-provider="gemini">Gemini 2.5 Flash</button>
         <button class="model-option" type="button" role="radio" aria-checked="false" data-provider="gpt5">GPT-5 <small>WEB</small></button>
+        <button class="model-option" type="button" role="radio" aria-checked="false" data-provider="qwen">Qwen <small>NOVA</small></button>
       </div>
 
       <div class="messages" aria-live="polite">
@@ -357,6 +390,10 @@
           <span>Screenshot attached</span>
           <button class="remove-shot" type="button" aria-label="Remove screenshot">×</button>
         </div>
+        <div class="file-preview">
+          <span>File attached</span>
+          <button class="remove-file" type="button" aria-label="Remove attached files">×</button>
+        </div>
         <div class="composer">
           <button class="icon-button capture" type="button" aria-label="Capture current screen" title="Attach a screenshot of the current tab">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -364,6 +401,12 @@
               <circle cx="12" cy="12" r="3.5"/>
             </svg>
           </button>
+          <button class="icon-button attach" type="button" aria-label="Attach text files" title="Attach text files">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.4 11.6-8.5 8.5a5 5 0 0 1-7.1-7.1l9.2-9.2a3.4 3.4 0 0 1 4.8 4.8l-9.2 9.2a1.8 1.8 0 1 1-2.5-2.5l8.5-8.5"/>
+            </svg>
+          </button>
+          <input class="file-input" type="file" multiple hidden>
           <textarea rows="1" maxlength="8000" aria-label="Message Gemini" placeholder="Ask Gemini…"></textarea>
           <button class="send" type="button" aria-label="Send message">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/></svg>
@@ -391,14 +434,48 @@
   const textarea = root.querySelector('textarea');
   const sendButton = root.querySelector('.send');
   const captureButton = root.querySelector('.capture');
+  const attachButton = root.querySelector('.attach');
+  const fileInput = root.querySelector('.file-input');
   const preview = root.querySelector('.shot-preview');
   const previewImage = preview.querySelector('img');
   const removeScreenshotButton = root.querySelector('.remove-shot');
+  const filePreview = root.querySelector('.file-preview');
+  const filePreviewText = filePreview.querySelector('span');
+  const removeFileButton = root.querySelector('.remove-file');
   const status = root.querySelector('.status');
 
+  const providerMeta = {
+    gemini: {
+      name: 'Gemini',
+      title: 'Ask Gemini',
+      detail: 'Conversation context enabled',
+      label: 'Message Gemini',
+      placeholder: 'Ask Gemini…',
+      thinking: 'Gemini is thinking…'
+    },
+    gpt5: {
+      name: 'GPT-5',
+      title: 'Ask GPT-5',
+      detail: 'Web search · current message only',
+      label: 'Message GPT-5',
+      placeholder: 'Ask GPT-5…',
+      thinking: 'GPT-5 is thinking and may search the web…'
+    },
+    qwen: {
+      name: 'Qwen/Nova',
+      title: 'Ask Nova',
+      detail: 'Qwen · web search · file text',
+      label: 'Message Nova',
+      placeholder: 'Ask Nova…',
+      thinking: 'Nova is starting Qwen and may search the web…'
+    }
+  };
+
   const geminiConversation = [];
+  const qwenConversation = [];
   let selectedProvider = 'gemini';
   let screenshot = null;
+  let attachedFiles = [];
   let requestInProgress = false;
 
   function setOpen(open) {
@@ -414,20 +491,18 @@
   }
 
   function setProvider(provider) {
-    if (requestInProgress || (provider !== 'gemini' && provider !== 'gpt5')) return;
+    if (requestInProgress || !providerMeta[provider]) return;
     selectedProvider = provider;
-    const isGpt5 = provider === 'gpt5';
+    const meta = providerMeta[provider];
     modelButtons.forEach(button => {
       const active = button.dataset.provider === provider;
       button.classList.toggle('active', active);
       button.setAttribute('aria-checked', String(active));
     });
-    heading.textContent = isGpt5 ? 'Ask GPT-5' : 'Ask Gemini';
-    headingDetail.textContent = isGpt5
-      ? 'Web search · current message only'
-      : 'Conversation context enabled';
-    textarea.setAttribute('aria-label', isGpt5 ? 'Message GPT-5' : 'Message Gemini');
-    textarea.placeholder = isGpt5 ? 'Ask GPT-5…' : 'Ask Gemini…';
+    heading.textContent = meta.title;
+    headingDetail.textContent = meta.detail;
+    textarea.setAttribute('aria-label', meta.label);
+    textarea.placeholder = meta.placeholder;
     status.textContent = '';
     textarea.focus();
   }
@@ -458,6 +533,78 @@
     previewImage.removeAttribute('src');
     status.textContent = '';
   }
+
+  function clearFiles() {
+    attachedFiles = [];
+    fileInput.value = '';
+    filePreview.classList.remove('visible');
+    filePreviewText.textContent = 'File attached';
+  }
+
+  function fileSummary(files) {
+    if (files.length === 1) return files[0].name;
+    return `${files.length} files attached`;
+  }
+
+  function messageWithFileNotice(message, files) {
+    if (!files.length) return message;
+    return `${message}\n\n[Attached: ${files.map(file => file.name).join(', ')}]`;
+  }
+
+  function messageWithFileText(message, files) {
+    if (!files.length) return message;
+    const fileText = files
+      .map(file => `File: ${file.name}\n${file.text}`)
+      .join('\n\n---\n\n');
+    return `${message}\n\nAttached file text:\n\n${fileText}`;
+  }
+
+  async function attachFiles() {
+    if (requestInProgress) return;
+    fileInput.click();
+  }
+
+  fileInput.addEventListener('change', async () => {
+    const files = Array.from(fileInput.files || []).slice(0, 4);
+    if (!files.length) return;
+
+    attachButton.disabled = true;
+    status.textContent = 'Reading attached file text…';
+
+    try {
+      let usedCharacters = 0;
+      const nextFiles = [];
+      for (const file of files) {
+        if (file.size > 512 * 1024) {
+          appendMessage('error', `${file.name} is too large. Please attach files under 512 KB.`);
+          continue;
+        }
+
+        const text = await file.text();
+        const remaining = 12000 - usedCharacters;
+        if (remaining <= 0) break;
+        const slicedText = text.slice(0, remaining);
+        usedCharacters += slicedText.length;
+        nextFiles.push({ name: file.name, type: file.type || 'text/plain', text: slicedText });
+      }
+
+      attachedFiles = nextFiles;
+      if (attachedFiles.length) {
+        filePreviewText.textContent = fileSummary(attachedFiles);
+        filePreview.classList.add('visible');
+        status.textContent = 'File text ready — it will be sent with your next message.';
+      } else {
+        clearFiles();
+        status.textContent = '';
+      }
+    } catch {
+      clearFiles();
+      appendMessage('error', 'The selected file could not be read as text.');
+      status.textContent = '';
+    } finally {
+      attachButton.disabled = false;
+    }
+  });
 
   function waitForVideo(video) {
     return new Promise((resolve, reject) => {
@@ -542,45 +689,74 @@
 
   async function sendMessage() {
     const message = textarea.value.trim();
-    if (!message || requestInProgress) return;
+    if ((!message && !attachedFiles.length) || requestInProgress) return;
+
+    if (selectedProvider === 'qwen' && screenshot) {
+      appendMessage('error', 'Nova/Qwen can read attached text files, but this local model cannot read screenshots yet. Remove the screenshot or switch models.');
+      return;
+    }
 
     const outgoingScreenshot = screenshot;
-    appendMessage('user', message, outgoingScreenshot && outgoingScreenshot.previewUrl);
+    const outgoingFiles = attachedFiles.slice();
+    appendMessage('user', messageWithFileNotice(message || 'Please read the attached file text.', outgoingFiles), outgoingScreenshot && outgoingScreenshot.previewUrl);
     textarea.value = '';
     updateTextareaHeight();
     clearScreenshot();
+    clearFiles();
 
     requestInProgress = true;
     sendButton.disabled = true;
     captureButton.disabled = true;
+    attachButton.disabled = true;
     modelButtons.forEach(button => { button.disabled = true; });
     const isGpt5 = selectedProvider === 'gpt5';
-    status.textContent = isGpt5 ? 'GPT-5 is thinking and may search the web…' : 'Gemini is thinking…';
+    const isQwen = selectedProvider === 'qwen';
+    const meta = providerMeta[selectedProvider] || providerMeta.gemini;
+    status.textContent = meta.thinking;
     const typing = appendMessage('assistant typing', '');
 
     try {
-      const response = await fetch('/api/gemini', {
+      const hostedMessage = messageWithFileText(message || 'Please read the attached file text.', outgoingFiles);
+      const response = await fetch(isQwen ? '/api/qwen' : '/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          message,
-          history: isGpt5 ? undefined : geminiConversation.slice(-10),
-          image: outgoingScreenshot
-            ? { mimeType: outgoingScreenshot.mimeType, data: outgoingScreenshot.data }
-            : undefined
-        })
+        body: JSON.stringify(isQwen
+          ? {
+              message: message || 'Please read the attached file text.',
+              history: qwenConversation.slice(-10),
+              attachments: outgoingFiles.map(file => ({ name: file.name, text: file.text })),
+              useWebSearch: true
+            }
+          : {
+              provider: selectedProvider,
+              message: hostedMessage,
+              history: isGpt5 ? undefined : geminiConversation.slice(-10),
+              image: outgoingScreenshot
+                ? { mimeType: outgoingScreenshot.mimeType, data: outgoingScreenshot.data }
+                : undefined
+            })
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || `${isGpt5 ? 'GPT-5' : 'Gemini'} did not return a reply.`);
+        throw new Error(data.error || `${meta.name} did not return a reply.`);
       }
 
       typing.remove();
-      appendMessage('assistant', data.reply);
-      if (!isGpt5) {
+      const sourceText = data.sources?.length
+        ? `\n\nSources:\n${data.sources.map((source, index) => `${index + 1}. ${source.title || source.url} - ${source.url}`).join('\n')}`
+        : '';
+      appendMessage('assistant', `${data.reply || data.answer || ''}${sourceText}`.trim());
+      if (isQwen) {
+        qwenConversation.push(
+          { role: 'user', content: messageWithFileText(message || 'Please read the attached file text.', outgoingFiles) },
+          { role: 'assistant', content: data.reply || data.answer || '' }
+        );
+        if (qwenConversation.length > 20) {
+          qwenConversation.splice(0, qwenConversation.length - 20);
+        }
+      } else if (!isGpt5) {
         geminiConversation.push(
-          { role: 'user', text: message },
+          { role: 'user', text: hostedMessage },
           { role: 'assistant', text: data.reply }
         );
         if (geminiConversation.length > 20) {
@@ -590,12 +766,13 @@
       status.textContent = '';
     } catch (error) {
       typing.remove();
-      appendMessage('error', error.message || `Unable to reach ${isGpt5 ? 'GPT-5' : 'Gemini'}.`);
+      appendMessage('error', error.message || `Unable to reach ${meta.name}.`);
       status.textContent = '';
     } finally {
       requestInProgress = false;
       sendButton.disabled = false;
       captureButton.disabled = false;
+      attachButton.disabled = false;
       modelButtons.forEach(button => { button.disabled = false; });
       textarea.focus();
     }
@@ -607,7 +784,9 @@
     button.addEventListener('click', () => setProvider(button.dataset.provider));
   });
   captureButton.addEventListener('click', captureScreen);
+  attachButton.addEventListener('click', attachFiles);
   removeScreenshotButton.addEventListener('click', clearScreenshot);
+  removeFileButton.addEventListener('click', clearFiles);
   sendButton.addEventListener('click', sendMessage);
   textarea.addEventListener('input', updateTextareaHeight);
   textarea.addEventListener('keydown', event => {

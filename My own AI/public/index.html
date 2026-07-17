@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Nova is an AI assistant that chats, solves problems, and searches the web." />
+    <title>Nova — AI Assistant</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand-row">
+          <a class="brand" href="/" aria-label="Nova home">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 2 14.7 9.3 22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7L12 2Z" /></svg>
+            </span>
+            <span>nova</span>
+          </a>
+          <button class="icon-button close-sidebar" id="closeSidebar" aria-label="Close menu">
+            <svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <button class="new-chat-button" id="newChatButton">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+          New conversation
+        </button>
+
+        <div class="sidebar-section">
+          <p class="sidebar-label">Capabilities</p>
+          <div class="capability"><span class="capability-icon lavender">Aa</span><span>English conversation</span></div>
+          <div class="capability"><span class="capability-icon peach">∑</span><span>Problem solving</span></div>
+          <div class="capability"><span class="capability-icon mint">⌁</span><span>Live web search</span></div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="status-line"><span class="status-dot" id="statusDot"></span><span id="statusText">Checking setup...</span></div>
+          <p>The chatbot runs privately on your computer.</p>
+        </div>
+      </aside>
+
+      <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <button class="icon-button menu-button" id="menuButton" aria-label="Open menu">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <div class="assistant-title">
+            <span>Nova</span>
+            <span class="online-pill"><span></span>AI assistant</span>
+          </div>
+          <button class="icon-button clear-button" id="clearButton" aria-label="Clear conversation" title="Clear conversation">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5M14 11v5" /></svg>
+          </button>
+        </header>
+
+        <section class="chat-scroll" id="chatScroll" aria-live="polite">
+          <div class="welcome" id="welcome">
+            <div class="hero-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 2 14.7 9.3 22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7L12 2Z" /></svg>
+            </div>
+            <p class="eyebrow">YOUR THINKING PARTNER</p>
+            <h1>What can we figure out?</h1>
+            <p class="welcome-copy">Ask a question, solve a tricky problem, or explore the latest information from around the web.</p>
+
+            <div class="prompt-grid">
+              <button class="prompt-card" data-prompt="Explain how photosynthesis works in simple steps.">
+                <span class="card-icon lavender"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" /></svg></span>
+                <span><strong>Explain something</strong><small>How does photosynthesis work?</small></span>
+                <svg class="card-arrow" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+              </button>
+              <button class="prompt-card" data-prompt="A train travels 180 km in 2.5 hours. What is its average speed? Show every step.">
+                <span class="card-icon peach"><svg viewBox="0 0 24 24"><path d="m5 15 4-4 3 3 7-8M15 6h4v4" /></svg></span>
+                <span><strong>Solve a problem</strong><small>Work through it step by step</small></span>
+                <svg class="card-arrow" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+              </button>
+              <button class="prompt-card" data-prompt="Search the web for an interesting positive science story from this week and include sources.">
+                <span class="card-icon mint"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4M8 11h6M11 8v6" /></svg></span>
+                <span><strong>Search the web</strong><small>Find current, sourced information</small></span>
+                <svg class="card-arrow" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="messages" id="messages"></div>
+        </section>
+
+        <section class="composer-area">
+          <div class="setup-banner" id="setupBanner" hidden>
+            <span id="setupMessage">Almost ready — start Ollama to activate Nova.</span>
+          </div>
+          <form class="composer" id="chatForm">
+            <textarea id="messageInput" rows="1" maxlength="8000" placeholder="Ask Nova anything..." aria-label="Message Nova"></textarea>
+            <div class="composer-actions">
+              <button class="tool-toggle active" type="button" id="searchToggle" aria-pressed="true">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+                Web search
+              </button>
+              <span class="composer-hint">Shift + Enter for a new line</span>
+              <button class="send-button" id="sendButton" type="submit" aria-label="Send message" disabled>
+                <svg viewBox="0 0 24 24"><path d="m5 12 14-7-4 14-3-6-7-1Z" /><path d="m12 13 7-8" /></svg>
+              </button>
+            </div>
+          </form>
+          <p class="disclaimer">Nova can make mistakes. Check important information and open the sources it provides.</p>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

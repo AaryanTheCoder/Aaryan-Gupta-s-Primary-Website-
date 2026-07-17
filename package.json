@@ -5,10 +5,12 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node tests/routeSmoke.test.js && node tests/tablockerRoutes.test.js && node tests/geminiRoutes.test.js",
+    "setup:qwen": "node scripts/setup-qwen-local-ai.mjs",
+    "test": "node tests/routeSmoke.test.js && node tests/tablockerRoutes.test.js && node tests/geminiRoutes.test.js && node tests/qwenRoutes.test.js",
     "test:routes": "node tests/routeSmoke.test.js",
     "test:tablocker": "node tests/tablockerRoutes.test.js",
-    "test:gemini": "node tests/geminiRoutes.test.js"
+    "test:gemini": "node tests/geminiRoutes.test.js",
+    "test:qwen": "node tests/qwenRoutes.test.js"
   },
   "keywords": [],
   "author": "",

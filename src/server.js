@@ -17,6 +17,7 @@ const privacyRoutes = require('./pages/privacy/routes');
 const shooterGameRoutes = require('./pages/shooter-game/routes');
 const gameTheoryRoutes = require('./pages/game-theory/routes');
 const chatRoutes = require('./pages/chat/routes');
+const qwenRoutes = require('./pages/qwen/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -52,6 +53,10 @@ if (requestPathname === '/game-theory' || requestPathname.startsWith('/game-theo
 
 if (requestPathname === '/chat' || requestPathname.startsWith('/chat/')) {
   return chatRoutes.handle(request, response);
+}
+
+if (requestPathname === '/api/qwen' || requestPathname === '/api/qwen/status') {
+  return qwenRoutes.handle(request, response);
 }
 
 if (requestPathname === '/sandbox' || requestPathname.startsWith('/sandbox/')) { // Sandbox is a fun little page I made to test out new code and features, It’s not linked anywhere on the website, but it’s a fun place to experiment and try out new things without affecting the main site. It’s like my personal playground for coding and creativity!

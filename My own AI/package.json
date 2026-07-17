@@ -1,0 +1,16 @@
+{
+  "name": "nova-ai-chatbot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A free local AI chatbot with web search and problem-solving tools.",
+  "scripts": {
+    "setup": "node scripts/setup-local-ai.mjs",
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
