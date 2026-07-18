@@ -13,8 +13,9 @@ const MAX_ATTACHMENT_CHARS = 12000;
 const OLLAMA_SEARCH_URL = 'https://ollama.com/api/web_search';
 const DEFAULT_KEEP_ALIVE = '10m';
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
-const DEFAULT_NUM_CTX = 2048;
+const DEFAULT_NUM_CTX = 1024;
 const DEFAULT_NUM_THREAD = Math.min(4, Math.max(2, os.cpus().length || 2));
+const DEFAULT_NUM_PREDICT = 220;
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const defaultModelsPath = isAzureAppService ? '/home/ollama-models' : path.join(process.cwd(), '.ollama-models');
@@ -82,7 +83,8 @@ function getConfig(overrides = {}) {
     keepAlive: overrides.keepAlive || process.env.OLLAMA_KEEP_ALIVE || DEFAULT_KEEP_ALIVE,
     idleTimeoutMs: Number(overrides.idleTimeoutMs || process.env.OLLAMA_IDLE_TIMEOUT_MS || DEFAULT_IDLE_TIMEOUT_MS),
     numCtx: boundedInteger(overrides.numCtx || process.env.OLLAMA_NUM_CTX, DEFAULT_NUM_CTX, 512, 8192),
-    numThread: boundedInteger(overrides.numThread || process.env.OLLAMA_NUM_THREAD, DEFAULT_NUM_THREAD, 1, 8)
+    numThread: boundedInteger(overrides.numThread || process.env.OLLAMA_NUM_THREAD, DEFAULT_NUM_THREAD, 1, 8),
+    numPredict: boundedInteger(overrides.numPredict || process.env.OLLAMA_NUM_PREDICT, DEFAULT_NUM_PREDICT, 32, 2048)
   };
 }
 
@@ -457,7 +459,12 @@ async function callLocalModel(config, messages, tools) {
         stream: false,
         think: false,
         keep_alive: config.keepAlive,
-        options: { temperature: 0.4, num_ctx: config.numCtx, num_thread: config.numThread }
+        options: {
+          temperature: 0.4,
+          num_ctx: config.numCtx,
+          num_thread: config.numThread,
+          num_predict: config.numPredict
+        }
       }),
       signal: AbortSignal.timeout(180000)
     });
@@ -510,9 +517,12 @@ async function createAssistantResponse(config, messages, useWebSearch) {
   ];
   const sources = [];
   const toolsUsed = new Set();
+  const timings = { modelMs: 0, webSearchMs: 0, toolTurns: 0 };
 
   for (let turn = 0; turn < 4; turn += 1) {
+    const modelStartedAt = Date.now();
     const result = await callLocalModel(config, conversation, tools);
+    timings.modelMs += Date.now() - modelStartedAt;
     const assistantMessage = result.message || {};
     const calls = assistantMessage.tool_calls || [];
     conversation.push(assistantMessage);
@@ -521,10 +531,11 @@ async function createAssistantResponse(config, messages, useWebSearch) {
       const answer = String(assistantMessage.content || '').trim();
       if (!answer) throw new Error('Nova returned an empty answer. Please try again.');
       const uniqueSources = [...new Map(sources.map(source => [source.url, source])).values()];
-      return { reply: answer, sources: uniqueSources, toolsUsed: [...toolsUsed] };
+      return { reply: answer, sources: uniqueSources, toolsUsed: [...toolsUsed], diagnostics: { timings } };
     }
 
     for (const call of calls) {
+      timings.toolTurns += 1;
       const name = call?.function?.name;
       const args = toolArguments(call);
       let content;
@@ -538,7 +549,9 @@ async function createAssistantResponse(config, messages, useWebSearch) {
         }
       } else if (name === 'web_search' && config.searchApiKey) {
         try {
+          const searchStartedAt = Date.now();
           const results = await searchWeb(args.query, config);
+          timings.webSearchMs += Date.now() - searchStartedAt;
           sources.push(...results.filter(item => item.url).map(item => ({ title: item.title || item.url, url: item.url })));
           content = JSON.stringify(results.map(item => ({ title: item.title, url: item.url, content: item.content })));
           toolsUsed.add('web_search');
@@ -563,10 +576,14 @@ async function handleQwenApi(req, res, overrides) {
   }
 
   chatInProgress = true;
+  const requestStartedAt = Date.now();
+  const timings = {};
 
   try {
     const config = getConfig(overrides);
+    const parseStartedAt = Date.now();
     const body = await readJsonBody(req, { maxBytes: MAX_QWEN_BODY_BYTES });
+    timings.parseMs = Date.now() - parseStartedAt;
     const message = typeof body.message === 'string' ? body.message.trim().slice(0, MAX_MESSAGE_CHARS) : '';
     const attachments = cleanAttachments(body.attachments);
     const history = cleanMessages(body.history);
@@ -576,7 +593,9 @@ async function handleQwenApi(req, res, overrides) {
       return;
     }
 
+    const ollamaStartedAt = Date.now();
     const ollama = await ensureOllamaIsReady(config);
+    timings.ensureOllamaMs = Date.now() - ollamaStartedAt;
 
     if (!ollama.status.running) {
       sendJson(res, 503, { error: `${ollama.status.message} Install Ollama or set OLLAMA_BIN correctly.` });
@@ -588,7 +607,11 @@ async function handleQwenApi(req, res, overrides) {
       return;
     }
     if (!ollama.status.modelLoaded) {
+      const loadStartedAt = Date.now();
       await loadModel(config);
+      timings.loadModelMs = Date.now() - loadStartedAt;
+    } else {
+      timings.loadModelMs = 0;
     }
 
     const messages = [
@@ -596,7 +619,25 @@ async function handleQwenApi(req, res, overrides) {
       { role: 'user', content: messageWithAttachments(message || 'Please read the attached file text.', attachments) }
     ];
 
+    const assistantStartedAt = Date.now();
     const result = await createAssistantResponse(config, messages, body.useWebSearch !== false);
+    timings.assistantMs = Date.now() - assistantStartedAt;
+    timings.totalMs = Date.now() - requestStartedAt;
+    result.diagnostics = {
+      ...(result.diagnostics || {}),
+      config: {
+        model: config.model,
+        numCtx: config.numCtx,
+        numThread: config.numThread,
+        numPredict: config.numPredict,
+        keepAlive: config.keepAlive
+      },
+      timings: {
+        ...timings,
+        ...(result.diagnostics?.timings || {})
+      }
+    };
+    console.log('Nova timing:', JSON.stringify(result.diagnostics));
     scheduleIdleShutdown(config);
     sendJson(res, 200, result);
   } catch (error) {
@@ -653,6 +694,7 @@ async function handleStatus(req, res, overrides) {
     idleTimeoutMs: config.idleTimeoutMs,
     numCtx: config.numCtx,
     numThread: config.numThread,
+    numPredict: config.numPredict,
     message: status.message
   });
 }
