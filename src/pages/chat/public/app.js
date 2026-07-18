@@ -23,8 +23,7 @@ const savedShareButton = document.querySelector('#savedShareButton');
 const liveShareButton = document.querySelector('#liveShareButton');
 
 const SAVED_FILE_BYTES = 200 * 1024 * 1024;
-const LIVE_CHUNK_BYTES = 16 * 1024 * 1024;
-const LIVE_BUFFER_CHUNKS = 3;
+const LIVE_CHUNK_BYTES = 8 * 1024 * 1024;
 let displayName = localStorage.getItem('publicChatName') || '';
 let latestSignature = '';
 let firstLoad = true;
@@ -100,7 +99,7 @@ function makeLiveTransferElement(message, content) {
   const title = document.createElement('strong');
   title.textContent = stream.title;
   const meta = document.createElement('span');
-  meta.textContent = `${stream.kind === 'folder' ? `${stream.fileCount} files` : 'Live file'} · ${formatBytes(stream.totalSize)} · 16 MB chunks · 3-buffer`;
+  meta.textContent = `${stream.kind === 'folder' ? `${stream.fileCount} files` : 'Live file'} · ${formatBytes(stream.totalSize)} · 8 MB chunks`;
   details.append(title, meta);
 
   const status = document.createElement('span');
@@ -372,12 +371,16 @@ async function waitForReceiver(messageId, senderToken) {
 async function sendLiveChunks(messageId, senderToken, files, kind, totalSize) {
   let sentBytes = 0;
   let seq = 0;
-  const activeUploads = new Set();
 
-  async function uploadChunk({ file, fileIndex, offset, end, seqNumber, fileDone, transferDone }) {
-    for (;;) {
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+    const file = files[fileIndex];
+    let offset = 0;
+    while (offset < file.size || (file.size === 0 && offset === 0)) {
+      const end = Math.min(offset + LIVE_CHUNK_BYTES, file.size);
       const body = file.size === 0 ? new Blob([]) : file.slice(offset, end);
-      const url = `/chat/api/streams/${encodeURIComponent(messageId)}/chunks?seq=${seqNumber}&fileIndex=${fileIndex}&offset=${offset}&fileDone=${fileDone ? '1' : '0'}&transferDone=${transferDone ? '1' : '0'}`;
+      const fileDone = end >= file.size;
+      const transferDone = fileDone && fileIndex === files.length - 1;
+      const url = `/chat/api/streams/${encodeURIComponent(messageId)}/chunks?seq=${seq}&fileIndex=${fileIndex}&offset=${offset}&fileDone=${fileDone ? '1' : '0'}&transferDone=${transferDone ? '1' : '0'}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -387,43 +390,16 @@ async function sendLiveChunks(messageId, senderToken, files, kind, totalSize) {
         body
       });
       const data = await response.json();
-      if (response.status === 429) {
-        await new Promise(resolve => setTimeout(resolve, 350));
-        continue;
-      }
       if (!response.ok) throw new Error(data.error || 'A live transfer chunk could not be sent.');
 
       sentBytes += body.size;
       const percent = totalSize ? Math.round((sentBytes / totalSize) * 100) : 100;
       setUploadStatus(`Live sending ${kind === 'folder' ? 'folder' : file.name}`, percent);
-      return;
-    }
-  }
-
-  async function queueChunk(chunk) {
-    while (activeUploads.size >= LIVE_BUFFER_CHUNKS) {
-      await Promise.race(activeUploads);
-    }
-    const upload = uploadChunk(chunk);
-    const tracked = upload.finally(() => activeUploads.delete(tracked));
-    activeUploads.add(tracked);
-  }
-
-  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-    const file = files[fileIndex];
-    let offset = 0;
-    while (offset < file.size || (file.size === 0 && offset === 0)) {
-      const end = Math.min(offset + LIVE_CHUNK_BYTES, file.size);
-      const fileDone = end >= file.size;
-      const transferDone = fileDone && fileIndex === files.length - 1;
-      await queueChunk({ file, fileIndex, offset, end, seqNumber: seq, fileDone, transferDone });
       seq += 1;
       offset = end;
       if (file.size === 0) break;
     }
   }
-
-  await Promise.all(activeUploads);
 }
 
 async function startLiveShare() {

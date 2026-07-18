@@ -12,8 +12,7 @@ const DATA_DIR = path.resolve(process.env.CHAT_DATA_DIR || DEFAULT_DATA_DIR);
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
-const LIVE_CHUNK_BYTES = 16 * 1024 * 1024;
-const LIVE_BUFFER_CHUNKS = 3;
+const LIVE_CHUNK_BYTES = 8 * 1024 * 1024;
 const LIVE_TRANSFER_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_TEXT_CHARS = 4000;
 const MAX_NAME_CHARS = 32;
@@ -123,10 +122,9 @@ function cleanupLiveTransfers() {
   const cutoff = Date.now() - LIVE_TRANSFER_TTL_MS;
   for (const [id, transfer] of liveTransfers.entries()) {
     if (transfer.updatedAt >= cutoff && !['completed', 'cancelled', 'failed'].includes(transfer.status)) continue;
-    for (const pending of (transfer.pendingReceivers || new Map()).values()) {
-      pending.res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
-      pending.res.end('Live transfer is no longer available');
-      clearTimeout(pending.timeout);
+    if (transfer.pendingReceiver) {
+      transfer.pendingReceiver.res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
+      transfer.pendingReceiver.res.end('Live transfer is no longer available');
     }
     liveTransfers.delete(id);
   }
@@ -372,9 +370,8 @@ async function createLiveStreamInvite(req, res) {
       fileCount,
       files,
       nextSeq: 0,
-      finalSeq: null,
-      chunks: new Map(),
-      pendingReceivers: new Map(),
+      currentChunk: null,
+      pendingReceiver: null,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -388,11 +385,10 @@ async function createLiveStreamInvite(req, res) {
       files,
       pinRequired: Boolean(pin),
       status: 'waiting',
-      chunkBytes: LIVE_CHUNK_BYTES,
-      bufferChunks: LIVE_BUFFER_CHUNKS
+      chunkBytes: LIVE_CHUNK_BYTES
     };
     addMessage(message);
-    sendJson(res, 201, { ok: true, message, senderToken, chunkBytes: LIVE_CHUNK_BYTES, bufferChunks: LIVE_BUFFER_CHUNKS });
+    sendJson(res, 201, { ok: true, message, senderToken, chunkBytes: LIVE_CHUNK_BYTES });
   } catch (error) {
     sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
   }
@@ -422,9 +418,7 @@ function liveStreamStatus(req, res, id) {
     status: transfer.status,
     receiverName: transfer.receiverName,
     nextSeq: transfer.nextSeq,
-    bufferedChunks: transfer.chunks.size,
-    chunkBytes: LIVE_CHUNK_BYTES,
-    bufferChunks: LIVE_BUFFER_CHUNKS
+    chunkBytes: LIVE_CHUNK_BYTES
   });
 }
 
@@ -466,8 +460,7 @@ async function acceptLiveStream(req, res, id) {
         totalSize: transfer.totalSize,
         fileCount: transfer.fileCount,
         files: transfer.files,
-        chunkBytes: LIVE_CHUNK_BYTES,
-        bufferChunks: LIVE_BUFFER_CHUNKS
+        chunkBytes: LIVE_CHUNK_BYTES
       }
     });
   } catch (error) {
@@ -498,7 +491,7 @@ function collectLiveChunk(req) {
 
     req.on('error', error => {
       if (oversized) {
-        const tooLarge = new Error('Live transfer chunks must be 16 MB or smaller.');
+        const tooLarge = new Error('Live transfer chunks must be 8 MB or smaller.');
         tooLarge.statusCode = 413;
         reject(tooLarge);
         return;
@@ -521,11 +514,7 @@ function sendLiveChunkResponse(res, chunk, transfer) {
     'X-Transfer-Done': chunk.transferDone ? '1' : '0'
   });
   res.end(chunk.data, () => {
-    transfer.chunks.delete(chunk.seq);
-    if (transfer.finalSeq === chunk.seq) {
-      transfer.status = 'completed';
-      setLiveMessageStatus(transfer.id, 'completed', { completedAt: new Date().toISOString() });
-    }
+    if (transfer.currentChunk === chunk) transfer.currentChunk = null;
     if (chunk.resolveConsumed) chunk.resolveConsumed();
   });
 }
@@ -533,7 +522,7 @@ function sendLiveChunkResponse(res, chunk, transfer) {
 function waitForChunkConsumed(transfer, chunk) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      transfer.chunks.delete(chunk.seq);
+      if (transfer.currentChunk === chunk) transfer.currentChunk = null;
       reject(new Error('The receiver stopped taking live transfer chunks.'));
     }, 120000);
     timeout.unref?.();
@@ -556,8 +545,8 @@ async function uploadLiveChunk(req, res, id, url) {
       sendJson(res, 409, { ok: false, error: 'Wait for someone to accept this live transfer first.' });
       return;
     }
-    if (transfer.chunks.size >= LIVE_BUFFER_CHUNKS) {
-      sendJson(res, 429, { ok: false, error: 'The live transfer buffer is full. Try this chunk again shortly.' });
+    if (transfer.currentChunk) {
+      sendJson(res, 429, { ok: false, error: 'The receiver is still downloading the previous live chunk.' });
       return;
     }
 
@@ -568,7 +557,7 @@ async function uploadLiveChunk(req, res, id, url) {
     const transferDone = url.searchParams.get('transferDone') === '1';
     const file = transfer.files[fileIndex];
 
-    if (!Number.isSafeInteger(seq) || seq < 0 || transfer.chunks.has(seq) ||
+    if (!Number.isSafeInteger(seq) || seq !== transfer.nextSeq ||
         !Number.isSafeInteger(fileIndex) || !file ||
         !Number.isSafeInteger(offset) || offset < 0) {
       sendJson(res, 409, { ok: false, error: 'Live transfer chunk order is invalid.' });
@@ -586,20 +575,24 @@ async function uploadLiveChunk(req, res, id, url) {
       data
     };
 
-    transfer.chunks.set(seq, chunk);
-    transfer.nextSeq = Math.max(transfer.nextSeq, seq + 1);
-    if (transferDone) transfer.finalSeq = seq;
+    transfer.nextSeq += 1;
     transfer.updatedAt = Date.now();
     const consumedPromise = waitForChunkConsumed(transfer, chunk);
 
-    if (transfer.pendingReceivers.has(seq)) {
-      const pending = transfer.pendingReceivers.get(seq);
-      transfer.pendingReceivers.delete(seq);
+    if (transfer.pendingReceiver && transfer.pendingReceiver.expectedSeq === seq) {
+      const pending = transfer.pendingReceiver;
+      transfer.pendingReceiver = null;
       clearTimeout(pending.timeout);
       sendLiveChunkResponse(pending.res, chunk, transfer);
+    } else {
+      transfer.currentChunk = chunk;
     }
 
     await consumedPromise;
+    if (transferDone) {
+      transfer.status = 'completed';
+      setLiveMessageStatus(id, 'completed', { completedAt: new Date().toISOString() });
+    }
     sendJson(res, 200, { ok: true, seq });
   } catch (error) {
     sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
@@ -626,34 +619,32 @@ function nextLiveChunk(req, res, id, url) {
     res.end('Live transfer ended');
     return;
   }
-  if (transfer.chunks.has(expectedSeq)) {
-    const chunk = transfer.chunks.get(expectedSeq);
+  if (transfer.currentChunk && transfer.currentChunk.seq === expectedSeq) {
+    const chunk = transfer.currentChunk;
     sendLiveChunkResponse(res, chunk, transfer);
     return;
   }
-  if (transfer.status === 'completed' && transfer.finalSeq !== null && expectedSeq > transfer.finalSeq) {
+  if (transfer.status === 'completed' && expectedSeq >= transfer.nextSeq) {
     res.writeHead(204, { 'Cache-Control': 'no-store' });
     res.end();
     return;
   }
 
-  if (transfer.pendingReceivers.has(expectedSeq)) {
-    const existing = transfer.pendingReceivers.get(expectedSeq);
-    existing.res.writeHead(409, { 'Content-Type': 'text/plain; charset=utf-8' });
-    existing.res.end('Another receiver request replaced this one');
-    clearTimeout(existing.timeout);
+  if (transfer.pendingReceiver) {
+    transfer.pendingReceiver.res.writeHead(409, { 'Content-Type': 'text/plain; charset=utf-8' });
+    transfer.pendingReceiver.res.end('Another receiver request replaced this one');
+    clearTimeout(transfer.pendingReceiver.timeout);
   }
 
   const timeout = setTimeout(() => {
-    const pending = transfer.pendingReceivers.get(expectedSeq);
-    if (pending && pending.res === res) {
-      transfer.pendingReceivers.delete(expectedSeq);
+    if (transfer.pendingReceiver && transfer.pendingReceiver.res === res) {
+      transfer.pendingReceiver = null;
       res.writeHead(204, { 'Cache-Control': 'no-store' });
       res.end();
     }
   }, 25000);
   timeout.unref?.();
-  transfer.pendingReceivers.set(expectedSeq, { res, expectedSeq, timeout });
+  transfer.pendingReceiver = { res, expectedSeq, timeout };
   transfer.updatedAt = Date.now();
 }
 
@@ -711,10 +702,9 @@ function serveUploadedFile(req, res, id) {
 function clearChat(res) {
   try {
     for (const transfer of liveTransfers.values()) {
-      for (const pending of (transfer.pendingReceivers || new Map()).values()) {
-        pending.res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
-        pending.res.end('Chat was cleared');
-        clearTimeout(pending.timeout);
+      if (transfer.pendingReceiver) {
+        transfer.pendingReceiver.res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
+        transfer.pendingReceiver.res.end('Chat was cleared');
       }
     }
     liveTransfers.clear();
