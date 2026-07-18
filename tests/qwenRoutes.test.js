@@ -134,7 +134,7 @@ function invoke(pathname, payload, config, method = 'POST') {
     idleTimeoutMs: 1000,
     numCtx: 1024,
     numThread: 4,
-    numPredict: 220
+    numPredict: 300
   };
 
   const startResponse = await invoke('/api/qwen/start', null, config);
@@ -153,14 +153,14 @@ function invoke(pathname, payload, config, method = 'POST') {
   assert.strictEqual(parsedResponse.reply, 'Nova searched and found a Mars update.');
   assert.deepStrictEqual(parsedResponse.sources, [{ title: 'Mars Update', url: 'https://example.com/mars' }]);
   assert.deepStrictEqual(parsedResponse.toolsUsed, ['web_search']);
-  assert.strictEqual(parsedResponse.diagnostics.config.numPredict, 220);
+  assert.strictEqual(parsedResponse.diagnostics.config.numPredict, 300);
 
   const firstChat = requests.find(request => request.url.endsWith('/api/chat'));
   assert.strictEqual(firstChat.payload.keep_alive, '10m');
   assert.strictEqual(firstChat.payload.model, 'qwen3.5:0.8b');
   assert.strictEqual(firstChat.payload.options.num_ctx, 1024);
   assert.strictEqual(firstChat.payload.options.num_thread, 4);
-  assert.strictEqual(firstChat.payload.options.num_predict, 220);
+  assert.strictEqual(firstChat.payload.options.num_predict, 300);
   assert.strictEqual(firstChat.payload.tools.some(tool => tool.function.name === 'web_search'), true);
   assert.match(firstChat.payload.messages.at(-1).content, /notes\.txt/);
   assert.match(firstChat.payload.messages.at(-1).content, /Remember to explain simply/);

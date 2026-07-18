@@ -15,7 +15,7 @@ const DEFAULT_KEEP_ALIVE = '10m';
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_NUM_CTX = 1024;
 const DEFAULT_NUM_THREAD = Math.min(4, Math.max(2, os.cpus().length || 2));
-const DEFAULT_NUM_PREDICT = 220;
+const DEFAULT_NUM_PREDICT = 300;
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const defaultModelsPath = isAzureAppService ? '/home/ollama-models' : path.join(process.cwd(), '.ollama-models');
