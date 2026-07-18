@@ -131,7 +131,9 @@ function invoke(pathname, payload, config, method = 'POST') {
     fetchImpl,
     searchApiKey: 'test-search-key',
     autoStartOllama: false,
-    idleTimeoutMs: 1000
+    idleTimeoutMs: 1000,
+    numCtx: 2048,
+    numThread: 4
   };
 
   const startResponse = await invoke('/api/qwen/start', null, config);
@@ -155,6 +157,8 @@ function invoke(pathname, payload, config, method = 'POST') {
   const firstChat = requests.find(request => request.url.endsWith('/api/chat'));
   assert.strictEqual(firstChat.payload.keep_alive, '10m');
   assert.strictEqual(firstChat.payload.model, 'qwen3.5:2b');
+  assert.strictEqual(firstChat.payload.options.num_ctx, 2048);
+  assert.strictEqual(firstChat.payload.options.num_thread, 4);
   assert.strictEqual(firstChat.payload.tools.some(tool => tool.function.name === 'web_search'), true);
   assert.match(firstChat.payload.messages.at(-1).content, /notes\.txt/);
   assert.match(firstChat.payload.messages.at(-1).content, /Remember to explain simply/);

@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { readJsonBody, sendJson } = require('../../shared/routeHelpers');
 
@@ -12,6 +13,8 @@ const MAX_ATTACHMENT_CHARS = 12000;
 const OLLAMA_SEARCH_URL = 'https://ollama.com/api/web_search';
 const DEFAULT_KEEP_ALIVE = '10m';
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_NUM_CTX = 2048;
+const DEFAULT_NUM_THREAD = Math.min(4, Math.max(2, os.cpus().length || 2));
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const defaultModelsPath = isAzureAppService ? '/home/ollama-models' : path.join(process.cwd(), '.ollama-models');
@@ -61,6 +64,12 @@ const webSearchTool = {
   }
 };
 
+function boundedInteger(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
 function getConfig(overrides = {}) {
   return {
     ollamaUrl: String(overrides.ollamaUrl || process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/, ''),
@@ -71,7 +80,9 @@ function getConfig(overrides = {}) {
     fetchImpl: overrides.fetchImpl || fetch,
     autoStartOllama: overrides.autoStartOllama !== false,
     keepAlive: overrides.keepAlive || process.env.OLLAMA_KEEP_ALIVE || DEFAULT_KEEP_ALIVE,
-    idleTimeoutMs: Number(overrides.idleTimeoutMs || process.env.OLLAMA_IDLE_TIMEOUT_MS || DEFAULT_IDLE_TIMEOUT_MS)
+    idleTimeoutMs: Number(overrides.idleTimeoutMs || process.env.OLLAMA_IDLE_TIMEOUT_MS || DEFAULT_IDLE_TIMEOUT_MS),
+    numCtx: boundedInteger(overrides.numCtx || process.env.OLLAMA_NUM_CTX, DEFAULT_NUM_CTX, 512, 8192),
+    numThread: boundedInteger(overrides.numThread || process.env.OLLAMA_NUM_THREAD, DEFAULT_NUM_THREAD, 1, 8)
   };
 }
 
@@ -446,7 +457,7 @@ async function callLocalModel(config, messages, tools) {
         stream: false,
         think: false,
         keep_alive: config.keepAlive,
-        options: { temperature: 0.4, num_ctx: 3072, num_thread: 2 }
+        options: { temperature: 0.4, num_ctx: config.numCtx, num_thread: config.numThread }
       }),
       signal: AbortSignal.timeout(180000)
     });
@@ -640,6 +651,8 @@ async function handleStatus(req, res, overrides) {
     managed: status.managed,
     keepAlive: config.keepAlive,
     idleTimeoutMs: config.idleTimeoutMs,
+    numCtx: config.numCtx,
+    numThread: config.numThread,
     message: status.message
   });
 }
