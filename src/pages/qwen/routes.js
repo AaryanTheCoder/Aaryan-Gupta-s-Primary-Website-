@@ -73,7 +73,7 @@ function boundedInteger(value, fallback, min, max) {
 function getConfig(overrides = {}) {
   return {
     ollamaUrl: String(overrides.ollamaUrl || process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/, ''),
-    model: overrides.model || process.env.OLLAMA_MODEL || 'qwen3.5:2b',
+    model: overrides.model || process.env.OLLAMA_MODEL || 'qwen3.5:0.8b',
     modelsPath: path.resolve(overrides.modelsPath || process.env.OLLAMA_MODELS_PATH || defaultModelsPath),
     ollamaBin: overrides.ollamaBin || process.env.OLLAMA_BIN || defaultOllamaBin,
     searchApiKey: overrides.searchApiKey || process.env.OLLAMA_SEARCH_API_KEY || process.env.OLLAMA_API_KEY || '',

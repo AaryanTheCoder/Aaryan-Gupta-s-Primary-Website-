@@ -4,7 +4,7 @@ import path from "node:path";
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const ollamaUrl = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
-const model = process.env.OLLAMA_MODEL || "qwen3.5:2b";
+const model = process.env.OLLAMA_MODEL || "qwen3.5:0.8b";
 const modelsPath = path.resolve(process.env.OLLAMA_MODELS_PATH || (isAzureAppService ? "/home/ollama-models" : ".ollama-models"));
 const ollamaBin = process.env.OLLAMA_BIN || (isAzureAppService ? "/home/ollama/bin/ollama" : "ollama");
 

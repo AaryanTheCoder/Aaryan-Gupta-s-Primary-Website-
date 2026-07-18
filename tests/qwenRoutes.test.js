@@ -44,7 +44,7 @@ function invoke(pathname, payload, config, method = 'POST') {
         ok: true,
         status: 200,
         async json() {
-          return { models: [{ name: 'qwen3.5:2b' }] };
+          return { models: [{ name: 'qwen3.5:0.8b' }] };
         }
       };
     }
@@ -54,7 +54,7 @@ function invoke(pathname, payload, config, method = 'POST') {
         ok: true,
         status: 200,
         async json() {
-          return { models: modelLoaded ? [{ name: 'qwen3.5:2b' }] : [] };
+          return { models: modelLoaded ? [{ name: 'qwen3.5:0.8b' }] : [] };
         }
       };
     }
@@ -156,7 +156,7 @@ function invoke(pathname, payload, config, method = 'POST') {
 
   const firstChat = requests.find(request => request.url.endsWith('/api/chat'));
   assert.strictEqual(firstChat.payload.keep_alive, '10m');
-  assert.strictEqual(firstChat.payload.model, 'qwen3.5:2b');
+  assert.strictEqual(firstChat.payload.model, 'qwen3.5:0.8b');
   assert.strictEqual(firstChat.payload.options.num_ctx, 2048);
   assert.strictEqual(firstChat.payload.options.num_thread, 4);
   assert.strictEqual(firstChat.payload.tools.some(tool => tool.function.name === 'web_search'), true);
