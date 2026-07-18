@@ -172,6 +172,44 @@ h1 { margin: 8px 0 3px; font-size: clamp(2rem, 6vw, 3rem); }
 .folder-files { display: grid; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .folder-files a { overflow: hidden; color: var(--accent-2); font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
 
+.stream-card {
+  flex-wrap: wrap;
+}
+
+.stream-status {
+  margin-left: auto;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: var(--accent-2);
+  background: rgba(66, 217, 200, 0.1);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.stream-status.accepted { color: #ffe69a; background: rgba(255, 230, 154, 0.1); }
+.stream-status.completed { color: #9dffba; background: rgba(157, 255, 186, 0.1); }
+
+.stream-accept-button,
+.stream-hint {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.stream-accept-button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 11px;
+  color: #07111f;
+  background: linear-gradient(135deg, var(--accent-2), #ffffff);
+  font-weight: 800;
+}
+
+.stream-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .upload-status {
   padding: 12px 22px;
   border-top: 1px solid var(--line);
@@ -274,6 +312,21 @@ dialog::backdrop { background: rgba(3, 6, 14, 0.8); backdrop-filter: blur(7px); 
 .name-form input:focus { border-color: var(--accent); }
 .name-form .send-button { margin-top: 5px; }
 .name-form .form-error { min-height: 18px; margin: 0; color: #ff9baa; font-size: 0.82rem; }
+
+.share-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.share-actions button {
+  min-height: 42px;
+}
+
+.share-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 
 @media (max-width: 650px) {
@@ -289,4 +342,5 @@ dialog::backdrop { background: rgba(3, 6, 14, 0.8); backdrop-filter: blur(7px); 
   .avatar { width: 36px; height: 36px; border-radius: 11px; }
   .composer { margin: 0 10px; }
   .composer-note { margin-right: 14px; }
+  .share-actions { grid-template-columns: 1fr; }
 }

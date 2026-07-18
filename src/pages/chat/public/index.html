@@ -42,12 +42,12 @@
       </div>
 
       <form id="messageForm" class="composer">
-        <label class="file-button" for="fileInput" title="Attach a file up to 500 MB">
+        <label class="file-button" for="fileInput" title="Share a file">
           <span aria-hidden="true">＋</span>
           <span class="sr-only">Attach file</span>
         </label>
         <input id="fileInput" type="file" hidden>
-        <label class="file-button" for="folderInput" title="Attach a folder up to 500 MB">
+        <label class="file-button" for="folderInput" title="Share a folder">
           <span aria-hidden="true">📁</span>
           <span class="sr-only">Attach folder</span>
         </label>
@@ -55,7 +55,7 @@
         <textarea id="messageInput" rows="1" maxlength="4000" placeholder="Write a message…" aria-label="Message"></textarea>
         <button id="sendButton" class="send-button" type="submit">Send</button>
       </form>
-      <p class="composer-note">Files or folders up to 500 MB · Enter to send · Shift + Enter for a new line</p>
+      <p class="composer-note">Saved uploads under 200 MB · Live transfers use 8 MB chunks · Enter to send</p>
     </section>
   </main>
 
@@ -68,6 +68,21 @@
       <input id="nameInput" maxlength="32" autocomplete="name" placeholder="e.g. Aaryan" required>
       <p id="nameError" class="form-error" aria-live="polite"></p>
       <button class="send-button" type="submit">Join the chat</button>
+    </form>
+  </dialog>
+
+  <dialog id="shareDialog">
+    <form id="shareForm" class="name-form">
+      <span class="dialog-icon">⇄</span>
+      <h2>How should this be shared?</h2>
+      <p id="shareSummary">Choose a sharing mode.</p>
+      <label for="sharePinInput">Optional 4-digit PIN for live transfer</label>
+      <input id="sharePinInput" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="Leave empty for no PIN">
+      <p id="shareError" class="form-error" aria-live="polite"></p>
+      <div class="share-actions">
+        <button id="savedShareButton" class="quiet-button" type="button">Saved upload</button>
+        <button id="liveShareButton" class="send-button" type="button">Live transfer</button>
+      </div>
     </form>
   </dialog>
 

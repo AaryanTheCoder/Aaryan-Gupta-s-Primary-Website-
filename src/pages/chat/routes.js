@@ -11,11 +11,14 @@ const DEFAULT_DATA_DIR = process.env.WEBSITE_SITE_NAME && process.env.HOME
 const DATA_DIR = path.resolve(process.env.CHAT_DATA_DIR || DEFAULT_DATA_DIR);
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
-const MAX_FILE_BYTES = 500 * 1024 * 1024;
+const MAX_FILE_BYTES = 200 * 1024 * 1024;
+const LIVE_CHUNK_BYTES = 8 * 1024 * 1024;
+const LIVE_TRANSFER_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_TEXT_CHARS = 4000;
 const MAX_NAME_CHARS = 32;
 const MAX_FILENAME_CHARS = 180;
 const folderUploads = new Map();
+const liveTransfers = new Map();
 
 const PUBLIC_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -50,6 +53,16 @@ function addMessage(message) {
   writeMessages(messages);
 }
 
+function updateMessage(id, updater) {
+  const messages = readMessages();
+  const index = messages.findIndex(message => message.id === id);
+  if (index < 0) return null;
+  const next = updater(messages[index]);
+  messages[index] = next || messages[index];
+  writeMessages(messages);
+  return messages[index];
+}
+
 function makeBaseMessage(name, type) {
   return {
     id: crypto.randomUUID(),
@@ -58,6 +71,66 @@ function makeBaseMessage(name, type) {
     createdAt: new Date().toISOString()
   };
 }
+
+function hashPin(pin) {
+  return crypto.createHash('sha256').update(String(pin)).digest('hex');
+}
+
+function cleanPin(value) {
+  const pin = String(value || '').trim();
+  return /^\d{4}$/.test(pin) ? pin : '';
+}
+
+function cleanLiveFilePath(value) {
+  const cleaned = String(value || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .split('/')
+    .map(part => cleanSingleLine(part, 120))
+    .filter(part => part && part !== '.' && part !== '..')
+    .join('/');
+  return cleaned.slice(0, 500);
+}
+
+function cleanLiveFiles(files) {
+  if (!Array.isArray(files)) return [];
+  return files.slice(0, 10000).map((file, index) => {
+    const pathName = cleanLiveFilePath(file && file.path) || `file-${index + 1}`;
+    const size = Number(file && file.size);
+    return {
+      path: pathName,
+      size: Number.isSafeInteger(size) && size >= 0 ? size : 0
+    };
+  });
+}
+
+function setLiveMessageStatus(id, status, extras = {}) {
+  updateMessage(id, message => {
+    if (!message.stream) return message;
+    return {
+      ...message,
+      stream: {
+        ...message.stream,
+        ...extras,
+        status
+      }
+    };
+  });
+}
+
+function cleanupLiveTransfers() {
+  const cutoff = Date.now() - LIVE_TRANSFER_TTL_MS;
+  for (const [id, transfer] of liveTransfers.entries()) {
+    if (transfer.updatedAt >= cutoff && !['completed', 'cancelled', 'failed'].includes(transfer.status)) continue;
+    if (transfer.pendingReceiver) {
+      transfer.pendingReceiver.res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
+      transfer.pendingReceiver.res.end('Live transfer is no longer available');
+    }
+    liveTransfers.delete(id);
+  }
+}
+
+setInterval(cleanupLiveTransfers, 10 * 60 * 1000).unref?.();
 
 function servePublicFile(req, res, pathname) {
   const relativePath = pathname === '/chat' || pathname === '/chat/'
@@ -98,7 +171,7 @@ function uploadFile(req, res, url) {
     return;
   }
   if (contentLength > MAX_FILE_BYTES) {
-    sendJson(res, 413, { ok: false, error: 'Files must be 500 MB or smaller.' });
+    sendJson(res, 413, { ok: false, error: 'Saved uploads must be 200 MB or smaller. Use live transfer for bigger files.' });
     return;
   }
 
@@ -130,7 +203,7 @@ function uploadFile(req, res, url) {
   req.on('data', chunk => {
     receivedBytes += chunk.length;
     if (receivedBytes > MAX_FILE_BYTES) {
-      fail(413, 'Files must be 500 MB or smaller.');
+      fail(413, 'Saved uploads must be 200 MB or smaller. Use live transfer for bigger files.');
       req.destroy();
     }
   });
@@ -174,7 +247,7 @@ async function startFolderUpload(req, res) {
     const fileCount = Number(body.fileCount);
     if (!name || !folderName || !Number.isSafeInteger(totalSize) || totalSize < 0 || totalSize > MAX_FILE_BYTES ||
         !Number.isSafeInteger(fileCount) || fileCount < 1 || fileCount > 10000) {
-      sendJson(res, 400, { ok: false, error: 'Choose a valid folder no larger than 500 MB.' });
+      sendJson(res, 400, { ok: false, error: 'Choose a valid saved folder no larger than 200 MB, or use live transfer.' });
       return;
     }
     const uploadId = crypto.randomUUID();
@@ -196,7 +269,7 @@ function uploadFolderFile(req, res, uploadId, url) {
     return;
   }
   if (upload.files.some(file => file.path === relativePath) || contentLength < 0 || upload.receivedBytes + contentLength > MAX_FILE_BYTES) {
-    sendJson(res, 413, { ok: false, error: 'The folder must be 500 MB or smaller and cannot contain duplicate paths.' });
+    sendJson(res, 413, { ok: false, error: 'The saved folder must be 200 MB or smaller and cannot contain duplicate paths.' });
     return;
   }
 
@@ -221,7 +294,7 @@ function uploadFolderFile(req, res, uploadId, url) {
   req.on('data', chunk => {
     receivedBytes += chunk.length;
     if (upload.receivedBytes + receivedBytes > MAX_FILE_BYTES) {
-      fail(413, 'The folder must be 500 MB or smaller.');
+      fail(413, 'The saved folder must be 200 MB or smaller.');
       req.destroy();
     }
   });
@@ -256,6 +329,323 @@ function finishFolderUpload(res, uploadId) {
   } catch (error) {
     sendJson(res, 500, { ok: false, error: 'The folder could not be saved.' });
   }
+}
+
+async function createLiveStreamInvite(req, res) {
+  try {
+    cleanupLiveTransfers();
+    const body = await readJsonBody(req, { maxBytes: 1024 * 1024 });
+    const name = cleanSingleLine(body.name, MAX_NAME_CHARS);
+    const title = cleanSingleLine(body.title, MAX_FILENAME_CHARS);
+    const kind = body.kind === 'folder' ? 'folder' : 'file';
+    const totalSize = Number(body.totalSize);
+    const fileCount = Number(body.fileCount);
+    const files = cleanLiveFiles(body.files);
+    const pin = cleanPin(body.pin);
+
+    if (!name || !title || !Number.isSafeInteger(totalSize) || totalSize < 0 ||
+        !Number.isSafeInteger(fileCount) || fileCount < 1 || fileCount !== files.length) {
+      sendJson(res, 400, { ok: false, error: 'Choose a valid live transfer.' });
+      return;
+    }
+
+    const calculatedSize = files.reduce((sum, file) => sum + file.size, 0);
+    if (calculatedSize !== totalSize) {
+      sendJson(res, 400, { ok: false, error: 'The live transfer size does not match the selected files.' });
+      return;
+    }
+
+    const message = makeBaseMessage(name, 'stream');
+    const senderToken = crypto.randomBytes(32).toString('hex');
+    const transfer = {
+      id: message.id,
+      senderToken,
+      receiverToken: '',
+      receiverName: '',
+      status: 'waiting',
+      pinHash: pin ? hashPin(pin) : '',
+      title,
+      kind,
+      totalSize,
+      fileCount,
+      files,
+      nextSeq: 0,
+      currentChunk: null,
+      pendingReceiver: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    liveTransfers.set(message.id, transfer);
+    message.stream = {
+      title,
+      kind,
+      totalSize,
+      fileCount,
+      files,
+      pinRequired: Boolean(pin),
+      status: 'waiting',
+      chunkBytes: LIVE_CHUNK_BYTES
+    };
+    addMessage(message);
+    sendJson(res, 201, { ok: true, message, senderToken, chunkBytes: LIVE_CHUNK_BYTES });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
+  }
+}
+
+function getLiveTransfer(id) {
+  cleanupLiveTransfers();
+  return liveTransfers.get(id);
+}
+
+function requireLiveSender(req, res, transfer) {
+  if (transfer && transfer.senderToken === req.headers['x-sender-token']) return true;
+  sendJson(res, 403, { ok: false, error: 'Live transfer sender token is invalid.' });
+  return false;
+}
+
+function liveStreamStatus(req, res, id) {
+  const transfer = getLiveTransfer(id);
+  if (!transfer) {
+    sendJson(res, 404, { ok: false, error: 'Live transfer not found.' });
+    return;
+  }
+  if (!requireLiveSender(req, res, transfer)) return;
+  transfer.updatedAt = Date.now();
+  sendJson(res, 200, {
+    ok: true,
+    status: transfer.status,
+    receiverName: transfer.receiverName,
+    nextSeq: transfer.nextSeq,
+    chunkBytes: LIVE_CHUNK_BYTES
+  });
+}
+
+async function acceptLiveStream(req, res, id) {
+  try {
+    const transfer = getLiveTransfer(id);
+    const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
+    const name = cleanSingleLine(body.name, MAX_NAME_CHARS);
+    const pin = cleanPin(body.pin);
+
+    if (!transfer) {
+      sendJson(res, 404, { ok: false, error: 'Live transfer not found. The sender may need to share it again.' });
+      return;
+    }
+    if (!name) {
+      sendJson(res, 400, { ok: false, error: 'Your name is required.' });
+      return;
+    }
+    if (transfer.status !== 'waiting') {
+      sendJson(res, 409, { ok: false, error: 'This live transfer has already been accepted or ended.' });
+      return;
+    }
+    if (transfer.pinHash && hashPin(pin) !== transfer.pinHash) {
+      sendJson(res, 403, { ok: false, error: 'Incorrect PIN.' });
+      return;
+    }
+
+    transfer.receiverToken = crypto.randomBytes(32).toString('hex');
+    transfer.receiverName = name;
+    transfer.status = 'accepted';
+    transfer.updatedAt = Date.now();
+    setLiveMessageStatus(id, 'accepted', { acceptedBy: name });
+    sendJson(res, 200, {
+      ok: true,
+      receiverToken: transfer.receiverToken,
+      stream: {
+        title: transfer.title,
+        kind: transfer.kind,
+        totalSize: transfer.totalSize,
+        fileCount: transfer.fileCount,
+        files: transfer.files,
+        chunkBytes: LIVE_CHUNK_BYTES
+      }
+    });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
+  }
+}
+
+function collectLiveChunk(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+    let oversized = false;
+
+    req.on('data', chunk => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.length;
+      if (totalBytes > LIVE_CHUNK_BYTES) {
+        oversized = true;
+        req.destroy();
+        return;
+      }
+      chunks.push(buffer);
+    });
+
+    req.on('end', () => {
+      if (!oversized) resolve(Buffer.concat(chunks));
+    });
+
+    req.on('error', error => {
+      if (oversized) {
+        const tooLarge = new Error('Live transfer chunks must be 8 MB or smaller.');
+        tooLarge.statusCode = 413;
+        reject(tooLarge);
+        return;
+      }
+      reject(error);
+    });
+  });
+}
+
+function sendLiveChunkResponse(res, chunk, transfer) {
+  res.writeHead(200, {
+    'Content-Type': 'application/octet-stream',
+    'Content-Length': chunk.data.length,
+    'Cache-Control': 'no-store',
+    'X-Stream-Seq': String(chunk.seq),
+    'X-File-Index': String(chunk.fileIndex),
+    'X-File-Path': encodeURIComponent(chunk.filePath),
+    'X-File-Offset': String(chunk.offset),
+    'X-File-Done': chunk.fileDone ? '1' : '0',
+    'X-Transfer-Done': chunk.transferDone ? '1' : '0'
+  });
+  res.end(chunk.data, () => {
+    if (transfer.currentChunk === chunk) transfer.currentChunk = null;
+    if (chunk.resolveConsumed) chunk.resolveConsumed();
+  });
+}
+
+function waitForChunkConsumed(transfer, chunk) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      if (transfer.currentChunk === chunk) transfer.currentChunk = null;
+      reject(new Error('The receiver stopped taking live transfer chunks.'));
+    }, 120000);
+    timeout.unref?.();
+    chunk.resolveConsumed = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+  });
+}
+
+async function uploadLiveChunk(req, res, id, url) {
+  try {
+    const transfer = getLiveTransfer(id);
+    if (!transfer) {
+      sendJson(res, 404, { ok: false, error: 'Live transfer not found.' });
+      return;
+    }
+    if (!requireLiveSender(req, res, transfer)) return;
+    if (transfer.status !== 'accepted') {
+      sendJson(res, 409, { ok: false, error: 'Wait for someone to accept this live transfer first.' });
+      return;
+    }
+    if (transfer.currentChunk) {
+      sendJson(res, 429, { ok: false, error: 'The receiver is still downloading the previous live chunk.' });
+      return;
+    }
+
+    const seq = Number(url.searchParams.get('seq'));
+    const fileIndex = Number(url.searchParams.get('fileIndex'));
+    const offset = Number(url.searchParams.get('offset'));
+    const fileDone = url.searchParams.get('fileDone') === '1';
+    const transferDone = url.searchParams.get('transferDone') === '1';
+    const file = transfer.files[fileIndex];
+
+    if (!Number.isSafeInteger(seq) || seq !== transfer.nextSeq ||
+        !Number.isSafeInteger(fileIndex) || !file ||
+        !Number.isSafeInteger(offset) || offset < 0) {
+      sendJson(res, 409, { ok: false, error: 'Live transfer chunk order is invalid.' });
+      return;
+    }
+
+    const data = await collectLiveChunk(req);
+    const chunk = {
+      seq,
+      fileIndex,
+      filePath: file.path,
+      offset,
+      fileDone,
+      transferDone,
+      data
+    };
+
+    transfer.nextSeq += 1;
+    transfer.updatedAt = Date.now();
+    const consumedPromise = waitForChunkConsumed(transfer, chunk);
+
+    if (transfer.pendingReceiver && transfer.pendingReceiver.expectedSeq === seq) {
+      const pending = transfer.pendingReceiver;
+      transfer.pendingReceiver = null;
+      clearTimeout(pending.timeout);
+      sendLiveChunkResponse(pending.res, chunk, transfer);
+    } else {
+      transfer.currentChunk = chunk;
+    }
+
+    await consumedPromise;
+    if (transferDone) {
+      transfer.status = 'completed';
+      setLiveMessageStatus(id, 'completed', { completedAt: new Date().toISOString() });
+    }
+    sendJson(res, 200, { ok: true, seq });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
+  }
+}
+
+function nextLiveChunk(req, res, id, url) {
+  const transfer = getLiveTransfer(id);
+  const receiverToken = url.searchParams.get('receiverToken') || '';
+  const expectedSeq = Number(url.searchParams.get('seq'));
+
+  if (!transfer || transfer.receiverToken !== receiverToken) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Live transfer not found');
+    return;
+  }
+  if (!Number.isSafeInteger(expectedSeq) || expectedSeq < 0) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Invalid live transfer sequence');
+    return;
+  }
+  if (transfer.status === 'cancelled' || transfer.status === 'failed') {
+    res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Live transfer ended');
+    return;
+  }
+  if (transfer.currentChunk && transfer.currentChunk.seq === expectedSeq) {
+    const chunk = transfer.currentChunk;
+    sendLiveChunkResponse(res, chunk, transfer);
+    return;
+  }
+  if (transfer.status === 'completed' && expectedSeq >= transfer.nextSeq) {
+    res.writeHead(204, { 'Cache-Control': 'no-store' });
+    res.end();
+    return;
+  }
+
+  if (transfer.pendingReceiver) {
+    transfer.pendingReceiver.res.writeHead(409, { 'Content-Type': 'text/plain; charset=utf-8' });
+    transfer.pendingReceiver.res.end('Another receiver request replaced this one');
+    clearTimeout(transfer.pendingReceiver.timeout);
+  }
+
+  const timeout = setTimeout(() => {
+    if (transfer.pendingReceiver && transfer.pendingReceiver.res === res) {
+      transfer.pendingReceiver = null;
+      res.writeHead(204, { 'Cache-Control': 'no-store' });
+      res.end();
+    }
+  }, 25000);
+  timeout.unref?.();
+  transfer.pendingReceiver = { res, expectedSeq, timeout };
+  transfer.updatedAt = Date.now();
 }
 
 function serveFolderFile(req, res, id, url) {
@@ -311,6 +701,13 @@ function serveUploadedFile(req, res, id) {
 
 function clearChat(res) {
   try {
+    for (const transfer of liveTransfers.values()) {
+      if (transfer.pendingReceiver) {
+        transfer.pendingReceiver.res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8' });
+        transfer.pendingReceiver.res.end('Chat was cleared');
+      }
+    }
+    liveTransfers.clear();
     fs.mkdirSync(FILES_DIR, { recursive: true });
     for (const fileName of fs.readdirSync(FILES_DIR)) {
       if (!fileName.startsWith('.upload-')) {
@@ -354,6 +751,35 @@ async function handle(req, res) {
 
   if (pathname === '/chat/api/files' && req.method === 'POST') {
     uploadFile(req, res, url);
+    return;
+  }
+
+  if (pathname === '/chat/api/streams' && req.method === 'POST') {
+    await createLiveStreamInvite(req, res);
+    return;
+  }
+
+  const streamStatusMatch = pathname.match(/^\/chat\/api\/streams\/([0-9a-f-]{36})\/status$/i);
+  if (streamStatusMatch && req.method === 'GET') {
+    liveStreamStatus(req, res, streamStatusMatch[1]);
+    return;
+  }
+
+  const streamAcceptMatch = pathname.match(/^\/chat\/api\/streams\/([0-9a-f-]{36})\/accept$/i);
+  if (streamAcceptMatch && req.method === 'POST') {
+    await acceptLiveStream(req, res, streamAcceptMatch[1]);
+    return;
+  }
+
+  const streamChunkMatch = pathname.match(/^\/chat\/api\/streams\/([0-9a-f-]{36})\/chunks$/i);
+  if (streamChunkMatch && req.method === 'POST') {
+    await uploadLiveChunk(req, res, streamChunkMatch[1], url);
+    return;
+  }
+
+  const streamNextMatch = pathname.match(/^\/chat\/api\/streams\/([0-9a-f-]{36})\/chunks\/next$/i);
+  if (streamNextMatch && req.method === 'GET') {
+    nextLiveChunk(req, res, streamNextMatch[1], url);
     return;
   }
 
