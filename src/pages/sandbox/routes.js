@@ -5,7 +5,10 @@ const { isPathInside, readJsonBody } = require('../../shared/routeHelpers');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const SANDBOX_DIR = path.join(__dirname, 'public');
-const SAVES_DIR = path.join(__dirname, 'saves');
+const DEFAULT_SAVES_DIR = process.env.WEBSITE_SITE_NAME && process.env.HOME
+  ? path.join(process.env.HOME, 'data', 'sandbox-saves')
+  : path.join(__dirname, 'saves');
+const SAVES_DIR = path.resolve(process.env.SANDBOX_SAVES_DIR || DEFAULT_SAVES_DIR);
 const MAX_SANDBOX_BODY_BYTES = 2 * 1024 * 1024;
 
 if (!fs.existsSync(SAVES_DIR)) {
