@@ -12,7 +12,7 @@ const DATA_DIR = path.resolve(process.env.CHAT_DATA_DIR || DEFAULT_DATA_DIR);
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
-const LIVE_CHUNK_BYTES = 16 * 1024 * 1024;
+const LIVE_CHUNK_BYTES = 32 * 1024 * 1024;
 const LIVE_TRANSFER_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_TEXT_CHARS = 4000;
 const MAX_NAME_CHARS = 32;
@@ -491,7 +491,7 @@ function collectLiveChunk(req) {
 
     req.on('error', error => {
       if (oversized) {
-        const tooLarge = new Error('Live transfer chunks must be 16 MB or smaller.');
+        const tooLarge = new Error('Live transfer chunks must be 32 MB or smaller.');
         tooLarge.statusCode = 413;
         reject(tooLarge);
         return;
