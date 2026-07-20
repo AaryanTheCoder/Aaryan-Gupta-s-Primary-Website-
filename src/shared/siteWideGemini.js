@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const WIDGET_ROUTE = '/assets/gemini-widget.js';
-const WIDGET_ASSET_URL = `${WIDGET_ROUTE}?v=gpt5`;
+const WIDGET_ASSET_URL = `${WIDGET_ROUTE}?v=gemini25`;
 const WIDGET_TAG = `<script src="${WIDGET_ASSET_URL}" defer></script>`;
 const WIDGET_FILE = path.join(__dirname, 'public', 'gemini-widget.js');
 

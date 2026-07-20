@@ -92,12 +92,7 @@ function getGeminiModelName(config) {
 
 function getGeminiModelsToTry(config) {
   const preferredModel = getGeminiModelName(config);
-  const fallbackModels = [
-    preferredModel,
-    preferredModel === 'gemini-2.5-flash' ? 'gemini-2.0-flash' : 'gemini-2.5-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash'
-  ];
+  const fallbackModels = [preferredModel, 'gemini-2.5-flash'];
 
   return Array.from(new Set(fallbackModels.filter(Boolean)));
 }
