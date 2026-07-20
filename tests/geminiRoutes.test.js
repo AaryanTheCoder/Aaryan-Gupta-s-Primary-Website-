@@ -52,7 +52,7 @@ function invokeApi(payload, config = 'test-gemini-key') {
       };
     }
 
-    assert.match(url, /gemini-2\.5-flash:generateContent/);
+    assert.match(url, /gemini-3\.5-flash:generateContent/);
     return {
       ok: true,
       status: 200,
