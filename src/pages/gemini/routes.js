@@ -555,7 +555,7 @@ async function handleGeminiApi(request, response, config) {
           ]
         }
       ],
-      tools: [{ google_search_retrieval: {} }]
+      tools: [{ google_search: {} }]
     };
 
     let lastError = null;
