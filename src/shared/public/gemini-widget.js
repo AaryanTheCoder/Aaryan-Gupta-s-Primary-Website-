@@ -409,7 +409,7 @@
         </span>
         <span class="heading">
           <strong>Ask Gemini</strong>
-          <span>Conversation context enabled</span>
+          <span>Conversation context + web search</span>
         </span>
         <button class="close" type="button" aria-label="Close AI chat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -417,7 +417,7 @@
       </header>
 
       <div class="model-picker" role="radiogroup" aria-label="Choose AI model">
-        <button class="model-option active" type="button" role="radio" aria-checked="true" data-provider="gemini">Gemini 3.5 Flash</button>
+        <button class="model-option active" type="button" role="radio" aria-checked="true" data-provider="gemini">Gemini 2.5 Flash</button>
         <button class="model-option" type="button" role="radio" aria-checked="false" data-provider="gpt5">GPT-5 <small>WEB</small></button>
         <button class="model-option" type="button" role="radio" aria-checked="false" data-provider="qwen">Qwen <small>NOVA</small></button>
       </div>
@@ -497,7 +497,7 @@
     gemini: {
       name: 'Gemini',
       title: 'Ask Gemini',
-      detail: 'Conversation context enabled',
+      detail: 'Conversation context + web search',
       label: 'Message Gemini',
       placeholder: 'Ask Gemini…',
       thinking: 'Gemini is thinking…'

@@ -87,12 +87,12 @@ function getAzureReply(data) {
 function getGeminiModelName(config) {
   const configuredModel = typeof config?.geminiModel === 'string' ? config.geminiModel.trim() : '';
   const envModel = typeof process.env.GEMINI_MODEL === 'string' ? process.env.GEMINI_MODEL.trim() : '';
-  return configuredModel || envModel || 'gemini-3.5-flash';
+  return configuredModel || envModel || 'gemini-2.5-flash';
 }
 
 function getGeminiModelsToTry(config) {
   const preferredModel = getGeminiModelName(config);
-  const fallbackModels = [preferredModel, 'gemini-3.5-flash'];
+  const fallbackModels = [preferredModel, 'gemini-2.5-flash'];
 
   return Array.from(new Set(fallbackModels.filter(Boolean)));
 }
