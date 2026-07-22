@@ -10,10 +10,12 @@ const plannerDataDirectory = path.join(os.tmpdir(), `planner-route-smoke-${proce
 const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
 const holidayPlannerDataPath = path.join(plannerDataDirectory, 'holiday-planner-data.json');
 const chatDataDirectory = path.join(os.tmpdir(), `chat-route-smoke-${process.pid}`);
+const feedbackDataDirectory = path.join(os.tmpdir(), `feedback-route-smoke-${process.pid}`);
 process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
 process.env.PLANNER_DATA_PATH = plannerDataPath;
 process.env.HOLIDAY_PLANNER_DATA_PATH = holidayPlannerDataPath;
 process.env.CHAT_DATA_DIR = chatDataDirectory;
+process.env.FEEDBACK_DATA_DIR = feedbackDataDirectory;
 
 const server = require('../src/server');
 const requestHandler = server.listeners('request')[0];
@@ -151,6 +153,45 @@ function invoke(pathname, options = {}) {
   const chatClear = await invoke('/chat/api/messages', { method: 'DELETE' });
   assert.strictEqual(chatClear.statusCode, 200);
   assert.strictEqual(JSON.parse(chatClear.body).ok, true);
+
+  const feedbackPage = await invoke('/extension-feedback');
+  assert.strictEqual(feedbackPage.statusCode, 200);
+  assert.match(feedbackPage.body, /Chrome Extension Feedback/);
+
+  const feedbackCss = await invoke('/extension-feedback/styles.css');
+  assert.strictEqual(feedbackCss.statusCode, 200);
+  assert.match(feedbackCss.headers['content-type'], /^text\/css/);
+
+  const feedbackDenied = await invoke('/extension-feedback/api/admin/feedback');
+  assert.strictEqual(feedbackDenied.statusCode, 401);
+
+  const onePixelPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lpP5QwAAAABJRU5ErkJggg==';
+  const feedbackSave = await invoke('/extension-feedback/api/feedback', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Route Tester',
+      email: 'tester@example.com',
+      description: 'The extension feedback route saves submissions.',
+      images: [{ name: 'screenshot.png', dataUrl: onePixelPng }]
+    })
+  });
+  assert.strictEqual(feedbackSave.statusCode, 201);
+  assert.strictEqual(JSON.parse(feedbackSave.body).ok, true);
+
+  const feedbackAdmin = await invoke('/extension-feedback/api/admin/feedback', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(feedbackAdmin.statusCode, 200);
+  const feedbackItems = JSON.parse(feedbackAdmin.body).feedback;
+  assert.strictEqual(feedbackItems.length, 1);
+  assert.strictEqual(feedbackItems[0].email, 'tester@example.com');
+
+  const feedbackImage = await invoke(feedbackItems[0].images[0].url, {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(feedbackImage.statusCode, 200);
+  assert.match(feedbackImage.headers['content-type'], /^image\/png/);
 
   const privacy = await invoke('/privacy');
   assert.strictEqual(privacy.statusCode, 200);

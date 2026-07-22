@@ -18,6 +18,7 @@ const shooterGameRoutes = require('./pages/shooter-game/routes');
 const gameTheoryRoutes = require('./pages/game-theory/routes');
 const chatRoutes = require('./pages/chat/routes');
 const qwenRoutes = require('./pages/qwen/routes');
+const feedbackRoutes = require('./pages/feedback/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -53,6 +54,10 @@ if (requestPathname === '/game-theory' || requestPathname.startsWith('/game-theo
 
 if (requestPathname === '/chat' || requestPathname.startsWith('/chat/')) {
   return chatRoutes.handle(request, response);
+}
+
+if (requestPathname === '/extension-feedback' || requestPathname.startsWith('/extension-feedback/')) {
+  return feedbackRoutes.handle(request, response);
 }
 
 if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {

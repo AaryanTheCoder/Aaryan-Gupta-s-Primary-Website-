@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chrome Extension Feedback</title>
+  <link rel="stylesheet" href="/extension-feedback/styles.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <section class="feedback-panel" aria-labelledby="page-title">
+      <div class="panel-copy">
+        <p class="eyebrow">Chrome extension feedback</p>
+        <h1 id="page-title">Tell me what I should improve.</h1>
+        <p class="intro">Bug reports, ideas, confusing parts, missing features, and screenshots are all welcome.</p>
+      </div>
+
+      <form id="feedback-form" class="feedback-form">
+        <label>
+          <span>Name</span>
+          <input id="name" name="name" type="text" autocomplete="name" maxlength="80" required />
+        </label>
+
+        <label>
+          <span>Email</span>
+          <input id="email" name="email" type="email" autocomplete="email" maxlength="160" required />
+        </label>
+
+        <label class="wide">
+          <span>Description</span>
+          <textarea id="description" name="description" rows="7" maxlength="5000" required></textarea>
+        </label>
+
+        <label class="upload-box wide" for="images">
+          <span>Image attachments</span>
+          <strong>Choose images</strong>
+          <small>Images can be up to 20 MB total.</small>
+          <input id="images" name="images" type="file" accept="image/*" multiple />
+        </label>
+
+        <div id="preview-grid" class="preview-grid wide" aria-live="polite"></div>
+
+        <div class="actions wide">
+          <button type="submit">Submit feedback</button>
+          <p id="form-status" role="status"></p>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <button id="admin-open" class="admin-open" type="button" aria-label="Open admin">Admin</button>
+
+  <section id="admin-modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-admin></div>
+    <div class="admin-panel" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+      <div class="admin-head">
+        <div>
+          <p class="eyebrow">Private</p>
+          <h2 id="admin-title">Feedback</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-admin aria-label="Close admin">x</button>
+      </div>
+
+      <form id="admin-login" class="admin-login">
+        <label>
+          <span>Password</span>
+          <input id="admin-password" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">View</button>
+      </form>
+
+      <p id="admin-status" class="admin-status" role="status"></p>
+      <div id="feedback-list" class="feedback-list"></div>
+    </div>
+  </section>
+
+  <script src="/extension-feedback/app.js"></script>
+</body>
+</html>
