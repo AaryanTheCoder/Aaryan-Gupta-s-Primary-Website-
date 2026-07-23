@@ -19,6 +19,7 @@ const gameTheoryRoutes = require('./pages/game-theory/routes');
 const chatRoutes = require('./pages/chat/routes');
 const qwenRoutes = require('./pages/qwen/routes');
 const feedbackRoutes = require('./pages/feedback/routes');
+const scrollguardRoutes = require('./pages/scrollguard/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -58,6 +59,10 @@ if (requestPathname === '/chat' || requestPathname.startsWith('/chat/')) {
 
 if (requestPathname === '/extension-feedback' || requestPathname.startsWith('/extension-feedback/')) {
   return feedbackRoutes.handle(request, response);
+}
+
+if (requestPathname === '/scrollguard' || requestPathname.startsWith('/scrollguard/')) {
+  return scrollguardRoutes.handle(request, response);
 }
 
 if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {

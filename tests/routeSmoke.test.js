@@ -162,6 +162,20 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(feedbackCss.statusCode, 200);
   assert.match(feedbackCss.headers['content-type'], /^text\/css/);
 
+  const scrollguard = await invoke('/scrollguard');
+  assert.strictEqual(scrollguard.statusCode, 200);
+  assert.match(scrollguard.body, /How to use ScrollGuard/);
+  assert.match(scrollguard.body, /Use the feed/);
+  assert.match(scrollguard.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
+
+  const scrollguardCss = await invoke('/scrollguard/styles.css');
+  assert.strictEqual(scrollguardCss.statusCode, 200);
+  assert.match(scrollguardCss.headers['content-type'], /^text\/css/);
+
+  const scrollguardHead = await invoke('/scrollguard', { method: 'HEAD' });
+  assert.strictEqual(scrollguardHead.statusCode, 200);
+  assert.strictEqual(scrollguardHead.body, '');
+
   const feedbackDenied = await invoke('/extension-feedback/api/admin/feedback');
   assert.strictEqual(feedbackDenied.statusCode, 401);
 
