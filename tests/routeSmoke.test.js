@@ -9,11 +9,13 @@ const gameTheoryDataPath = path.join(os.tmpdir(), `game-theory-route-smoke-${pro
 const plannerDataDirectory = path.join(os.tmpdir(), `planner-route-smoke-${process.pid}`);
 const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
 const holidayPlannerDataPath = path.join(plannerDataDirectory, 'holiday-planner-data.json');
+const codeCopyPasteDataPath = path.join(os.tmpdir(), `code-copy-paste-route-smoke-${process.pid}.json`);
 const chatDataDirectory = path.join(os.tmpdir(), `chat-route-smoke-${process.pid}`);
 const feedbackDataDirectory = path.join(os.tmpdir(), `feedback-route-smoke-${process.pid}`);
 process.env.GAME_THEORY_DATA_PATH = gameTheoryDataPath;
 process.env.PLANNER_DATA_PATH = plannerDataPath;
 process.env.HOLIDAY_PLANNER_DATA_PATH = holidayPlannerDataPath;
+process.env.CODE_COPY_PASTE_DATA_PATH = codeCopyPasteDataPath;
 process.env.CHAT_DATA_DIR = chatDataDirectory;
 process.env.FEEDBACK_DATA_DIR = feedbackDataDirectory;
 
@@ -376,6 +378,45 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(invalidPlannerSave.statusCode, 400);
 
+  const codeCopyPasteDenied = await invoke('/code-copy-paste');
+  assert.strictEqual(codeCopyPasteDenied.statusCode, 401);
+  assert.match(codeCopyPasteDenied.headers['www-authenticate'], /Code Copy Paste/);
+
+  const codeCopyPaste = await invoke('/code-copy-paste', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(codeCopyPaste.statusCode, 200);
+  assert.match(codeCopyPaste.body, /Code Copy Paste/);
+  assert.match(codeCopyPaste.body, /id="codeInput"/);
+
+  const codeCopyPasteBefore = await invoke('/code-copy-paste/api/document', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.strictEqual(codeCopyPasteBefore.statusCode, 200);
+  assert.strictEqual(JSON.parse(codeCopyPasteBefore.body).exists, false);
+
+  const savedCodeDocument = { language: 'javascript', code: 'const answer = 42;' };
+  const codeCopyPasteSave = await invoke('/code-copy-paste/api/document', {
+    method: 'PUT',
+    headers: { authorization: basicAuth(), 'content-type': 'application/json' },
+    body: JSON.stringify({ document: savedCodeDocument })
+  });
+  assert.strictEqual(codeCopyPasteSave.statusCode, 200);
+  assert.strictEqual(JSON.parse(codeCopyPasteSave.body).ok, true);
+  assert.strictEqual(fs.existsSync(codeCopyPasteDataPath), true);
+
+  const codeCopyPasteAfter = await invoke('/code-copy-paste/api/document', {
+    headers: { authorization: basicAuth() }
+  });
+  assert.deepStrictEqual(JSON.parse(codeCopyPasteAfter.body).document, savedCodeDocument);
+
+  const invalidCodeCopyPasteSave = await invoke('/code-copy-paste/api/document', {
+    method: 'PUT',
+    headers: { authorization: basicAuth(), 'content-type': 'application/json' },
+    body: JSON.stringify({ document: { language: 'made-up-language', code: 'hello' } })
+  });
+  assert.strictEqual(invalidCodeCopyPasteSave.statusCode, 400);
+
   const holidayPlannerDenied = await invoke('/holiday-planner');
   assert.strictEqual(holidayPlannerDenied.statusCode, 401);
   assert.match(holidayPlannerDenied.headers['www-authenticate'], /Holiday Planner/);
@@ -498,6 +539,7 @@ function invoke(pathname, options = {}) {
   process.exitCode = 1;
 }).finally(() => {
   fs.rmSync(gameTheoryDataPath, { force: true });
+  fs.rmSync(codeCopyPasteDataPath, { force: true });
   fs.rmSync(plannerDataDirectory, { force: true, recursive: true });
   fs.rmSync(chatDataDirectory, { force: true, recursive: true });
 });

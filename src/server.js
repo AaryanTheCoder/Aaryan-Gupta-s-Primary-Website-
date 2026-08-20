@@ -20,6 +20,7 @@ const chatRoutes = require('./pages/chat/routes');
 const qwenRoutes = require('./pages/qwen/routes');
 const feedbackRoutes = require('./pages/feedback/routes');
 const scrollguardRoutes = require('./pages/scrollguard/routes');
+const codeCopyPasteRoutes = require('./pages/code-copy-paste/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -63,6 +64,10 @@ if (requestPathname === '/extension-feedback' || requestPathname.startsWith('/ex
 
 if (requestPathname === '/scrollguard' || requestPathname.startsWith('/scrollguard/')) {
   return scrollguardRoutes.handle(request, response);
+}
+
+if (requestPathname === '/code-copy-paste' || requestPathname.startsWith('/code-copy-paste/')) {
+  return codeCopyPasteRoutes.handle(request, response);
 }
 
 if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {
@@ -928,6 +933,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <div class="route">/planner</div>
         <h2>Daily Planner</h2>
         <p>A password-protected personal school dashboard with Singapore time, notes, weather, tasks, calendar, and urgency widgets.</p>
+      </a>
+
+      <a class="widget" href="/code-copy-paste">
+        <div class="route">/code-copy-paste</div>
+        <h2>Code Copy Paste</h2>
+        <p>A private code workspace with language colouring, error checks, clipboard buttons, and server autosave.</p>
       </a>
 
       <a class="widget" href="/holiday-planner">
