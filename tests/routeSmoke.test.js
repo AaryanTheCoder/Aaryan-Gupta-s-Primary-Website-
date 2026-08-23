@@ -417,6 +417,21 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(invalidCodeCopyPasteSave.statusCode, 400);
 
+  const streamDenied = await invoke('/stream');
+  assert.strictEqual(streamDenied.statusCode, 401);
+  assert.match(streamDenied.headers['www-authenticate'], /Private Stream/);
+
+  const stream = await invoke('/stream', { headers: { authorization: basicAuth() } });
+  assert.strictEqual(stream.statusCode, 200);
+  assert.match(stream.body, /Private Live Stream/);
+  assert.match(stream.body, /id="recordButton"/);
+  assert.match(stream.body, /No microphone is requested/);
+
+  const streamScript = await invoke('/stream/app.js', { headers: { authorization: basicAuth() } });
+  assert.strictEqual(streamScript.statusCode, 200);
+  assert.match(streamScript.body, /audio: false/);
+  assert.match(streamScript.body, /\/stream\/ws/);
+
   const holidayPlannerDenied = await invoke('/holiday-planner');
   assert.strictEqual(holidayPlannerDenied.statusCode, 401);
   assert.match(holidayPlannerDenied.headers['www-authenticate'], /Holiday Planner/);

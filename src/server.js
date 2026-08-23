@@ -21,6 +21,7 @@ const qwenRoutes = require('./pages/qwen/routes');
 const feedbackRoutes = require('./pages/feedback/routes');
 const scrollguardRoutes = require('./pages/scrollguard/routes');
 const codeCopyPasteRoutes = require('./pages/code-copy-paste/routes');
+const streamRoutes = require('./pages/stream/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -68,6 +69,10 @@ if (requestPathname === '/scrollguard' || requestPathname.startsWith('/scrollgua
 
 if (requestPathname === '/code-copy-paste' || requestPathname.startsWith('/code-copy-paste/')) {
   return codeCopyPasteRoutes.handle(request, response);
+}
+
+if (requestPathname === '/stream' || requestPathname.startsWith('/stream/')) {
+  return streamRoutes.handle(request, response);
 }
 
 if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {
@@ -941,6 +946,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <p>A private code workspace with language colouring, error checks, clipboard buttons, and server autosave.</p>
       </a>
 
+      <a class="widget" href="/stream">
+        <div class="route">/stream</div>
+        <h2>Private Live Stream</h2>
+        <p>Start a no-audio camera stream from one device and watch it live from another.</p>
+      </a>
+
       <a class="widget" href="/holiday-planner">
         <div class="route">/holiday-planner</div>
         <h2>Holiday Planner</h2>
@@ -978,6 +989,7 @@ const PORT = process.env.PORT || 3000;
 server.on('upgrade', (request, socket, head) => {
   if (tablockerRoutes.handleUpgrade(request, socket, head)) return;
   if (shooterGameRoutes.handleUpgrade(request, socket, head)) return;
+  if (streamRoutes.handleUpgrade(request, socket, head)) return;
   socket.destroy();
 });
 
