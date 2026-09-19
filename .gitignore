@@ -6,4 +6,7 @@ src/pages/sandbox/saves/
 src/pages/storage/uploads/
 src/pages/planner/data/
 src/pages/game-theory/data/
+src/pages/chat/data/
+src/pages/feedback/data/
+src/pages/code-copy-paste/data/
 planner-data.json

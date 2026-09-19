@@ -220,16 +220,26 @@ function createRoom(mode = ROOM_MODE_ONLINE) {
   };
   resetRoom(room);
   rooms.set(room.code, room);
+  return room;
+}
+
+function startRoomTicking(room) {
+  if (room.interval) return;
   room.interval = setInterval(() => tickRoom(room), TICK_MS);
   room.interval.unref?.();
-  return room;
+}
+
+function stopRoomTicking(room) {
+  if (!room.interval) return;
+  clearInterval(room.interval);
+  room.interval = null;
 }
 
 function cleanupRooms() {
   const cutoff = now() - ROOM_TTL_MS;
   for (const [code, room] of rooms.entries()) {
     if (room.updatedAt >= cutoff && room.sockets.size > 0) continue;
-    clearInterval(room.interval);
+    stopRoomTicking(room);
     for (const socket of room.sockets.keys()) {
       socket.close();
     }
@@ -794,6 +804,7 @@ wss.on('connection', socket => {
 
       room.sockets.set(socket, slot);
       room.updatedAt = now();
+      startRoomTicking(room);
       send(socket, { type: 'joined', roomCode: room.code, yourSlot: slot });
       broadcastState(room);
       return;
@@ -831,6 +842,7 @@ wss.on('connection', socket => {
   socket.on('close', () => {
     if (!room) return;
     room.sockets.delete(socket);
+    if (room.sockets.size === 0) stopRoomTicking(room);
     room.updatedAt = now();
     broadcastState(room);
   });

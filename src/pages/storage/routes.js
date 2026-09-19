@@ -1,6 +1,7 @@
 const fs = require('fs');
 const mime = require('mime-types');
 const path = require('path');
+const { requirePassword } = require('../../shared/security');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const DEFAULT_STORAGE_DIR = process.env.WEBSITE_SITE_NAME && process.env.HOME
@@ -52,28 +53,8 @@ function resolveStoragePath(relativePath, options = {}) {
   };
 }
 
-function isAuthorized(req) {
-  if (!STORAGE_PASSWORD) return false;
-
-  const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Basic ')) return false;
-
-  const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-  const colonIndex = decoded.indexOf(':');
-  const password = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
-
-  return password === STORAGE_PASSWORD;
-}
-
 function requireAuth(req, res) {
-  if (isAuthorized(req)) return true;
-
-  res.writeHead(401, {
-    'Content-Type': 'text/plain; charset=utf-8',
-    'WWW-Authenticate': 'Basic realm="Storage"'
-  });
-  res.end('Storage password required');
-  return false;
+  return requirePassword(req, res, STORAGE_PASSWORD, 'Storage', 'STORAGE_PASSWORD');
 }
 
 function escapeHtml(str) {

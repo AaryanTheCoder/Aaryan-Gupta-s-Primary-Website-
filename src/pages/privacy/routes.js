@@ -115,53 +115,31 @@ function getPrivacyHtml() {
   <main>
     <article>
       <h1>Privacy Policy</h1>
-      <p class="updated">Last updated: June 6, 2026</p>
+      <p class="updated">Last updated: September 19, 2026</p>
 
-      <p>
-        This privacy policy applies to Chrome Extensions made by developer <strong>Aaryan Gupta</strong>.
-        These extensions are designed to provide their features without collecting personal user data wherever possible.
-      </p>
+      <p>This policy covers this website and its related Chrome-extension tools. It explains the data a feature needs to work; it is not used for advertising or sold to advertisers.</p>
 
-      <h2>Data Collection</h2>
-      <p>
-        Chrome Extensions made by Aaryan Gupta do not sell, share, or intentionally collect personal user data for advertising,
-        tracking, analytics, or profiling.
-      </p>
-      <p>
-        Some data may be processed only when it is needed for extension functionality. Depending on the extension, this may include:
-      </p>
+      <h2>Information this website can store</h2>
       <ul>
-        <li>IP address or basic request information received by the website server</li>
-        <li>Website URLs needed for the extension to understand or manage browser tabs</li>
-        <li>Browser history or tab information only when required by a specific extension feature</li>
-        <li>Basic User info (Name, age, race)</li>
+        <li>Public Chat stores the display name, messages, and files or folders that a visitor chooses to post.</li>
+        <li>Extension Feedback stores the name, email address, description, and screenshots submitted through its form.</li>
+        <li>Private tools such as Storage, planners, Code Copy Paste, Sandbox, and the Stock Simulator store the content saved by their authenticated user.</li>
+        <li>The Stock Simulator uses a signed browser cookie to remember its simulator profile. It does not represent a real brokerage account.</li>
+        <li>Server logs contain basic technical information such as the request method and route. Sensitive query values are not intentionally logged.</li>
       </ul>
 
-      <h2>Where Data Is Stored</h2>
-      <p>
-        Any user data used by these extensions is stored either locally on the user's device or, when required for functionality,
-        on <strong>aaryangupta.azurewebsites.net</strong>.
-      </p>
-      <p>
-        Data stored locally in Chrome or on the user's device is not visible to Aaryan Gupta. It is accessed by the extension only
-        so the extension can provide its intended functionality.
-      </p>
+      <h2>AI and external services</h2>
+      <p>If you choose an AI feature, the text or image you submit is sent to the configured AI provider so it can answer your request. Market-data and weather features also send the requested symbol or location parameters to their provider. Do not submit passwords, private documents, or sensitive personal information to these features.</p>
 
-      <h2>Developer Access</h2>
-      <p>
-        Aaryan Gupta does not view, sell, share, or use user browsing data, URLs, history, or locally stored extension data.
-        The extension may access this information only to perform the feature the user requested.
-      </p>
-      <p>
-        Like most websites, <strong>aaryangupta.azurewebsites.net</strong> may receive basic technical request information, such as
-        IP address and request URL, through normal server operation. This information is not used to identify, track, or profile users.
-      </p>
+      <h2>Storage, sharing, and deletion</h2>
+      <p>Website data is stored on the website server or on the visitor's device when a feature uses local browser storage. Public Chat posts are visible to other visitors. Files sent through a live transfer are relayed between the sender and receiver and are not intentionally saved as live-transfer content.</p>
+      <p>Data is kept while it is needed for the feature or until the site owner removes it. To request removal of feedback or other personal information, use the contact address below and include enough detail to identify the item.</p>
 
-      <h2>Third Parties</h2>
-      <p>
-        User data is not sold to third parties. User data is not shared with third parties except where necessary for the extension
-        or website hosting infrastructure to operate.
-      </p>
+      <h2>Chrome extensions</h2>
+      <p>An extension may process browser tabs, URLs, or locally stored extension settings only when that is needed for its stated feature. The site owner does not sell this information or use it for advertising, tracking, or profiling.</p>
+
+      <h2>Security</h2>
+      <p>Private tools require a password. No internet service can promise perfect security, so please avoid uploading sensitive information unless the feature is clearly private and you trust the device and network you are using.</p>
 
       <h2>Contact</h2>
       <p>

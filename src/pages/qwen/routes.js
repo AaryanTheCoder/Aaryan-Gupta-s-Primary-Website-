@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { readJsonBody, sendJson } = require('../../shared/routeHelpers');
+const { createRateLimiter } = require('../../shared/security');
 
 const MAX_QWEN_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_MESSAGE_CHARS = 8000;
@@ -16,6 +17,11 @@ const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_NUM_CTX = 1024;
 const DEFAULT_NUM_THREAD = Math.min(4, Math.max(2, os.cpus().length || 2));
 const DEFAULT_NUM_PREDICT = 300;
+const limitQwenRequests = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 8,
+  message: 'Nova is busy. Please wait a few minutes before trying again.'
+});
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID);
 const defaultModelsPath = isAzureAppService ? '/home/ollama-models' : path.join(process.cwd(), '.ollama-models');
@@ -707,14 +713,17 @@ function handle(req, res, config = {}) {
   }
 
   if (url.pathname === '/api/qwen/start' && req.method === 'POST') {
+    if (!limitQwenRequests(req, res)) return;
     return handleStart(req, res, config);
   }
 
   if (url.pathname === '/api/qwen/stop' && req.method === 'POST') {
+    if (!limitQwenRequests(req, res)) return;
     return handleStop(req, res, config);
   }
 
   if (url.pathname === '/api/qwen' && req.method === 'POST') {
+    if (!limitQwenRequests(req, res)) return;
     return handleQwenApi(req, res, config);
   }
 

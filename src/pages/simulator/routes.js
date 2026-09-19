@@ -3,6 +3,7 @@ const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
 const { isPathInside, readJsonBody } = require('../../shared/routeHelpers');
+const { requirePassword } = require('../../shared/security');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const SIMULATOR_SESSION_SECRET = process.env.SIMULATOR_SESSION_SECRET || STORAGE_PASSWORD || 'simulator-dev-secret';
@@ -10,6 +11,7 @@ const TWELVEDATA_API_KEY = process.env.TWELVEDATA_API_KEY || '';
 const ALPACA_API_KEY = process.env.ALPACA_API_KEY || '';
 const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET || '';
 const MAX_SIMULATOR_BODY_BYTES = 512 * 1024;
+const IS_MANAGED_PRODUCTION = Boolean(process.env.WEBSITE_SITE_NAME || process.env.NODE_ENV === 'production');
 
 const SIMULATOR_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.SIMULATOR_DATA_DIR
@@ -376,7 +378,9 @@ function readJson(filePath, fallback) {
 }
 
 function writeJson(filePath, value) {
-  fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify(value, null, 2));
+  fs.renameSync(temporaryPath, filePath);
 }
 
 function readBody(req) {
@@ -396,24 +400,8 @@ function redirect(res, location) {
   res.end();
 }
 
-function basicAuthMatches(req) {
-  if (!STORAGE_PASSWORD) return false;
-  const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Basic ')) return false;
-  const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-  const colonIndex = decoded.indexOf(':');
-  const password = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
-  return password === STORAGE_PASSWORD;
-}
-
 function requireSimulatorAuth(req, res) {
-  if (basicAuthMatches(req)) return true;
-  res.writeHead(401, {
-    'Content-Type': 'text/plain; charset=utf-8',
-    'WWW-Authenticate': 'Basic realm="Simulator"',
-  });
-  res.end('Simulator password required');
-  return false;
+  return requirePassword(req, res, STORAGE_PASSWORD, 'Simulator', 'STORAGE_PASSWORD');
 }
 
 function parseCookies(req) {
@@ -434,7 +422,8 @@ function signProfileId(profileId) {
 }
 
 function buildProfileCookie(profileId) {
-  return `simulator_profile=${encodeURIComponent(`${profileId}.${signProfileId(profileId)}`)}; Path=/simulator; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}`;
+  const secure = IS_MANAGED_PRODUCTION ? '; Secure' : '';
+  return `simulator_profile=${encodeURIComponent(`${profileId}.${signProfileId(profileId)}`)}; Path=/simulator; HttpOnly; SameSite=Lax${secure}; Max-Age=${60 * 60 * 24 * 365}`;
 }
 
 function getVerifiedProfileId(req) {
@@ -623,6 +612,7 @@ function httpsJson(options) {
         }
       });
     });
+    req.setTimeout(20_000, () => req.destroy(new Error('Market-data request timed out')));
     req.on('error', reject);
     req.end();
   });

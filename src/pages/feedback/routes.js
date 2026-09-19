@@ -9,6 +9,7 @@ const {
   requireBasicAuth,
   sendJson
 } = require('../../shared/routeHelpers');
+const { createRateLimiter } = require('../../shared/security');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DEFAULT_DATA_DIR = process.env.WEBSITE_SITE_NAME && process.env.HOME
@@ -20,6 +21,11 @@ const FEEDBACK_PATH = path.join(DATA_DIR, 'feedback.json');
 const ADMIN_PASSWORD = process.env.FEEDBACK_ADMIN_PASSWORD || process.env.STORAGE_PASSWORD;
 const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_JSON_BYTES = 28 * 1024 * 1024;
+const limitFeedbackPosts = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 6,
+  message: 'Too many feedback submissions from this connection. Please try again later.'
+});
 const MAX_NAME_CHARS = 80;
 const MAX_EMAIL_CHARS = 160;
 const MAX_DESCRIPTION_CHARS = 5000;
@@ -136,11 +142,14 @@ function servePublicFile(req, res, pathname) {
   }
 
   const stat = fs.statSync(filePath);
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': PUBLIC_TYPES[extension],
-    'Content-Length': stat.size,
     'Cache-Control': extension === '.html' ? 'no-store' : 'public, max-age=3600'
-  });
+  };
+  // The site-wide widget adds a script to HTML just before it is sent. Let
+  // Node calculate the final length instead of sending a stale Content-Length.
+  if (extension !== '.html') headers['Content-Length'] = stat.size;
+  res.writeHead(200, headers);
   if (req.method === 'HEAD') res.end();
   else res.end(fs.readFileSync(filePath));
 }
@@ -166,6 +175,7 @@ function requireAdmin(req, res) {
 
 async function createFeedback(req, res) {
   try {
+    if (!limitFeedbackPosts(req, res)) return;
     const body = await readJsonBody(req, { maxBytes: MAX_JSON_BYTES });
     const name = cleanText(body.name, MAX_NAME_CHARS);
     const email = cleanText(body.email, MAX_EMAIL_CHARS).toLowerCase();

@@ -3,6 +3,7 @@ const fs = require('fs');
 const mime = require('mime-types');
 const path = require('path');
 const { isPathInside, readJsonBody, sendJson } = require('../../shared/routeHelpers');
+const { createRateLimiter, requirePassword } = require('../../shared/security');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DEFAULT_DATA_DIR = process.env.WEBSITE_SITE_NAME && process.env.HOME
@@ -14,11 +15,18 @@ const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const LIVE_CHUNK_BYTES = 32 * 1024 * 1024;
 const LIVE_TRANSFER_TTL_MS = 6 * 60 * 60 * 1000;
+const FOLDER_UPLOAD_TTL_MS = 60 * 60 * 1000;
+const MAX_LIVE_MANIFEST_BYTES = 6 * 1024 * 1024;
 const MAX_TEXT_CHARS = 4000;
 const MAX_NAME_CHARS = 32;
 const MAX_FILENAME_CHARS = 180;
 const folderUploads = new Map();
 const liveTransfers = new Map();
+const CHAT_ADMIN_PASSWORD = process.env.CHAT_ADMIN_PASSWORD || process.env.STORAGE_PASSWORD;
+const limitMessagePosts = createRateLimiter({ windowMs: 10 * 60 * 1000, maxRequests: 30 });
+const limitSavedUploads = createRateLimiter({ windowMs: 60 * 60 * 1000, maxRequests: 12 });
+const limitFolderStarts = createRateLimiter({ windowMs: 60 * 60 * 1000, maxRequests: 8 });
+const limitLiveStarts = createRateLimiter({ windowMs: 60 * 60 * 1000, maxRequests: 8 });
 
 const PUBLIC_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -132,6 +140,25 @@ function cleanupLiveTransfers() {
 
 setInterval(cleanupLiveTransfers, 10 * 60 * 1000).unref?.();
 
+function cleanupFolderUploads() {
+  const cutoff = Date.now() - FOLDER_UPLOAD_TTL_MS;
+  for (const [id, upload] of folderUploads.entries()) {
+    if (upload.updatedAt >= cutoff) continue;
+    try {
+      fs.rmSync(upload.temporaryDirectory, { recursive: true, force: true });
+    } catch (error) {
+      console.error('Could not clean up incomplete chat folder upload:', error);
+    }
+    folderUploads.delete(id);
+  }
+}
+
+setInterval(cleanupFolderUploads, 10 * 60 * 1000).unref?.();
+
+function requireChatAdmin(req, res) {
+  return requirePassword(req, res, CHAT_ADMIN_PASSWORD, 'Public Chat Admin', 'CHAT_ADMIN_PASSWORD or STORAGE_PASSWORD');
+}
+
 function servePublicFile(req, res, pathname) {
   const relativePath = pathname === '/chat' || pathname === '/chat/'
     ? 'index.html'
@@ -162,6 +189,7 @@ function servePublicFile(req, res, pathname) {
 }
 
 function uploadFile(req, res, url) {
+  if (!limitSavedUploads(req, res)) return;
   const name = cleanSingleLine(url.searchParams.get('name'), MAX_NAME_CHARS);
   const originalName = cleanSingleLine(url.searchParams.get('filename'), MAX_FILENAME_CHARS);
   const contentLength = Number(req.headers['content-length'] || 0);
@@ -240,6 +268,8 @@ function safeFolderPath(value) {
 
 async function startFolderUpload(req, res) {
   try {
+    if (!limitFolderStarts(req, res)) return;
+    cleanupFolderUploads();
     const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
     const name = cleanSingleLine(body.name, MAX_NAME_CHARS);
     const folderName = cleanSingleLine(body.folderName, MAX_FILENAME_CHARS);
@@ -253,7 +283,17 @@ async function startFolderUpload(req, res) {
     const uploadId = crypto.randomUUID();
     const temporaryDirectory = path.join(FILES_DIR, `.upload-folder-${uploadId}`);
     fs.mkdirSync(temporaryDirectory, { recursive: true });
-    folderUploads.set(uploadId, { name, folderName, totalSize, fileCount, receivedBytes: 0, files: [], temporaryDirectory });
+    folderUploads.set(uploadId, {
+      name,
+      folderName,
+      totalSize,
+      fileCount,
+      receivedBytes: 0,
+      files: [],
+      temporaryDirectory,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    });
     sendJson(res, 201, { ok: true, uploadId });
   } catch (error) {
     sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
@@ -306,6 +346,7 @@ function uploadFolderFile(req, res, uploadId, url) {
     fs.renameSync(temporaryPath, finalPath);
     upload.receivedBytes += receivedBytes;
     upload.files.push({ path: relativePath, size: receivedBytes });
+    upload.updatedAt = Date.now();
     finished = true;
     sendJson(res, 201, { ok: true });
   });
@@ -333,8 +374,9 @@ function finishFolderUpload(res, uploadId) {
 
 async function createLiveStreamInvite(req, res) {
   try {
+    if (!limitLiveStarts(req, res)) return;
     cleanupLiveTransfers();
-    const body = await readJsonBody(req, { maxBytes: 1024 * 1024 });
+    const body = await readJsonBody(req, { maxBytes: MAX_LIVE_MANIFEST_BYTES });
     const name = cleanSingleLine(body.name, MAX_NAME_CHARS);
     const title = cleanSingleLine(body.title, MAX_FILENAME_CHARS);
     const kind = body.kind === 'folder' ? 'folder' : 'file';
@@ -370,6 +412,7 @@ async function createLiveStreamInvite(req, res) {
       fileCount,
       files,
       nextSeq: 0,
+      fileOffsets: files.map(() => 0),
       currentChunk: null,
       pendingReceiver: null,
       createdAt: Date.now(),
@@ -559,12 +602,25 @@ async function uploadLiveChunk(req, res, id, url) {
 
     if (!Number.isSafeInteger(seq) || seq !== transfer.nextSeq ||
         !Number.isSafeInteger(fileIndex) || !file ||
-        !Number.isSafeInteger(offset) || offset < 0) {
+        !Number.isSafeInteger(offset) || offset < 0 ||
+        offset !== transfer.fileOffsets[fileIndex]) {
       sendJson(res, 409, { ok: false, error: 'Live transfer chunk order is invalid.' });
       return;
     }
 
     const data = await collectLiveChunk(req);
+    const endOffset = offset + data.length;
+    if (endOffset > file.size || fileDone !== (endOffset === file.size)) {
+      sendJson(res, 409, { ok: false, error: 'Live transfer chunk size does not match the file.' });
+      return;
+    }
+    if (transferDone && !transfer.files.every((item, index) => {
+      const savedOffset = index === fileIndex ? endOffset : transfer.fileOffsets[index];
+      return savedOffset === item.size;
+    })) {
+      sendJson(res, 409, { ok: false, error: 'Live transfer cannot finish before every file is sent.' });
+      return;
+    }
     const chunk = {
       seq,
       fileIndex,
@@ -576,6 +632,7 @@ async function uploadLiveChunk(req, res, id, url) {
     };
 
     transfer.nextSeq += 1;
+    transfer.fileOffsets[fileIndex] = endOffset;
     transfer.updatedAt = Date.now();
     const consumedPromise = waitForChunkConsumed(transfer, chunk);
 
@@ -601,7 +658,9 @@ async function uploadLiveChunk(req, res, id, url) {
 
 function nextLiveChunk(req, res, id, url) {
   const transfer = getLiveTransfer(id);
-  const receiverToken = url.searchParams.get('receiverToken') || '';
+  // New clients send this secret in a header, not a URL that can be logged.
+  // Keep the query-string fallback briefly so an in-progress older page can finish.
+  const receiverToken = req.headers['x-receiver-token'] || url.searchParams.get('receiverToken') || '';
   const expectedSeq = Number(url.searchParams.get('seq'));
 
   if (!transfer || transfer.receiverToken !== receiverToken) {
@@ -733,6 +792,7 @@ async function handle(req, res) {
 
   if (pathname === '/chat/api/messages' && req.method === 'POST') {
     try {
+      if (!limitMessagePosts(req, res)) return;
       const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
       const name = cleanSingleLine(body.name, MAX_NAME_CHARS);
       const text = typeof body.text === 'string' ? body.text.trim().slice(0, MAX_TEXT_CHARS) : '';
@@ -812,6 +872,7 @@ async function handle(req, res) {
   }
 
   if (pathname === '/chat/api/messages' && req.method === 'DELETE') {
+    if (!requireChatAdmin(req, res)) return;
     clearChat(res);
     return;
   }

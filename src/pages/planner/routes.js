@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { requirePassword } = require('../../shared/security');
 
 const PLANNER_PASSWORD = process.env.PLANNER_PASSWORD || process.env.STORAGE_PASSWORD;
 const IS_MANAGED_PRODUCTION = Boolean(process.env.WEBSITE_SITE_NAME || process.env.NODE_ENV === 'production');
@@ -54,38 +55,9 @@ function getPlannerMode(pathname) {
   };
 }
 
-function isAuthorized(req) {
-  if (!PLANNER_PASSWORD) return !IS_MANAGED_PRODUCTION;
-
-  const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Basic ')) return false;
-
-  const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-  const colonIndex = decoded.indexOf(':');
-  const password = colonIndex >= 0 ? decoded.slice(colonIndex + 1) : '';
-
-  return password === PLANNER_PASSWORD;
-}
-
 function requireAuth(req, res, plannerName = 'Daily Planner') {
-  if (isAuthorized(req)) return true;
-
-  if (!PLANNER_PASSWORD) {
-    res.writeHead(503, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-store'
-    });
-    res.end(`${plannerName} is not configured. Set PLANNER_PASSWORD or STORAGE_PASSWORD.`);
-    return false;
-  }
-
-  res.writeHead(401, {
-    'Content-Type': 'text/plain; charset=utf-8',
-    'WWW-Authenticate': `Basic realm="${plannerName}"`,
-    'Cache-Control': 'no-store'
-  });
-  res.end(`${plannerName} password required`);
-  return false;
+  if (!PLANNER_PASSWORD && !IS_MANAGED_PRODUCTION) return true;
+  return requirePassword(req, res, PLANNER_PASSWORD, plannerName, 'PLANNER_PASSWORD or STORAGE_PASSWORD');
 }
 
 function readPlannerData(mode) {
@@ -202,8 +174,8 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
     <section class="holiday-panel" aria-label="UWCSEA East summer holiday progress">
       <div class="holiday-copy">
         <div class="eyebrow holiday-eyebrow">UWCSEA East Summer Holiday</div>
-        <h2>25 June to 12 August 2026</h2>
-        <p>School break is counted through 12 August, because the 2026/2027 school year starts on 13 August.</p>
+        <h2>24 June to 11 August 2027</h2>
+        <p>School break is counted through 11 August, because the 2027/2028 school year is planned to start on 12 August.</p>
         <div class="holiday-stats" aria-label="Holiday days used and left">
           <div><strong data-holiday-used-days>--</strong><span>days used</span></div>
           <div><strong data-holiday-left-days>--</strong><span>days left</span></div>
@@ -1378,7 +1350,7 @@ ${holidayPanelHtml}
 
       function defaultHolidayPlannerState() {
         return {
-          selectedDate: holidayDateKey(new Date(2026, 5, 25)),
+          selectedDate: holidayDateKey(new Date(2027, 5, 24)),
           plans: {}
         };
       }
@@ -2187,9 +2159,9 @@ ${holidayPanelHtml}
         if (!calendar) return;
 
         var months = [
-          { label: 'June 2026', year: 2026, month: 5 },
-          { label: 'July 2026', year: 2026, month: 6 },
-          { label: 'August 2026', year: 2026, month: 7 }
+          { label: 'June 2027', year: 2027, month: 5 },
+          { label: 'July 2027', year: 2027, month: 6 },
+          { label: 'August 2027', year: 2027, month: 7 }
         ];
         var weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
         var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
@@ -2325,8 +2297,8 @@ ${holidayPanelHtml}
 
       function holidayBounds() {
         return {
-          start: new Date(2026, 5, 25),
-          endExclusive: new Date(2026, 7, 13)
+          start: new Date(2027, 5, 24),
+          endExclusive: new Date(2027, 7, 12)
         };
       }
 

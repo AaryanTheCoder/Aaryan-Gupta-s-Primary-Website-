@@ -50,6 +50,19 @@ function formatBytes(bytes) {
   return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${unit}`;
 }
 
+async function readJsonResponse(response, fallbackMessage) {
+  const raw = await response.text();
+  if (!raw) {
+    throw new Error(`${fallbackMessage} The server returned an empty response.`);
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`${fallbackMessage} The server returned an invalid response.`);
+  }
+}
+
 function cleanPath(value) {
   return String(value || '')
     .replace(/\\/g, '/')
@@ -308,7 +321,7 @@ async function uploadSavedFolder(files, folderName, totalSize) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: displayName, folderName, totalSize, fileCount: files.length })
   });
-  const startData = await startResponse.json();
+  const startData = await readJsonResponse(startResponse, 'The folder upload could not start.');
   if (!startResponse.ok) throw new Error(startData.error || 'The folder upload could not start.');
 
   let uploadedBytes = 0;
@@ -321,14 +334,14 @@ async function uploadSavedFolder(files, folderName, totalSize) {
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
       body: file
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response, `Could not upload ${relativePath}.`);
     if (!response.ok) throw new Error(data.error || `Could not upload ${relativePath}.`);
     uploadedBytes += file.size;
     setUploadStatus(`Uploading ${folderName} (${index + 1}/${files.length})`, totalSize ? Math.round((uploadedBytes / totalSize) * 100) : 100);
   }
 
   const finishResponse = await fetch(`/chat/api/folders/${startData.uploadId}/finish`, { method: 'POST' });
-  const finishData = await finishResponse.json();
+  const finishData = await readJsonResponse(finishResponse, 'The folder upload could not finish.');
   if (!finishResponse.ok) throw new Error(finishData.error || 'The folder upload could not finish.');
 }
 
@@ -358,7 +371,7 @@ async function waitForReceiver(messageId, senderToken) {
       headers: { 'X-Sender-Token': senderToken },
       cache: 'no-store'
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response, 'Could not check the live transfer status.');
     if (!response.ok) throw new Error(data.error || 'Could not check live transfer status.');
     if (data.status === 'accepted') return data;
     if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
@@ -428,7 +441,7 @@ async function startLiveShare() {
         pin
       })
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response, 'Could not create the live transfer invite.');
     if (!response.ok) throw new Error(data.error || 'Could not create live transfer invite.');
 
     senderTransfers.set(data.message.id, {
@@ -495,7 +508,7 @@ async function acceptLiveTransfer(message) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: displayName, pin })
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response, 'Could not accept the live transfer.');
     if (!response.ok) throw new Error(data.error || 'Could not accept live transfer.');
 
     receiverTransfers.add(message.id);
@@ -518,8 +531,9 @@ async function receiveLiveTransfer(messageId, receiverToken, stream, saveTarget)
 
   try {
     for (;;) {
-      const response = await fetch(`/chat/api/streams/${encodeURIComponent(messageId)}/chunks/next?receiverToken=${encodeURIComponent(receiverToken)}&seq=${seq}`, {
-        cache: 'no-store'
+      const response = await fetch(`/chat/api/streams/${encodeURIComponent(messageId)}/chunks/next?seq=${seq}`, {
+        cache: 'no-store',
+        headers: { 'X-Receiver-Token': receiverToken }
       });
       if (response.status === 204) {
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -621,7 +635,7 @@ messageForm.addEventListener('submit', async event => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: displayName, text })
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response, 'Message could not be sent.');
     if (!response.ok) throw new Error(data.error || 'Message could not be sent.');
     messageInput.value = '';
     messageInput.style.height = 'auto';
@@ -651,10 +665,15 @@ folderInput.addEventListener('change', () => {
 clearButton.addEventListener('click', async () => {
   const confirmed = confirm('Clear every public message and uploaded file? This cannot be undone.');
   if (!confirmed) return;
+  const password = prompt('Enter the storage password to clear the public chat:');
+  if (!password) return;
   clearButton.disabled = true;
   try {
-    const response = await fetch('/chat/api/messages', { method: 'DELETE' });
-    const data = await response.json();
+    const response = await fetch('/chat/api/messages', {
+      method: 'DELETE',
+      headers: { Authorization: `Basic ${btoa(`:${password}`)}` }
+    });
+    const data = await readJsonResponse(response, 'Chat could not be cleared.');
     if (!response.ok) throw new Error(data.error || 'Chat could not be cleared.');
     latestSignature = '__refresh__';
     await refreshMessages();

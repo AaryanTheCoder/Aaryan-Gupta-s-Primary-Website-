@@ -1,10 +1,16 @@
 const crypto = require('crypto');
 const WebSocket = require('ws');
+const { createRateLimiter } = require('../../shared/security');
 
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
 const ROOM_CODE_RE = /^\d{6}$/;
 const rooms = new Map();
 const wss = new WebSocket.Server({ noServer: true });
+const limitRoomCreation = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 30,
+  message: 'Too many classroom rooms were created from this connection. Please wait and try again.'
+});
 
 function makeCode() {
   let code;
@@ -154,6 +160,7 @@ function handle(req, res) {
   }
 
   if (pathname === '/tablocker/api/rooms' && req.method === 'POST') {
+    if (!limitRoomCreation(req, res)) return;
     readJsonBody(req, error => {
       if (error) {
         sendJson(res, 400, { ok: false, error: 'Invalid JSON body' });

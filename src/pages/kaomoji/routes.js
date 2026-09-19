@@ -1,6 +1,12 @@
 const { readJsonBody } = require('../../shared/routeHelpers');
+const { createRateLimiter } = require('../../shared/security');
 
 const MAX_GEMINI_BODY_BYTES = 64 * 1024;
+const limitKaomojiRequests = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 20,
+  message: 'The Kaomoji AI has reached its short request limit. Please try again in a few minutes.'
+});
 
 function serveKaomojiPage(response) {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -329,7 +335,8 @@ async function handleGeminiApi(request, response, GEMINI_API_KEY) {
               ]
             }
           ]
-        })
+        }),
+        signal: AbortSignal.timeout(30_000)
       }
     );
 
@@ -352,20 +359,22 @@ async function handleGeminiApi(request, response, GEMINI_API_KEY) {
 
 function handle(request, response, deps) {
   const { fs, path, GEMINI_API_KEY } = deps;
+  const pathname = new URL(request.url, 'http://localhost').pathname;
 
-  if (request.url === '/kaomoji' && request.method === 'GET') {
+  if (pathname === '/kaomoji' && request.method === 'GET') {
     return serveKaomojiPage(response);
   }
 
-  if (request.url === '/7d2e594b9e08ab2fba15ece12d239457.png' && request.method === 'GET') {
+  if (pathname === '/7d2e594b9e08ab2fba15ece12d239457.png' && request.method === 'GET') {
     return serveCursorImage(response, fs, path);
   }
 
-  if (request.url === '/freesound_community-evil-laugh-89423.mp3' && request.method === 'GET') {
+  if (pathname === '/freesound_community-evil-laugh-89423.mp3' && request.method === 'GET') {
     return serveSound(response, fs, path);
   }
 
-  if (request.url === '/api/kaomoji-gemini' && request.method === 'POST') {
+  if (pathname === '/api/kaomoji-gemini' && request.method === 'POST') {
+    if (!limitKaomojiRequests(request, response)) return;
     return handleGeminiApi(request, response, GEMINI_API_KEY);
   }
 

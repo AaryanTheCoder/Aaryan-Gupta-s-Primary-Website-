@@ -77,6 +77,10 @@ function invoke(pathname, options = {}) {
   assert.match(home.body, /Welcome to my website/);
   assert.match(home.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
 
+  const health = await invoke('/health');
+  assert.strictEqual(health.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(health.body), { ok: true });
+
   const geminiWidget = await invoke('/assets/gemini-widget.js');
   assert.strictEqual(geminiWidget.statusCode, 200);
   assert.match(geminiWidget.headers['content-type'], /^application\/javascript/);
@@ -152,7 +156,67 @@ function invoke(pathname, options = {}) {
   const chatWithFolder = await invoke('/chat/api/messages');
   assert.strictEqual(JSON.parse(chatWithFolder.body).messages.length, 2);
 
-  const chatClear = await invoke('/chat/api/messages', { method: 'DELETE' });
+  const liveManifestFiles = Array.from({ length: 10_000 }, (_, index) => ({
+    path: `large-folder/${String(index).padStart(5, '0')}-${'a'.repeat(140)}.txt`,
+    size: 0
+  }));
+  const largeLiveManifest = await invoke('/chat/api/streams', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Route Tester',
+      title: 'large-folder',
+      kind: 'folder',
+      totalSize: 0,
+      fileCount: liveManifestFiles.length,
+      files: liveManifestFiles
+    })
+  });
+  assert.strictEqual(largeLiveManifest.statusCode, 201);
+
+  const liveStart = await invoke('/chat/api/streams', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Route Tester',
+      title: 'hello.txt',
+      kind: 'file',
+      totalSize: 5,
+      fileCount: 1,
+      files: [{ path: 'hello.txt', size: 5 }]
+    })
+  });
+  assert.strictEqual(liveStart.statusCode, 201);
+  const liveStartData = JSON.parse(liveStart.body);
+
+  const liveAccept = await invoke(`/chat/api/streams/${liveStartData.message.id}/accept`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Receiver' })
+  });
+  assert.strictEqual(liveAccept.statusCode, 200);
+  const liveAcceptData = JSON.parse(liveAccept.body);
+
+  const nextChunk = invoke(`/chat/api/streams/${liveStartData.message.id}/chunks/next?seq=0`, {
+    headers: { 'x-receiver-token': liveAcceptData.receiverToken }
+  });
+  const uploadChunk = invoke(`/chat/api/streams/${liveStartData.message.id}/chunks?seq=0&fileIndex=0&offset=0&fileDone=1&transferDone=1`, {
+    method: 'POST',
+    headers: { 'x-sender-token': liveStartData.senderToken },
+    body: 'hello'
+  });
+  const receivedChunk = await nextChunk;
+  assert.strictEqual(receivedChunk.statusCode, 200);
+  assert.strictEqual(receivedChunk.body, 'hello');
+  assert.strictEqual((await uploadChunk).statusCode, 200);
+
+  const chatClearDenied = await invoke('/chat/api/messages', { method: 'DELETE' });
+  assert.strictEqual(chatClearDenied.statusCode, 401);
+
+  const chatClear = await invoke('/chat/api/messages', {
+    method: 'DELETE',
+    headers: { authorization: basicAuth() }
+  });
   assert.strictEqual(chatClear.statusCode, 200);
   assert.strictEqual(JSON.parse(chatClear.body).ok, true);
 
@@ -231,16 +295,19 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(kaomojiSound.statusCode, 200);
   assert.match(kaomojiSound.headers['content-type'], /^audio\/mpeg/);
 
-  const sandbox = await invoke('/sandbox');
+  const sandboxDenied = await invoke('/sandbox');
+  assert.strictEqual(sandboxDenied.statusCode, 401);
+
+  const sandbox = await invoke('/sandbox', { headers: { authorization: basicAuth() } });
   assert.strictEqual(sandbox.statusCode, 200);
   assert.match(sandbox.body, /\/sandbox\/assets\//);
   assert.match(sandbox.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
 
-  const sandboxCss = await invoke('/sandbox/assets/index-BQ2BYKP8.css');
+  const sandboxCss = await invoke('/sandbox/assets/index-BQ2BYKP8.css', { headers: { authorization: basicAuth() } });
   assert.strictEqual(sandboxCss.statusCode, 200);
   assert.match(sandboxCss.headers['content-type'], /^text\/css/);
 
-  const traversal = await invoke('/sandbox/../sandboxRoutes.js');
+  const traversal = await invoke('/sandbox/../sandboxRoutes.js', { headers: { authorization: basicAuth() } });
   assert.strictEqual(traversal.statusCode, 403);
 
   const shooterTraversal = await invoke('/shooter-game/../Server2.js');
@@ -442,7 +509,7 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(holidayPlanner.statusCode, 200);
   assert.match(holidayPlanner.body, /Holiday Planner/);
   assert.match(holidayPlanner.body, /UWCSEA East Summer Holiday/);
-  assert.match(holidayPlanner.body, /25 June to 12 August 2026/);
+  assert.match(holidayPlanner.body, /24 June to 11 August 2027/);
   assert.match(holidayPlanner.body, /data-holiday-calendar/);
   assert.match(holidayPlanner.body, /data-holiday-week/);
   assert.match(holidayPlanner.body, /data-holiday-day-panel/);
@@ -503,10 +570,13 @@ function invoke(pathname, options = {}) {
   assert.deepStrictEqual(JSON.parse(holidayPlannerDataAfter.body).state, holidayPlannerState);
 
   const cloudUnauthed = await invoke('/cloudconsole');
-  assert.strictEqual(cloudUnauthed.statusCode, 200);
-  assert.match(cloudUnauthed.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
+  assert.strictEqual(cloudUnauthed.statusCode, 401);
 
-  const execute = await invoke('/api/cloudconsole/execute', {
+  const cloudAuthed = await invoke('/cloudconsole', { headers: { authorization: basicAuth() } });
+  assert.strictEqual(cloudAuthed.statusCode, 200);
+  assert.match(cloudAuthed.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
+
+  const executeDenied = await invoke('/api/cloudconsole/execute', {
     method: 'POST',
     headers: {
       'content-type': 'application/json'
@@ -516,20 +586,21 @@ function invoke(pathname, options = {}) {
       code: 'console.log(2 + 2)'
     })
   });
-  assert.strictEqual(execute.statusCode, 200);
-  assert.deepStrictEqual(JSON.parse(execute.body), { success: true, output: '4\n' });
+  assert.strictEqual(executeDenied.statusCode, 401);
 
-  const bashUnauthed = await invoke('/api/cloudconsole/execute', {
+  const execute = await invoke('/api/cloudconsole/execute', {
     method: 'POST',
     headers: {
+      authorization: basicAuth(),
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      language: 'bash',
-      code: 'echo blocked'
+      language: 'javascript',
+      code: 'console.log(2 + 2)'
     })
   });
-  assert.strictEqual(bashUnauthed.statusCode, 401);
+  assert.strictEqual(execute.statusCode, 200);
+  assert.deepStrictEqual(JSON.parse(execute.body), { success: true, output: '4\n' });
 
   const bashAuthed = await invoke('/api/cloudconsole/execute', {
     method: 'POST',

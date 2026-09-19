@@ -2,8 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { isPathInside, readJsonBody } = require('../../shared/routeHelpers');
+const { requirePassword } = require('../../shared/security');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const SANDBOX_PASSWORD = process.env.SANDBOX_PASSWORD || process.env.STORAGE_PASSWORD;
 const SANDBOX_DIR = path.join(__dirname, 'public');
 const DEFAULT_SAVES_DIR = process.env.WEBSITE_SITE_NAME && process.env.HOME
   ? path.join(process.env.HOME, 'data', 'sandbox-saves')
@@ -74,6 +76,7 @@ function callGemini(prompt) {
       });
     });
 
+    req.setTimeout(30_000, () => req.destroy(new Error('Gemini request timed out')));
     req.on('error', reject);
     req.write(body);
     req.end();
@@ -81,6 +84,8 @@ function callGemini(prompt) {
 }
 
 function handle(req, res) {
+  if (!requirePassword(req, res, SANDBOX_PASSWORD, 'Sandbox', 'SANDBOX_PASSWORD or STORAGE_PASSWORD')) return;
+
   const url = req.url;
 
   // ── API: Save project ──────────────────────────────────────────────
@@ -92,8 +97,15 @@ function handle(req, res) {
       }
 
       const id = sanitizeId(body.id);
+      if (!id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Project id is invalid' }));
+        return;
+      }
       const filePath = path.join(SAVES_DIR, `${id}.json`);
-      fs.writeFileSync(filePath, JSON.stringify(body, null, 2));
+      const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+      fs.writeFileSync(temporaryPath, JSON.stringify(body, null, 2));
+      fs.renameSync(temporaryPath, filePath);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, id }));
     }).catch(() => {

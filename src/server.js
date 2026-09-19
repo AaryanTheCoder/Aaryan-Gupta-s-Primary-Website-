@@ -26,16 +26,25 @@ const {
   injectWidgetIntoHtmlResponses,
   serveWidget
 } = require('./shared/siteWideGemini');
+const { addSecurityHeaders } = require('./shared/security');
 
 const HOME_DIR = path.join(__dirname, 'pages', 'home');
 
 const server = http.createServer((request, response) => {
-  console.log('Requested URL: ' + request.url);
-  console.log('Request Method: ' + request.method); // The console (I think the Azure One,) Will report all requests, like if they requested a specific subsite /kaomoji for example and if they GET or POST (like when uploading)
-response.setHeader('X-Content-Type-Options', 'nosniff');
-injectWidgetIntoHtmlResponses(request, response);
 const requestPathname = request.url.split('?')[0];
+console.log(`Request: ${request.method} ${requestPathname}`);
+addSecurityHeaders(response);
+injectWidgetIntoHtmlResponses(request, response);
 if (serveWidget(request, response)) {
+  return;
+}
+
+if (requestPathname === '/health' && (request.method === 'GET' || request.method === 'HEAD')) {
+  response.writeHead(200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store'
+  });
+  response.end(request.method === 'HEAD' ? undefined : JSON.stringify({ ok: true }));
   return;
 }
 
@@ -84,10 +93,10 @@ if (requestPathname === '/sandbox' || requestPathname.startsWith('/sandbox/')) {
 }
 
 if (
-  request.url === '/kaomoji' ||
-  request.url === '/7d2e594b9e08ab2fba15ece12d239457.png' ||
-  request.url === '/freesound_community-evil-laugh-89423.mp3' ||
-  request.url === '/api/kaomoji-gemini'
+  requestPathname === '/kaomoji' ||
+  requestPathname === '/7d2e594b9e08ab2fba15ece12d239457.png' ||
+  requestPathname === '/freesound_community-evil-laugh-89423.mp3' ||
+  requestPathname === '/api/kaomoji-gemini'
 ) {
   return kaomojiRoutes.handle(request, response, { fs, path, GEMINI_API_KEY });
 }
@@ -96,7 +105,7 @@ if (requestPathname === '/cloudconsole' || requestPathname.startsWith('/api/clou
   return cloudConsoleRoutes.handle(request, response);
 }
 
-if (request.url === '/simulator' || request.url.startsWith('/simulator/')) {
+if (requestPathname === '/simulator' || requestPathname.startsWith('/simulator/')) {
   return simulatorRoutes.handle(request, response);
 }
 
@@ -104,7 +113,7 @@ if (requestPathname === '/planner' || requestPathname === '/daily-planner' || re
   return plannerRoutes.handle(request, response);
 }
 
-if (request.url === '/gemini' || request.url === '/api/gemini') {
+if (requestPathname === '/gemini' || requestPathname === '/api/gemini') {
   return geminiRoutes.handle(request, response, {
     geminiApiKey: GEMINI_API_KEY,
     azureOpenAiApiKey: AZURE_OPENAI_API_KEY,
@@ -973,6 +982,8 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
       <a href="/sitemap" style="color:#9fb6d6; text-decoration:none;">sitemap</a>
       <span style="margin: 0 6px;">|</span>
       <a href="/google39fdc9cf51b98b51.html" style="color:#9fb6d6; text-decoration:none;">google verification</a>
+      <span style="margin: 0 6px;">|</span>
+      <a href="/extension-feedback" style="color:#9fb6d6; text-decoration:none;">extension feedback</a>
     </div>
   </div>
 </body>

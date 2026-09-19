@@ -1,4 +1,5 @@
 const { readJsonBody } = require('../../shared/routeHelpers');
+const { createRateLimiter } = require('../../shared/security');
 
 const MAX_GEMINI_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_GEMINI_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -6,6 +7,11 @@ const MAX_GEMINI_MESSAGE_CHARS = 8000;
 const MAX_GEMINI_HISTORY_ITEMS = 10;
 const MAX_GEMINI_HISTORY_CHARS = 24000;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const limitGeminiRequests = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 20,
+  message: 'The AI chat has reached its short request limit. Please try again in a few minutes.'
+});
 const GEMINI_SITE_PROMPT = `You are the AI assistant on Aaryan Gupta's personal website.
 
 About the site owner:
@@ -533,7 +539,8 @@ async function handleGeminiApi(request, response, config) {
           tools: [{ type: 'web_search' }],
           input,
           store: false
-        })
+        }),
+        signal: AbortSignal.timeout(30_000)
       });
       const azureData = await azureResponse.json();
 
@@ -594,7 +601,8 @@ async function handleGeminiApi(request, response, config) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(30_000)
         }
       );
 
@@ -627,11 +635,13 @@ async function handleGeminiApi(request, response, config) {
 }
 
 function handle(request, response, config) {
-  if (request.url === '/gemini' && request.method === 'GET') {
+  const pathname = new URL(request.url, 'http://localhost').pathname;
+  if (pathname === '/gemini' && request.method === 'GET') {
     return serveGeminiPage(response);
   }
 
-  if (request.url === '/api/gemini' && request.method === 'POST') {
+  if (pathname === '/api/gemini' && request.method === 'POST') {
+    if (!limitGeminiRequests(request, response)) return;
     return handleGeminiApi(request, response, config);
   }
 

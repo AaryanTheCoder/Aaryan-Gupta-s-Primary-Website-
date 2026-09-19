@@ -1,31 +1,28 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const crypto = require('crypto');
+const { execFileSync, execSync } = require('child_process');
 const os = require('os');
-const { readJsonBody, requireBasicAuth, sendJson } = require('../../shared/routeHelpers');
+const { readJsonBody, sendJson } = require('../../shared/routeHelpers');
+const { requirePassword } = require('../../shared/security');
 
 const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
 const MAX_CODE_REQUEST_BYTES = 256 * 1024;
 
-function isBashLanguage(language) {
-  const normalized = String(language || '').toLowerCase();
-  return normalized === 'bash' || normalized === 'sh';
-}
-
 function executeCode(code, language) {
   try {
     const tmpDir = os.tmpdir();
-    const timestamp = Date.now();
+    const requestId = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
     let result = '';
 
     switch (language.toLowerCase()) {
       case 'javascript':
       case 'js': {
         // Execute JavaScript in Node.js
-        const tmpFile = path.join(tmpDir, `code_${timestamp}.js`);
+        const tmpFile = path.join(tmpDir, `code_${requestId}.js`);
         fs.writeFileSync(tmpFile, code);
         try {
-          result = execSync(`node "${tmpFile}"`, { 
+          result = execFileSync(process.execPath, [tmpFile], {
             encoding: 'utf-8',
             timeout: 10000,
             maxBuffer: 1024 * 1024 // 1MB buffer
@@ -39,10 +36,10 @@ function executeCode(code, language) {
       case 'python':
       case 'py': {
         // Execute Python
-        const tmpFile = path.join(tmpDir, `code_${timestamp}.py`);
+        const tmpFile = path.join(tmpDir, `code_${requestId}.py`);
         fs.writeFileSync(tmpFile, code);
         try {
-          result = execSync(`python3 "${tmpFile}"`, {
+          result = execFileSync('python3', [tmpFile], {
             encoding: 'utf-8',
             timeout: 10000,
             maxBuffer: 1024 * 1024
@@ -84,28 +81,24 @@ function executeCode(code, language) {
 }
 
 function handle(request, response) {
+  const pathname = new URL(request.url, 'http://localhost').pathname;
+  if (!requirePassword(request, response, STORAGE_PASSWORD, 'Cloud Console', 'STORAGE_PASSWORD')) return;
+
   // Serve the cloud console HTML page
-  if (request.url === '/cloudconsole' && request.method === 'GET') {
+  if (pathname === '/cloudconsole' && request.method === 'GET') {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     response.end(getConsoleHTML());
     return;
   }
 
   // Handle code execution API
-  if (request.url === '/api/cloudconsole/execute' && request.method === 'POST') {
+  if (pathname === '/api/cloudconsole/execute' && request.method === 'POST') {
     readJsonBody(request, { maxBytes: MAX_CODE_REQUEST_BYTES }).then(body => {
       if (!body || !body.code || !body.language) {
         sendJson(response, 400, {
           error: 'Missing code or language parameter',
           success: false
         });
-        return;
-      }
-
-      if (
-        isBashLanguage(body.language) &&
-        !requireBasicAuth(request, response, STORAGE_PASSWORD, 'Cloud Console Bash', 'Cloud Console bash password required')
-      ) {
         return;
       }
 
