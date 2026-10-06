@@ -72,7 +72,12 @@ function cleanPath(value) {
 }
 
 function filePathFor(file, kind) {
-  if (kind === 'folder') return cleanPath(file.webkitRelativePath || file.name) || file.name;
+  if (kind === 'folder') {
+    // The receiver already chooses the folder to save into, so do not create
+    // an unnecessary second copy of the selected top-level folder inside it.
+    const parts = cleanPath(file.webkitRelativePath || file.name).split('/').filter(Boolean);
+    return parts.slice(1).join('/') || parts[0] || file.name;
+  }
   return file.name;
 }
 

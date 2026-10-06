@@ -101,15 +101,24 @@ function cleanLiveFilePath(value) {
 }
 
 function cleanLiveFiles(files) {
-  if (!Array.isArray(files)) return [];
-  return files.slice(0, 10000).map((file, index) => {
-    const pathName = cleanLiveFilePath(file && file.path) || `file-${index + 1}`;
+  if (!Array.isArray(files) || !files.length || files.length > 10000) return [];
+
+  const paths = new Set();
+  const cleaned = [];
+  for (const file of files) {
+    const pathName = cleanLiveFilePath(file && file.path);
     const size = Number(file && file.size);
-    return {
-      path: pathName,
-      size: Number.isSafeInteger(size) && size >= 0 ? size : 0
-    };
-  });
+    const overlapsExistingPath = cleaned.some(file => (
+      pathName.startsWith(`${file.path}/`) || file.path.startsWith(`${pathName}/`)
+    ));
+    if (!pathName || paths.has(pathName) || overlapsExistingPath || !Number.isSafeInteger(size) || size < 0) {
+      return [];
+    }
+    paths.add(pathName);
+    cleaned.push({ path: pathName, size });
+  }
+
+  return cleaned;
 }
 
 function setLiveMessageStatus(id, status, extras = {}) {
@@ -308,8 +317,18 @@ function uploadFolderFile(req, res, uploadId, url) {
     sendJson(res, 404, { ok: false, error: 'Folder upload not found or file path is invalid.' });
     return;
   }
-  if (upload.files.some(file => file.path === relativePath) || contentLength < 0 || upload.receivedBytes + contentLength > MAX_FILE_BYTES) {
-    sendJson(res, 413, { ok: false, error: 'The saved folder must be 200 MB or smaller and cannot contain duplicate paths.' });
+  const hasPathConflict = upload.files.some(file => (
+    file.path === relativePath ||
+    relativePath.startsWith(`${file.path}/`) ||
+    file.path.startsWith(`${relativePath}/`)
+  ));
+  if (hasPathConflict) {
+    sendJson(res, 409, { ok: false, error: 'The folder cannot contain duplicate or overlapping file paths.' });
+    return;
+  }
+  if (contentLength < 0 || upload.receivedBytes + contentLength > MAX_FILE_BYTES ||
+      upload.receivedBytes + contentLength > upload.totalSize) {
+    sendJson(res, 413, { ok: false, error: 'The saved folder is larger than the size that was selected.' });
     return;
   }
 
@@ -318,9 +337,15 @@ function uploadFolderFile(req, res, uploadId, url) {
     sendJson(res, 400, { ok: false, error: 'Invalid folder file path.' });
     return;
   }
-  fs.mkdirSync(path.dirname(finalPath), { recursive: true });
   const temporaryPath = `${finalPath}.upload`;
-  const output = fs.createWriteStream(temporaryPath, { flags: 'wx' });
+  let output;
+  try {
+    fs.mkdirSync(path.dirname(finalPath), { recursive: true });
+    output = fs.createWriteStream(temporaryPath, { flags: 'wx' });
+  } catch {
+    sendJson(res, 400, { ok: false, error: 'The folder file path conflicts with another file.' });
+    return;
+  }
   let receivedBytes = 0;
   let finished = false;
 
@@ -328,13 +353,18 @@ function uploadFolderFile(req, res, uploadId, url) {
     if (finished) return;
     finished = true;
     output.destroy();
-    fs.rmSync(temporaryPath, { force: true });
+    try {
+      fs.rmSync(temporaryPath, { force: true });
+    } catch {
+      // The original error is more useful than a cleanup failure.
+    }
     if (!res.headersSent) sendJson(res, statusCode, { ok: false, error });
   };
   req.on('data', chunk => {
     receivedBytes += chunk.length;
-    if (upload.receivedBytes + receivedBytes > MAX_FILE_BYTES) {
-      fail(413, 'The saved folder must be 200 MB or smaller.');
+    if (upload.receivedBytes + receivedBytes > MAX_FILE_BYTES ||
+        upload.receivedBytes + receivedBytes > upload.totalSize) {
+      fail(413, 'The saved folder is larger than the size that was selected.');
       req.destroy();
     }
   });
@@ -343,12 +373,16 @@ function uploadFolderFile(req, res, uploadId, url) {
   output.on('error', () => fail(500, 'The file could not be saved.'));
   output.on('finish', () => {
     if (finished) return;
-    fs.renameSync(temporaryPath, finalPath);
-    upload.receivedBytes += receivedBytes;
-    upload.files.push({ path: relativePath, size: receivedBytes });
-    upload.updatedAt = Date.now();
-    finished = true;
-    sendJson(res, 201, { ok: true });
+    try {
+      fs.renameSync(temporaryPath, finalPath);
+      upload.receivedBytes += receivedBytes;
+      upload.files.push({ path: relativePath, size: receivedBytes });
+      upload.updatedAt = Date.now();
+      finished = true;
+      sendJson(res, 201, { ok: true });
+    } catch {
+      fail(400, 'The folder file path conflicts with another file.');
+    }
   });
   req.pipe(output);
 }

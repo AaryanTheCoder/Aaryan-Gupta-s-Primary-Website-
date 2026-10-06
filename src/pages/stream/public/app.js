@@ -14,6 +14,7 @@ const helpText = document.getElementById('helpText');
 
 const canvas = document.createElement('canvas');
 const context = canvas.getContext('2d', { alpha: false });
+const MAX_FRAME_BYTES = 1024 * 1024;
 let socket;
 let cameraStream;
 let broadcasting = false;
@@ -107,7 +108,12 @@ function drawFrame() {
   context.restore();
   canvas.toBlob(blob => {
     frameInProgress = false;
-    if (blob && socket && socket.readyState === WebSocket.OPEN && broadcasting) socket.send(blob);
+    if (!blob || !socket || socket.readyState !== WebSocket.OPEN || !broadcasting) return;
+    if (blob.size > MAX_FRAME_BYTES) {
+      helpText.textContent = 'That camera frame is too detailed for the live relay. Try Medium or Low quality.';
+      return;
+    }
+    socket.send(blob);
   }, 'image/jpeg', Number(qualitySelect.value));
 }
 

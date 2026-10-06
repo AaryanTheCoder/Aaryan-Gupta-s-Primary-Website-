@@ -85,7 +85,7 @@ function invokeApi(payload, config = 'test-gemini-key') {
     assert.strictEqual(response.statusCode, 200);
     assert.strictEqual(JSON.parse(response.body).reply, 'I can see the attached page.');
     const sentGeminiPrompt = requests[0].payload.contents[2].parts[1].text;
-    assert.match(sentGeminiPrompt, /Aaryan is a Grade 10 student/);
+    assert.match(sentGeminiPrompt, /Aaryan is a Grade 9 student/);
     assert.match(sentGeminiPrompt, /Today's date is \d{4}-\d{2}-\d{2}\./);
     assert.match(sentGeminiPrompt, /User prompt:\nWhat is visible here\?/);
     assert.deepStrictEqual(requests[0].payload.tools, [{ google_search: {} }]);

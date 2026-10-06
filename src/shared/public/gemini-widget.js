@@ -1,6 +1,10 @@
 (function initializeGeminiWidget() {
   'use strict';
 
+  // This matches the server's image limit. Keeping the browser capture below
+  // it means a detailed screenshot is resized instead of being rejected later.
+  const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
+
   if (window.__aaryanGeminiWidgetLoaded) return;
   window.__aaryanGeminiWidgetLoaded = true;
 
@@ -730,6 +734,38 @@
     return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   }
 
+  function decodedDataUrlSize(dataUrl) {
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+    return Math.floor((base64.length * 3) / 4) - padding;
+  }
+
+  function makeUploadableScreenshot(canvas) {
+    let imageCanvas = canvas;
+    let quality = 0.74;
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      const dataUrl = imageCanvas.toDataURL('image/jpeg', quality);
+      if (decodedDataUrlSize(dataUrl) <= MAX_SCREENSHOT_BYTES) return dataUrl;
+
+      if (quality > 0.5) {
+        quality -= 0.12;
+        continue;
+      }
+
+      const smallerCanvas = document.createElement('canvas');
+      smallerCanvas.width = Math.max(1, Math.floor(imageCanvas.width * 0.75));
+      smallerCanvas.height = Math.max(1, Math.floor(imageCanvas.height * 0.75));
+      const smallerContext = smallerCanvas.getContext('2d');
+      if (!smallerContext) break;
+      smallerContext.drawImage(imageCanvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
+      imageCanvas = smallerCanvas;
+      quality = 0.74;
+    }
+
+    throw new Error('The screenshot could not be compressed enough to upload. Try capturing a smaller area.');
+  }
+
   async function captureScreen() {
     if (requestInProgress || captureButton.disabled) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -770,7 +806,7 @@
       if (!context) throw new Error('The screenshot could not be created.');
       context.drawImage(video, 0, 0, width, height);
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.74);
+      const dataUrl = makeUploadableScreenshot(canvas);
       screenshot = {
         mimeType: 'image/jpeg',
         data: dataUrl.slice(dataUrl.indexOf(',') + 1),

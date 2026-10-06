@@ -42,44 +42,52 @@ function readJsonBody(req, options = {}) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
-    let oversized = false;
+    let settled = false;
+
+    function rejectOnce(error) {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    }
 
     req.on('data', chunk => {
+      if (settled) return;
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
       totalBytes += buffer.length;
       if (totalBytes > maxBytes) {
-        oversized = true;
-        req.destroy();
+        const error = new Error('Payload too large');
+        error.statusCode = 413;
+        rejectOnce(error);
+        // Keep consuming the rest of the request so the route can send its
+        // JSON error response instead of leaving the client waiting forever.
+        req.resume?.();
         return;
       }
       chunks.push(buffer);
     });
 
     req.on('end', () => {
-      if (oversized) return;
+      if (settled) return;
       const raw = Buffer.concat(chunks).toString().trim();
       if (!raw) {
+        settled = true;
         resolve({});
         return;
       }
 
       try {
-        resolve(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        settled = true;
+        resolve(parsed);
       } catch {
         const error = new Error('Invalid JSON body');
         error.statusCode = 400;
-        reject(error);
+        rejectOnce(error);
       }
     });
 
     req.on('error', error => {
-      if (oversized) {
-        const tooLarge = new Error('Payload too large');
-        tooLarge.statusCode = 413;
-        reject(tooLarge);
-        return;
-      }
-      reject(error);
+      rejectOnce(error);
     });
   });
 }
