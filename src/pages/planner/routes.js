@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { requirePassword } = require('../../shared/security');
 
-const PLANNER_PASSWORD = process.env.PLANNER_PASSWORD || process.env.STORAGE_PASSWORD;
+const STORAGE_PASSWORD = process.env.STORAGE_PASSWORD;
+const PLANNER_PASSWORD = process.env.PLANNER_PASSWORD || STORAGE_PASSWORD;
 const IS_MANAGED_PRODUCTION = Boolean(process.env.WEBSITE_SITE_NAME || process.env.NODE_ENV === 'production');
 const DEFAULT_PLANNER_DATA_PATH = process.env.WEBSITE_SITE_NAME && process.env.HOME
   ? path.join(process.env.HOME, 'data', 'planner-data.json')
@@ -55,9 +56,12 @@ function getPlannerMode(pathname) {
   };
 }
 
-function requireAuth(req, res, plannerName = 'Daily Planner') {
-  if (!PLANNER_PASSWORD && !IS_MANAGED_PRODUCTION) return true;
-  return requirePassword(req, res, PLANNER_PASSWORD, plannerName, 'PLANNER_PASSWORD or STORAGE_PASSWORD');
+function requireAuth(req, res, mode) {
+  const isHolidayPlanner = mode.id === 'holiday';
+  const password = isHolidayPlanner ? STORAGE_PASSWORD : PLANNER_PASSWORD;
+  const configurationName = isHolidayPlanner ? 'STORAGE_PASSWORD' : 'PLANNER_PASSWORD or STORAGE_PASSWORD';
+  if (!password && !IS_MANAGED_PRODUCTION) return true;
+  return requirePassword(req, res, password, mode.authName, configurationName);
 }
 
 function readPlannerData(mode) {
@@ -133,7 +137,7 @@ function handle(req, res) {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   const mode = getPlannerMode(pathname);
 
-  if (!requireAuth(req, res, mode.authName)) return;
+  if (!requireAuth(req, res, mode)) return;
 
   if (pathname === mode.dataEndpoint && req.method === 'GET') {
     sendJson(res, 200, readPlannerData(mode));

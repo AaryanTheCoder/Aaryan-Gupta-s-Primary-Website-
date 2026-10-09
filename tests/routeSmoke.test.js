@@ -5,6 +5,7 @@ const path = require('path');
 const { Readable } = require('stream');
 
 process.env.STORAGE_PASSWORD = process.env.STORAGE_PASSWORD || 'test-password';
+process.env.PLANNER_PASSWORD = `${process.env.STORAGE_PASSWORD}-daily-planner-test`;
 const gameTheoryDataPath = path.join(os.tmpdir(), `game-theory-route-smoke-${process.pid}.json`);
 const plannerDataDirectory = path.join(os.tmpdir(), `planner-route-smoke-${process.pid}`);
 const plannerDataPath = path.join(plannerDataDirectory, 'planner-data.json');
@@ -386,7 +387,7 @@ function invoke(pathname, options = {}) {
   assert.match(plannerDenied.headers['www-authenticate'], /Daily Planner/);
 
   const planner = await invoke('/planner', {
-    headers: { authorization: basicAuth() }
+    headers: { authorization: basicAuth(process.env.PLANNER_PASSWORD) }
   });
   assert.strictEqual(planner.statusCode, 200);
   assert.match(planner.body, /Personal Daily Planner/);
@@ -399,7 +400,7 @@ function invoke(pathname, options = {}) {
   assert.doesNotMatch(planner.body, /data-note-add/, 'Planner notes should not require task rows');
 
   const plannerDataBefore = await invoke('/planner-data', {
-    headers: { authorization: basicAuth() }
+    headers: { authorization: basicAuth(process.env.PLANNER_PASSWORD) }
   });
   assert.strictEqual(plannerDataBefore.statusCode, 200);
   assert.strictEqual(JSON.parse(plannerDataBefore.body).exists, false);
@@ -421,7 +422,7 @@ function invoke(pathname, options = {}) {
   const plannerSave = await invoke('/planner-data', {
     method: 'PUT',
     headers: {
-      authorization: basicAuth(),
+      authorization: basicAuth(process.env.PLANNER_PASSWORD),
       'content-type': 'application/json'
     },
     body: JSON.stringify({ state: plannerState })
@@ -431,7 +432,7 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(fs.existsSync(plannerDataPath), true);
 
   const plannerDataAfter = await invoke('/planner-data', {
-    headers: { authorization: basicAuth() }
+    headers: { authorization: basicAuth(process.env.PLANNER_PASSWORD) }
   });
   assert.strictEqual(plannerDataAfter.statusCode, 200);
   assert.deepStrictEqual(JSON.parse(plannerDataAfter.body).state, plannerState);
@@ -439,7 +440,7 @@ function invoke(pathname, options = {}) {
   const invalidPlannerSave = await invoke('/planner-data', {
     method: 'PUT',
     headers: {
-      authorization: basicAuth(),
+      authorization: basicAuth(process.env.PLANNER_PASSWORD),
       'content-type': 'application/json'
     },
     body: JSON.stringify({ state: { widgets: 'invalid' } })
@@ -503,6 +504,11 @@ function invoke(pathname, options = {}) {
   const holidayPlannerDenied = await invoke('/holiday-planner');
   assert.strictEqual(holidayPlannerDenied.statusCode, 401);
   assert.match(holidayPlannerDenied.headers['www-authenticate'], /Holiday Planner/);
+
+  const holidayPlannerWrongPassword = await invoke('/holiday-planner', {
+    headers: { authorization: basicAuth(process.env.PLANNER_PASSWORD) }
+  });
+  assert.strictEqual(holidayPlannerWrongPassword.statusCode, 401);
 
   const holidayPlanner = await invoke('/holiday-planner', {
     headers: { authorization: basicAuth() }
