@@ -76,6 +76,7 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(home.statusCode, 200);
   assert.match(home.body, /Welcome to my website/);
   assert.match(home.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
+  assert.doesNotMatch(home.body, /href="\/holiday-planner"/, 'Holiday planner should only be reachable by typing its URL');
 
   const health = await invoke('/health');
   assert.strictEqual(health.statusCode, 200);
@@ -508,11 +509,14 @@ function invoke(pathname, options = {}) {
   });
   assert.strictEqual(holidayPlanner.statusCode, 200);
   assert.match(holidayPlanner.body, /Holiday Planner/);
-  assert.match(holidayPlanner.body, /UWCSEA East Summer Holiday/);
-  assert.match(holidayPlanner.body, /24 June to 11 August 2027/);
+  assert.match(holidayPlanner.body, /UWCSEA East October Break/);
+  assert.match(holidayPlanner.body, /10 to 25 October 2026/);
   assert.match(holidayPlanner.body, /data-holiday-calendar/);
   assert.match(holidayPlanner.body, /data-holiday-week/);
   assert.match(holidayPlanner.body, /data-holiday-day-panel/);
+  assert.match(holidayPlanner.body, /data-holiday-days-left/);
+  assert.match(holidayPlanner.body, /name="dueDate" type="date"/);
+  assert.match(holidayPlanner.body, /Open Google Calendar to add or edit events/);
   assert.match(holidayPlanner.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
   const holidayPlannerScript = holidayPlanner.body.match(/<script>\s*([\s\S]*?)\s*<\/script>/);
   assert.ok(holidayPlannerScript, 'Holiday planner browser script should exist');
@@ -529,6 +533,15 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(JSON.parse(holidayPlannerDataBefore.body).exists, false);
 
   const holidayPlannerState = {
+    holidayPlanner: {
+      selectedDate: '2026-10-12',
+      plans: {
+        '2026-10-12': {
+          dateLabel: 'Monday, 12 October 2026',
+          items: [{ id: 'swim-plan', text: 'Swim at 10:00', done: false }]
+        }
+      }
+    },
     widgets: [
       {
         id: 'holiday-note',
@@ -539,6 +552,16 @@ function invoke(pathname, options = {}) {
         w: 320,
         h: 260,
         data: { text: 'Holiday persistence works' }
+      },
+      {
+        id: 'holiday-tasks',
+        type: 'tasks',
+        title: 'Holiday tasks',
+        x: 360,
+        y: 24,
+        w: 380,
+        h: 300,
+        data: { tasks: [{ id: 'book-task', text: 'Return library book', dueDate: '2026-10-20', done: false }] }
       }
     ]
   };

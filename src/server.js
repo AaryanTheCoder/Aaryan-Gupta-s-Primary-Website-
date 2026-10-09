@@ -851,9 +851,6 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
       <p class="lead">
         Hi, I'm Aaryan Gupta. This website is a collection of projects, pages, and fun experiments I’ve built — from my personal profile page to games, kaomoji tools, and more. Click any widget below to explore the different parts of the site.
       </p>
-      <div class="hero-actions">
-        <a class="hero-link" href="/holiday-planner">Open Holiday Planner</a>
-      </div>
     </section>
 
     <h2 class="section-title">Explore the site</h2>
@@ -961,11 +958,6 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <p>Start a no-audio camera stream from one device and watch it live from another.</p>
       </a>
 
-      <a class="widget" href="/holiday-planner">
-        <div class="route">/holiday-planner</div>
-        <h2>Holiday Planner</h2>
-        <p>A summer planning dashboard with UWCSEA East holiday progress, a calendar countdown, notes, tasks, timers, weather, and Google Calendar.</p>
-      </a>
     </section>
 
     <div class="footer-note">

@@ -29,8 +29,8 @@ function getPlannerMode(pathname) {
       dataPaths: [HOLIDAY_PLANNER_DATA_PATH],
       documentTitle: 'Holiday Planner',
       eyebrow: 'Holiday Planner',
-      heading: 'UWCSEA East summer countdown and planning board.',
-      subtitle: 'Track how much of summer is left, then plan the days with the same draggable notes, tasks, timers, weather, and Google Calendar widgets.',
+      heading: 'UWCSEA East October break countdown and planning board.',
+      subtitle: 'Track how much of the October break is left, then plan each day with draggable notes, tasks, timers, weather, and Google Calendar widgets.',
       storageKey: 'aaryan-holiday-planner-v1',
       authName: 'Holiday Planner'
     };
@@ -171,15 +171,15 @@ function handle(req, res) {
 function getPlannerHtml(mode = getPlannerMode('/planner')) {
   const isHolidayMode = mode.id === 'holiday';
   const holidayPanelHtml = isHolidayMode ? String.raw`
-    <section class="holiday-panel" aria-label="UWCSEA East summer holiday progress">
+    <section class="holiday-panel" aria-label="UWCSEA East October break progress">
       <div class="holiday-copy">
-        <div class="eyebrow holiday-eyebrow">UWCSEA East Summer Holiday</div>
-        <h2>24 June to 11 August 2027</h2>
-        <p>School break is counted through 11 August, because the 2027/2028 school year is planned to start on 12 August.</p>
+        <div class="eyebrow holiday-eyebrow">UWCSEA East October Break</div>
+        <h2>10 to 25 October 2026</h2>
+        <p>The countdown includes every day from Saturday 10 October through Sunday 25 October.</p>
         <div class="holiday-stats" aria-label="Holiday days used and left">
           <div><strong data-holiday-used-days>--</strong><span>days used</span></div>
           <div><strong data-holiday-left-days>--</strong><span>days left</span></div>
-          <div><strong data-holiday-total-days>49</strong><span>total days</span></div>
+          <div><strong data-holiday-total-days>16</strong><span>total days</span></div>
         </div>
         <div class="holiday-bar" aria-label="Percentage of holiday used and left">
           <div class="holiday-used" data-holiday-used-bar></div>
@@ -201,6 +201,7 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
       </div>
       <div class="holiday-calendar-wrap">
         <div class="holiday-calendar" id="holidayCalendar" data-holiday-calendar></div>
+        <p class="holiday-days-left" data-holiday-days-left>Loading holiday days left...</p>
       </div>
     </section>
 ` : '';
@@ -564,9 +565,18 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
       min-width: 0;
     }
 
+    .holiday-days-left {
+      margin: 12px 2px 0;
+      color: #274e72;
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+      font-size: 1rem;
+      font-weight: 900;
+      text-align: center;
+    }
+
     .holiday-calendar {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 12px;
       min-width: 0;
       font-family: 'Trebuchet MS', Verdana, sans-serif;
@@ -1095,7 +1105,7 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
 
     .task-item {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: auto minmax(120px, 1fr) minmax(132px, auto) auto;
       gap: 9px;
       align-items: center;
       padding: 9px;
@@ -1109,6 +1119,23 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
       background: transparent;
       outline: none;
       color: var(--ink);
+    }
+
+    .task-item input[type="date"],
+    .compact-form input[type="date"] {
+      min-width: 132px;
+      border: 1px solid rgba(35, 90, 59, 0.13);
+      border-radius: 10px;
+      padding: 7px 8px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.72);
+      outline: none;
+    }
+
+    .task-item.overdue input[type="date"] {
+      color: #a83d2b;
+      border-color: rgba(168, 61, 43, 0.38);
+      background: rgba(217, 91, 67, 0.10);
     }
 
     .task-item.done input[type="text"] {
@@ -1228,6 +1255,14 @@ function getPlannerHtml(mode = getPlannerMode('/planner')) {
 
       .day-remaining .progress-label {
         font-size: 1.25rem;
+      }
+
+      .task-item {
+        grid-template-columns: auto 1fr auto;
+      }
+
+      .task-item input[type="date"] {
+        grid-column: 2 / -1;
       }
     }
   </style>
@@ -1350,7 +1385,7 @@ ${holidayPanelHtml}
 
       function defaultHolidayPlannerState() {
         return {
-          selectedDate: holidayDateKey(new Date(2027, 5, 24)),
+          selectedDate: holidayDateKey(new Date(2026, 9, 10)),
           plans: {}
         };
       }
@@ -1389,7 +1424,9 @@ ${holidayPanelHtml}
         var match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (!match) return fallback;
         var date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-        return Number.isFinite(date.getTime()) ? holidayDateKey(date) : fallback;
+        var bounds = holidayBounds();
+        if (!Number.isFinite(date.getTime()) || date < bounds.start || date >= bounds.endExclusive) return fallback;
+        return holidayDateKey(date);
       }
 
       function defaultState() {
@@ -1416,7 +1453,7 @@ ${holidayPanelHtml}
           widgets: [
             { id: uid(), type: 'weather', title: 'Singapore Weather', x: 0, y: 0, w: 330, h: 250, data: {} },
             { id: uid(), type: 'urgency', title: 'Time Left', x: 350, y: 0, w: 390, h: 300, data: {} },
-            { id: uid(), type: 'notes', title: 'Summer Goals', x: 760, y: 0, w: 410, h: 360, data: { text: 'Write the main things you want to finish this holiday.', fontSize: '18', notesFormat: 'plain-v1' } },
+            { id: uid(), type: 'notes', title: 'Break Goals', x: 760, y: 0, w: 410, h: 360, data: { text: 'Write the main things you want to finish this holiday.', fontSize: '18', notesFormat: 'plain-v1' } },
             { id: uid(), type: 'tasks', title: 'Holiday Tasks', x: 0, y: 280, w: 380, h: 350, data: { tasks: [{ id: uid(), text: 'Plan one useful thing for today', done: false }] } },
             { id: uid(), type: 'pomodoro', title: 'Focus Timer', x: 400, y: 330, w: 360, h: 360, data: { mode: 'work', workMinutes: 25, breakMinutes: 5, longBreakMinutes: 15, remainingSeconds: 1500, running: false, sessions: 0 } },
             { id: uid(), type: 'calendar', title: 'Google Calendar', x: 780, y: 390, w: 520, h: 430, data: { embedUrl: '' } },
@@ -1648,9 +1685,10 @@ ${holidayPanelHtml}
         }
 
         if (widget.type === 'calendar') {
-          var url = widget.data.embedUrl || '';
-          var frame = url ? '<iframe class="calendar-frame" src="' + escapeAttr(url) + '"></iframe>' : '<div class="empty">Paste a public Google Calendar embed URL below. In Google Calendar: Settings -> Integrate calendar -> embed code, then copy only the URL inside src.</div>';
-          return frame + '<div class="compact-form" style="margin-top:10px;"><input data-calendar-url placeholder="Google Calendar embed URL" value="' + escapeAttr(url) + '"><button class="btn" data-calendar-save type="button">Save</button></div><p class="calendar-help">Private calendars need Google sign-in in the browser. Public embed URLs work best.</p>';
+          var savedUrl = widget.data.embedUrl || '';
+          var url = normalizeCalendarUrl(savedUrl);
+          var frame = url ? '<iframe class="calendar-frame" title="Google Calendar" src="' + escapeAttr(url) + '"></iframe>' : '<div class="empty">Paste a Google Calendar embed URL below. In Google Calendar: Settings -> Integrate calendar -> copy the URL inside the embed code.</div>';
+          return frame + '<div class="compact-form" style="margin-top:10px;"><input data-calendar-url placeholder="Google Calendar embed URL" value="' + escapeAttr(savedUrl) + '"><button class="btn" data-calendar-save type="button">Save</button></div><p class="calendar-help" data-calendar-help>Only secure calendar.google.com embed links are accepted. <a href="https://calendar.google.com/calendar/" target="_blank" rel="noopener noreferrer">Open Google Calendar to add or edit events</a>.</p>';
         }
 
         if (widget.type === 'notes') {
@@ -1678,7 +1716,7 @@ ${holidayPanelHtml}
         }
 
         if (widget.type === 'tasks') {
-          return '<div class="task-list" data-task-list></div><form class="compact-form" data-task-form><input name="task" placeholder="Add homework, test, errand..."><button class="btn" type="submit">Add</button></form>';
+          return '<div class="task-list" data-task-list></div><form class="compact-form" data-task-form><input name="task" placeholder="Add homework, test, errand..."><input name="dueDate" type="date" aria-label="Due date"><button class="btn" type="submit">Add</button></form>';
         }
 
         if (widget.type === 'habits') {
@@ -1696,7 +1734,13 @@ ${holidayPanelHtml}
         if (widget.type === 'calendar') {
           var input = body.querySelector('[data-calendar-url]');
           body.querySelector('[data-calendar-save]').addEventListener('click', function () {
-            widget.data.embedUrl = input.value.trim();
+            var enteredUrl = input.value.trim();
+            var safeUrl = normalizeCalendarUrl(enteredUrl);
+            if (enteredUrl && !safeUrl) {
+              body.querySelector('[data-calendar-help]').textContent = 'That link was not saved. Please use a secure calendar.google.com embed URL.';
+              return;
+            }
+            widget.data.embedUrl = safeUrl;
             render();
           });
         }
@@ -1721,8 +1765,9 @@ ${holidayPanelHtml}
             var text = input.value.trim();
             if (!text) return;
             widget.data.tasks = widget.data.tasks || [];
-            widget.data.tasks.push({ id: uid(), text: text, done: false });
+            widget.data.tasks.push({ id: uid(), text: text, dueDate: event.currentTarget.elements.dueDate.value || '', done: false });
             input.value = '';
+            event.currentTarget.elements.dueDate.value = '';
             render();
           });
         }
@@ -1797,6 +1842,7 @@ ${holidayPanelHtml}
           item.id = item.id || uid();
           item.text = item.text || '';
           item.done = Boolean(item.done);
+          if (key === 'tasks') item.dueDate = normalizeDueDate(item.dueDate);
           return item;
         });
         items = widget.data[key];
@@ -1805,7 +1851,9 @@ ${holidayPanelHtml}
           return;
         }
         list.innerHTML = items.map(function (item) {
-          return '<div class="task-item ' + (item.done ? 'done' : '') + '" data-item-id="' + item.id + '"><input type="checkbox" ' + (item.done ? 'checked' : '') + '><input type="text" value="' + escapeAttr(item.text) + '"><button class="icon-btn" type="button">x</button></div>';
+          var dueDateInput = key === 'tasks' ? '<input type="date" aria-label="Due date for ' + escapeAttr(item.text || 'task') + '" value="' + escapeAttr(item.dueDate) + '">' : '';
+          var overdueClass = key === 'tasks' && isOverdue(item) ? ' overdue' : '';
+          return '<div class="task-item ' + (item.done ? 'done' : '') + overdueClass + '" data-item-id="' + escapeAttr(item.id) + '"><input type="checkbox" ' + (item.done ? 'checked' : '') + '><input type="text" value="' + escapeAttr(item.text) + '">' + dueDateInput + '<button class="icon-btn" type="button">x</button></div>';
         }).join('');
         list.querySelectorAll('.task-item').forEach(function (row) {
           var item = items.find(function (entry) { return entry.id === row.dataset.itemId; });
@@ -1818,11 +1866,40 @@ ${holidayPanelHtml}
             item.text = event.target.value;
             scheduleSave();
           });
+          var dueDateInput = row.querySelector('input[type="date"]');
+          if (dueDateInput) {
+            dueDateInput.addEventListener('change', function () {
+              item.dueDate = normalizeDueDate(dueDateInput.value);
+              row.classList.toggle('overdue', isOverdue(item));
+              scheduleSave();
+            });
+          }
           row.querySelector('button').addEventListener('click', function () {
             widget.data[key] = items.filter(function (entry) { return entry.id !== item.id; });
             render();
           });
         });
+      }
+
+      function normalizeDueDate(value) {
+        var text = String(value || '');
+        return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+      }
+
+      function isOverdue(item) {
+        if (!item || item.done || !item.dueDate) return false;
+        return item.dueDate < holidayDateKey(singaporeNow());
+      }
+
+      function normalizeCalendarUrl(value) {
+        if (!value) return '';
+        try {
+          var url = new URL(String(value));
+          if (url.protocol !== 'https:' || url.hostname !== 'calendar.google.com' || url.pathname.indexOf('/calendar/embed') !== 0) return '';
+          return url.toString();
+        } catch (error) {
+          return '';
+        }
       }
 
       function refreshDynamicWidgets() {
@@ -2132,7 +2209,7 @@ ${holidayPanelHtml}
         today.setHours(0, 0, 0, 0);
 
         state.holidayPlanner = normalizeHolidayPlannerState(state.holidayPlanner);
-        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
+        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, defaultHolidayPlannerState().selectedDate);
         if (selectedDateKey && !state.holidayPlanner.plans[selectedDateKey]) {
           state.holidayPlanner.selectedDate = selectedDateKey;
         }
@@ -2146,6 +2223,7 @@ ${holidayPanelHtml}
         setHolidayText('[data-holiday-used-days]', usedDays);
         setHolidayText('[data-holiday-left-days]', leftDays);
         setHolidayText('[data-holiday-total-days]', totalDays);
+        setHolidayText('[data-holiday-days-left]', leftDays + ' holiday day' + (leftDays === 1 ? '' : 's') + ' left');
         setHolidayWidth('[data-holiday-used-bar]', usedPercent);
         setHolidayWidth('[data-holiday-left-bar]', leftPercent);
         setHolidayText('[data-holiday-percent]', Math.round(usedPercent) + '% used - ' + Math.round(leftPercent) + '% left');
@@ -2159,12 +2237,10 @@ ${holidayPanelHtml}
         if (!calendar) return;
 
         var months = [
-          { label: 'June 2027', year: 2027, month: 5 },
-          { label: 'July 2027', year: 2027, month: 6 },
-          { label: 'August 2027', year: 2027, month: 7 }
+          { label: 'October 2026', year: 2026, month: 9 }
         ];
         var weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
+        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, defaultHolidayPlannerState().selectedDate);
 
         calendar.innerHTML = months.map(function (month) {
           var first = new Date(month.year, month.month, 1);
@@ -2222,7 +2298,7 @@ ${holidayPanelHtml}
         if (!panel) return;
 
         state.holidayPlanner = normalizeHolidayPlannerState(state.holidayPlanner);
-        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, holidayDateKey(today));
+        var selectedDateKey = normalizeHolidayDateKey(state.holidayPlanner.selectedDate, defaultHolidayPlannerState().selectedDate);
         var selectedDate = new Date(selectedDateKey + 'T00:00:00');
         var selectedDateLabel = selectedDate.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         var plan = getHolidayPlanForDateKey(selectedDateKey);
@@ -2297,8 +2373,8 @@ ${holidayPanelHtml}
 
       function holidayBounds() {
         return {
-          start: new Date(2027, 5, 24),
-          endExclusive: new Date(2027, 7, 12)
+          start: new Date(2026, 9, 10),
+          endExclusive: new Date(2026, 9, 26)
         };
       }
 
@@ -2385,7 +2461,10 @@ ${holidayPanelHtml}
           return;
         }
         fetch('https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.8198&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m&hourly=precipitation_probability&forecast_days=1&timezone=Asia%2FSingapore')
-          .then(function (response) { return response.json(); })
+          .then(function (response) {
+            if (!response.ok) throw new Error('Weather request failed');
+            return response.json();
+          })
           .then(function (data) {
             weatherCache = data;
             weatherCacheTime = Date.now();
@@ -2400,7 +2479,11 @@ ${holidayPanelHtml}
 
       function paintWeather(data) {
         var current = data.current || {};
-        var chance = Array.isArray(data.hourly && data.hourly.precipitation_probability) ? data.hourly.precipitation_probability[0] : null;
+        var hourlyTimes = Array.isArray(data.hourly && data.hourly.time) ? data.hourly.time : [];
+        var hourlyRain = Array.isArray(data.hourly && data.hourly.precipitation_probability) ? data.hourly.precipitation_probability : [];
+        var currentHour = String(current.time || '').slice(0, 13);
+        var currentHourIndex = hourlyTimes.findIndex(function (time) { return String(time).slice(0, 13) === currentHour; });
+        var chance = currentHourIndex >= 0 ? hourlyRain[currentHourIndex] : null;
         document.querySelectorAll('[data-weather-temp]').forEach(function (target) {
           target.textContent = Math.round(current.temperature_2m) + 'C';
         });
