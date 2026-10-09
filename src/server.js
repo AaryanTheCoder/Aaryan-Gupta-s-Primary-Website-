@@ -946,6 +946,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <p>A password-protected personal school dashboard with Singapore time, notes, weather, tasks, calendar, and urgency widgets.</p>
       </a>
 
+      <a class="widget" href="/holiday-planner">
+        <div class="route">/holiday-planner</div>
+        <h2>Holiday Planner</h2>
+        <p>Plan the October break with a clickable calendar, daily tasks, countdowns, notes, weather, and customizable widgets.</p>
+      </a>
+
       <a class="widget" href="/code-copy-paste">
         <div class="route">/code-copy-paste</div>
         <h2>Code Copy Paste</h2>

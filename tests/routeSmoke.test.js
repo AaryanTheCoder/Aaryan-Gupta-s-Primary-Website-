@@ -76,7 +76,7 @@ function invoke(pathname, options = {}) {
   assert.strictEqual(home.statusCode, 200);
   assert.match(home.body, /Welcome to my website/);
   assert.match(home.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
-  assert.doesNotMatch(home.body, /href="\/holiday-planner"/, 'Holiday planner should only be reachable by typing its URL');
+  assert.match(home.body, /href="\/holiday-planner"/, 'Homepage should link to the holiday planner');
 
   const health = await invoke('/health');
   assert.strictEqual(health.statusCode, 200);
