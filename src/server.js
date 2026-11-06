@@ -19,6 +19,7 @@ const gameTheoryRoutes = require('./pages/game-theory/routes');
 const chatRoutes = require('./pages/chat/routes');
 const qwenRoutes = require('./pages/qwen/routes');
 const feedbackRoutes = require('./pages/feedback/routes');
+const baduiRoutes = require('./pages/badui/routes');
 const scrollguardRoutes = require('./pages/scrollguard/routes');
 const codeCopyPasteRoutes = require('./pages/code-copy-paste/routes');
 const streamRoutes = require('./pages/stream/routes');
@@ -34,7 +35,9 @@ const server = http.createServer((request, response) => {
 const requestPathname = request.url.split('?')[0];
 console.log(`Request: ${request.method} ${requestPathname}`);
 addSecurityHeaders(response);
-injectWidgetIntoHtmlResponses(request, response);
+if (requestPathname !== '/badui' && !requestPathname.startsWith('/badui/')) {
+  injectWidgetIntoHtmlResponses(request, response);
+}
 if (serveWidget(request, response)) {
   return;
 }
@@ -46,6 +49,10 @@ if (requestPathname === '/health' && (request.method === 'GET' || request.method
   });
   response.end(request.method === 'HEAD' ? undefined : JSON.stringify({ ok: true }));
   return;
+}
+
+if (requestPathname === '/badui' || requestPathname.startsWith('/badui/')) {
+  return baduiRoutes.handle(request, response);
 }
 
 if (requestPathname === '/storage' || requestPathname.startsWith('/storage/')) {
@@ -904,6 +911,11 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <p>Check out my Near Impossible Pong project and download the Python version to run locally.</p>
       </a>
 
+      <a class="widget" href="/badui">
+        <div class="route">/badui</div>
+        <h2>Broken Thermometer</h2>
+        <p>Convert a temperature through pushups, Peter's shooter challenge, and a leaking progress bar.</p>
+      </a>
       <a class="widget" href="/shooter-game">
         <div class="route">/shooter-game</div>
         <h2>Square Shooter Online</h2>

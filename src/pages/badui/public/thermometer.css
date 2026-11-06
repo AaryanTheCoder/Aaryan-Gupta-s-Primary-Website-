@@ -1,0 +1,39 @@
+dialog { max-width: 540px; width: 85%; font-family: sans-serif; max-height: 92vh; overflow: auto; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+dialog button { padding: 8px 12px; margin: 4px 4px 4px 0; }
+.camera { position: relative; background: #222; aspect-ratio: 4 / 3; }
+.camera video, .camera canvas { width: 100%; height: 100%; transform: scaleX(-1); }
+.camera video { display: block; object-fit: contain; }
+#poseOverlay { position: absolute; inset: 0; }
+#pushupCount { font-size: 1.5rem; font-weight: bold; }
+#shooterChallenge { max-width: 1100px; width: 92%; }
+#shooterFrame { display: block; width: 100%; height: 70vh; border: 0; }
+#notice { color: #a22; }
+#temperatureResult, #repairAnswer { font-size: 1.4rem; font-weight: bold; color: #166441; }
+[hidden] { display: none !important; }
+
+/* The repair puzzle has its own styles so the simple thermometer stays the same. */
+#repairChallenge { position: fixed; inset: 0; margin: 0; padding: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; border: 0; overflow: hidden; }
+#repairHeader { position: absolute; top: 12px; left: 12px; z-index: 30; max-width: 90%; }
+#repairTitle { margin-bottom: 8px; }
+.repair-scene { position: absolute; inset: 0; background: #eae7df; overflow: hidden; }
+.progress-label { position: absolute; top: calc(40% - 28px); left: 12%; width: 76%; display: flex; justify-content: space-between; }
+.progress-track { position: absolute; left: 12%; top: 40%; width: 76%; height: 40px; background: #d2d0c8; border: 3px solid #25252b; }
+.progress-fill { height: 100%; width: 0%; border-radius: 3px; background: repeating-linear-gradient(120deg, #27b9a3 0 16px, #55d2bb 16px 32px); transition: width 0.12s linear; }
+#progressHole { position: absolute; left: 57%; bottom: -18px; width: 58px; height: 55px; margin: 0; padding: 0; border: 0; background: #1d1d25; z-index: 3; cursor: crosshair; clip-path: polygon(48% 0, 60% 19%, 86% 8%, 79% 35%, 100% 51%, 78% 65%, 88% 91%, 58% 81%, 43% 100%, 31% 78%, 3% 85%, 19% 56%, 0 38%, 29% 29%, 25% 4%); }
+.leak-stream { display: none; position: absolute; left: calc(57% + 13px); top: 100%; width: 29px; height: 110px; background: repeating-linear-gradient(#32c5ab 0 13px, transparent 13px 19px); animation: leak 0.7s linear infinite; transform-origin: top; }
+.spill-puddle { display: none; position: absolute; top: calc(40% + 150px); left: 43%; width: 37%; height: 22px; border-radius: 50%; background: #32c5ab; opacity: 0.8; animation: puddle 1.2s ease-in-out infinite alternate; }
+.repair-scene.burst .leak-stream, .repair-scene.burst .spill-puddle { display: block; }
+.repair-scene.burst .progress-track { animation: shake 0.4s ease-out; }
+#progressHole.patched { background: #e3bd77; border: 1px solid #ad8547; border-radius: 2px; clip-path: none; transform: rotate(-11deg); height: 31px; bottom: -7px; }
+.puzzle-objects { position: absolute; inset: 0; pointer-events: none; }
+.puzzle-object { position: absolute; width: 64px; height: 64px; margin: 0; padding: 0; font-size: 38px; background: transparent; border: 0; cursor: grab; pointer-events: auto; touch-action: none; user-select: none; z-index: 5; animation: pop-in 0.4s ease-out; }
+.puzzle-object.dragging { cursor: grabbing; z-index: 20; animation: none; }
+.puzzle-object[data-kind="patch"] { background: #ebc788; border: 1px dashed #946a2d; transform: rotate(-7deg); }
+.burst-chip { position: absolute; top: calc(40% + 22px); left: 59%; width: 9px; height: 9px; background: #26b49c; pointer-events: none; animation: burst-chip 0.8s ease-out forwards; }
+@keyframes leak { from { background-position-y: 0; } to { background-position-y: 38px; } }
+@keyframes puddle { to { transform: scaleX(1.14); } }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@keyframes pop-in { from { transform: translateY(-25px) rotate(-15deg); opacity: 0; } }
+@keyframes burst-chip { to { transform: translate(var(--dx), var(--dy)) rotate(220deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

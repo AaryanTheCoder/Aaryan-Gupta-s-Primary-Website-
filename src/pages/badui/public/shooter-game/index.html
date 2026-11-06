@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Square Shooter — Temperature Challenge</title>
+    <link rel="stylesheet" href="/badui/shooter-game/style.css">
+</head>
+<body>
+    <main class="shell">
+        <header><h1>Peter has stolen the thermometer get him!</h1></header>
+        <section class="game-wrap">
+            <aside class="scoreboard" aria-label="Match status">
+                <div><span>You · Blue</span><strong id="p1Health">10</strong></div>
+                <div><span>Peter</span><img src="/badui/shooter-game/peter.webp" alt="Peter" width="90" height="90"><strong id="p2Health">10</strong></div>
+                <button id="restartButton" type="button" disabled>Restart</button>
+            </aside>
+            <div class="arena-shell">
+                <canvas id="gameCanvas" width="900" height="900" aria-label="Square Shooter game arena"></canvas>
+                <div id="overlay" class="overlay"><div id="overlayTitle">Starting…</div><div id="overlayText"></div></div>
+            </div>
+        </section>
+    </main>
+    <script src="/badui/shooter-game/engine.js" defer></script>
+    <script src="/badui/shooter-game/game.js" defer></script>
+</body>
+</html>
