@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="A local CPU and GPU browser benchmark with live data, reproducible scores, and a combined stress test.">
+  <title>Stress Lab · CPU + GPU benchmark</title>
+  <link rel="stylesheet" href="/stress/stress.css">
+  <script defer src="/stress/metrics.js"></script>
+  <script defer src="/stress/gpu.js"></script>
+  <script defer src="/stress/stress.js"></script>
+</head>
+<body>
+  <main>
+    <header><a href="/" class="brand">AG <span>/ STRESS LAB</span></a><span class="version">V1.0 · LOCAL COMPUTE</span></header>
+    <section class="intro">
+      <p class="eyebrow"><span class="dot"></span> YOUR HARDWARE. UNDER PRESSURE.</p>
+      <h1>Find your<br><span>machine’s limits.</span></h1>
+      <p class="lede">CPU computation. GPU rendering. Sustained performance.<br>A clearer picture of what your browser and hardware can do.</p>
+      <div class="chips"><span>Chromium · Linux / macOS / Windows</span><span>No install</span><span>Results stay on this device</span></div>
+    </section>
+
+    <section class="scores" aria-label="Benchmark scores">
+      <article class="score overall"><p>OVERALL SCORE</p><strong id="overall-score">—</strong><span>Stress Lab points</span></article>
+      <article class="score"><p>CPU · SINGLE WORKER</p><strong id="single-score">—</strong><span>Integer + float + buffer</span></article>
+      <article class="score"><p>CPU · MULTI WORKER</p><strong id="multi-score">—</strong><span id="worker-caption">Parallel throughput</span></article>
+      <article class="score"><p>GPU · WEBGL2</p><strong id="gpu-score">—</strong><span>Ray marching + texture sampling</span></article>
+    </section>
+
+    <div class="workspace">
+      <section class="panel controls" aria-labelledby="configure-title">
+        <div class="section-heading"><span class="number">01</span><h2 id="configure-title">Set up your run</h2></div>
+        <fieldset id="settings">
+          <label for="mode">Test suite</label>
+          <select id="mode"><option value="full">Full benchmark · CPU + GPU</option><option value="cpu">CPU benchmark</option><option value="gpu">GPU benchmark</option><option value="combined">Combined stress · no score</option></select>
+          <label for="preset">Duration</label>
+          <select id="preset"><option value="quick">Quick · about 40 seconds</option><option value="standard" selected>Standard · about 90 seconds</option><option value="sustained">Sustained · about 4 minutes</option></select>
+          <label for="threads">CPU workers</label>
+          <input id="threads" type="number" min="1" max="64" value="1" inputmode="numeric">
+          <p class="hint" id="thread-info">Detecting logical processors…</p>
+          <p class="hint" id="estimate"></p>
+          <label class="consent"><input id="consent" type="checkbox"><span>I’m ready for a heavy workload. Fans, heat, and battery use may increase.</span></label>
+        </fieldset>
+        <button id="start" class="primary" disabled>Start benchmark <span>↗</span></button>
+        <button id="stop" class="stop" disabled>■ Stop test</button>
+        <p class="hint">Starts only when you click. Switching tabs or minimizing this window cancels the run. Keep vents clear; Stop ends the workload.</p>
+      </section>
+
+      <section class="panel monitor" aria-labelledby="monitor-title">
+        <div class="section-heading"><span class="number">02</span><h2 id="monitor-title">Live monitor</h2><span id="run-state" class="badge">IDLE</span></div>
+        <div class="status-line"><p id="status" role="status" aria-live="polite">Ready when you are. No workload is running.</p><span id="elapsed">0:00</span></div>
+        <progress id="progress" value="0" max="100" aria-label="Test progress"></progress>
+        <div class="telemetry"><div><span id="rate-label">CURRENT THROUGHPUT</span><strong id="live-rate">—</strong></div><div><span>CALCULATION ERRORS</span><strong id="errors">—</strong></div><div><span>RENDER RESOLUTION</span><strong>1280 × 720</strong></div></div>
+        <canvas id="chart" width="900" height="180" role="img" aria-label="Live throughput chart; numeric throughput appears above"></canvas>
+        <p class="hint" id="chart-caption">The graph starts with your test. Each CPU workload and GPU scene gets its own trace.</p>
+        <div class="render-wrap"><canvas id="render" width="1280" height="720" aria-label="Live GPU workload preview"></canvas><div id="render-placeholder">GPU VIEWPORT <span>Fixed resolution. Independent of window size.</span></div></div>
+      </section>
+    </div>
+
+    <section class="panel results" aria-labelledby="results-title">
+      <div class="section-heading"><span class="number">03</span><h2 id="results-title">Beyond the score</h2><button id="download" class="quiet" disabled>↓ Export JSON</button></div>
+      <p id="result-note" class="hint">Completed runs show raw throughput, timing, and performance consistency here. Canceled runs never receive a final score.</p>
+      <div class="table-scroll"><table><thead><tr><th>Workload</th><th>Throughput</th><th>Variation</th><th>End / start</th><th>Details</th></tr></thead><tbody id="results-body"><tr><td colspan="5" class="empty">Your results will appear here.</td></tr></tbody></table></div>
+      <div class="system"><span id="system-cpu">CPU threads: —</span><span id="system-gpu">GPU: detected only when a GPU test starts</span><span>Temperature / watts / utilization: unavailable to this page</span></div>
+    </section>
+
+    <section class="panel history"><div class="section-heading"><h2>Recent runs</h2><button id="clear-history" class="quiet">Clear history</button></div><p class="hint">Last five completed runs, saved in this browser. Compare the same version, suite, duration, worker count, and browser settings.</p><div id="history-list" class="history-list"></div></section>
+
+    <section class="methodology">
+      <div><p class="eyebrow">WHAT THE NUMBERS MEAN</p><h2>Real measurements.<br>Transparent scoring.</h2><p>This is a browser benchmark, influenced by Chromium, its JavaScript engine, graphics driver, power settings, and background apps. It does not certify hardware stability or replace a native diagnostic tool.</p></div>
+      <div>
+        <details open><summary>How do points work?</summary><p>We use normalized throughput and geometric means, an approach used for workload groups in <a href="https://www.geekbench.com/doc/geekbench6-benchmark-internals.pdf" target="_blank" rel="noopener">Geekbench 6</a>. These are <strong>Stress Lab v1 points</strong>, with our own synthetic reference rates, not Geekbench, Cinebench, or 3DMark scores.</p><p>Each workload earns 1,000 × measured rate ÷ reference rate. CPU reference rates: integer 50 million iterations/s; floating point 10 million iterations/s; buffer 2,000 MB/s. GPU references: ray marching 25 MPix/s; texture sampling 250 MPix/s. These are fixed scale anchors, not a measured reference PC.</p><p>Each CPU score is the geometric mean of its three workload scores. GPU uses the geometric mean of its two scene scores. Overall is the geometric mean of CPU single, CPU multi, and GPU. Twice the throughput in every workload means twice the score. Overall requires a completed full suite.</p></details>
+        <details><summary>What exactly runs?</summary><p>CPU: deterministic integer hashing, dependent floating-point math, and a 1 MiB buffer read/write test per worker. Each block is checked against a known answer. Workers warm up for 150 ms before timing. Single worker is not a pinned physical core. Multi-worker tests use your selected count (up to 64); the default is capped at 16.</p><p>GPU: a 64-step torus ray marcher and 32 dependent texture samples per pixel, both at 1280 × 720, with 500 ms warmups. The score uses completed pixels per wall-clock second, including browser overhead. GPU fences prevent unbounded queued work and avoid display refresh limits. Optional <a href="https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/" target="_blank" rel="noopener">GPU timer queries</a> add device-time diagnostics; invalid timers are discarded. A readable-pixel check confirms output, but cannot detect every visual artifact.</p><p>Buffer throughput includes cache effects; it is not total RAM bandwidth. GPU results describe these two WebGL scenes, not gaming FPS, VRAM capacity, or general compute performance.</p></details>
+        <details><summary>How should I read stability data?</summary><p>Variation is standard deviation ÷ mean throughput (lower is steadier). End / start compares the last third of samples to the first third, shown after at least six samples. A drop can come from heat, power limits, or background work; this page cannot identify the cause.</p><p>GPU timing includes median and 95th-percentile completed frame latency, plus 1% low equivalent FPS. These include browser scheduling; optional device timings are shown separately. Combined stress runs integer CPU work alongside the ray marcher and reports data without assigning a benchmark score.</p></details>
+        <details><summary>Compatibility and fair comparisons</summary><p>Designed for current Chromium browsers on Linux, macOS, and Windows. CPU needs Web Workers. GPU needs hardware-accelerated WebGL2; if it is unavailable, CPU-only mode remains available. The driver chooses the GPU; a high-performance preference cannot force a specific adapter. Renderer names may be hidden for privacy.</p><p>Use the same Chromium version and settings, plug in power, allow cooling between runs, and keep the tab visible. See <a href="https://browserbench.org/Speedometer3.0/instructions.html" target="_blank" rel="noopener">BrowserBench’s comparison guidance</a>. Results and history stay in this browser; Export downloads a local JSON file. Benchmark code makes no network submissions.</p></details>
+      </div>
+    </section>
+    <footer><span>STRESS LAB / AARYAN GUPTA</span><span>Measure. Compare. Understand.</span></footer>
+  </main>
+</body>
+</html>

@@ -51,13 +51,16 @@ function invoke(pathname, options = {}) {
       write(chunk) {
         if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
       },
-      end(chunk) {
+      end(chunk, encoding, callback) {
         if (chunk) this.write(chunk);
         resolve({
           statusCode: this.statusCode,
           headers: this.headers,
           body: Buffer.concat(chunks).toString()
         });
+        // Match Node's end callback so live-transfer tests can finish consuming chunks.
+        const onEnd = typeof encoding === 'function' ? encoding : callback;
+        if (typeof onEnd === 'function') queueMicrotask(onEnd);
       },
       on() {
         return this;
@@ -78,6 +81,15 @@ function invoke(pathname, options = {}) {
   assert.match(home.body, /Welcome to my website/);
   assert.match(home.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
   assert.match(home.body, /href="\/holiday-planner"/, 'Homepage should link to the holiday planner');
+  assert.match(home.body, /href="\/stress"/);
+
+  const stress = await invoke('/stress');
+  assert.strictEqual(stress.statusCode, 200);
+  assert.match(stress.body, /Stress Lab/);
+  assert.doesNotMatch(stress.body, /gemini-widget\.js/, 'Benchmark should avoid widget background activity');
+  const stressWorker = await invoke('/stress/cpu-worker.js');
+  assert.strictEqual(stressWorker.statusCode, 200);
+  assert.match(stressWorker.headers['content-type'], /javascript/);
 
   const health = await invoke('/health');
   assert.strictEqual(health.statusCode, 200);

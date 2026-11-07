@@ -23,6 +23,7 @@ const baduiRoutes = require('./pages/badui/routes');
 const scrollguardRoutes = require('./pages/scrollguard/routes');
 const codeCopyPasteRoutes = require('./pages/code-copy-paste/routes');
 const streamRoutes = require('./pages/stream/routes');
+const stressRoutes = require('./pages/stress/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -35,7 +36,8 @@ const server = http.createServer((request, response) => {
 const requestPathname = request.url.split('?')[0];
 console.log(`Request: ${request.method} ${requestPathname}`);
 addSecurityHeaders(response);
-if (requestPathname !== '/badui' && !requestPathname.startsWith('/badui/')) {
+if (requestPathname !== '/badui' && !requestPathname.startsWith('/badui/') &&
+    requestPathname !== '/stress' && !requestPathname.startsWith('/stress/')) {
   injectWidgetIntoHtmlResponses(request, response);
 }
 if (serveWidget(request, response)) {
@@ -89,6 +91,10 @@ if (requestPathname === '/code-copy-paste' || requestPathname.startsWith('/code-
 
 if (requestPathname === '/stream' || requestPathname.startsWith('/stream/')) {
   return streamRoutes.handle(request, response);
+}
+
+if (requestPathname === '/stress' || requestPathname.startsWith('/stress/')) {
+  return stressRoutes.handle(request, response);
 }
 
 if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {
@@ -974,6 +980,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <div class="route">/stream</div>
         <h2>Private Live Stream</h2>
         <p>Start a no-audio camera stream from one device and watch it live from another.</p>
+      </a>
+
+      <a class="widget" href="/stress">
+        <div class="route">/stress</div>
+        <h2>CPU + GPU Stress Lab</h2>
+        <p>Benchmark your browser’s CPU and graphics performance with live data, transparent scores, and an optional combined stress test.</p>
       </a>
 
     </section>

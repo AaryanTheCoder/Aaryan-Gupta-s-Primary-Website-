@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "setup:qwen": "node scripts/setup-qwen-local-ai.mjs",
-    "test": "node tests/baduiRoutes.test.js && node tests/routeHelpers.test.js && node tests/routeSmoke.test.js && node tests/fileShareSafety.test.js && node tests/streamRoutes.test.js && node tests/tablockerRoutes.test.js && node tests/geminiRoutes.test.js && node tests/qwenRoutes.test.js",
+    "test": "node tests/baduiRoutes.test.js && node tests/routeHelpers.test.js && node tests/routeSmoke.test.js && node tests/fileShareSafety.test.js && node tests/streamRoutes.test.js && node tests/tablockerRoutes.test.js && node tests/geminiRoutes.test.js && node tests/qwenRoutes.test.js && node tests/stress.test.js",
+    "test:stress": "node tests/stress.test.js",
     "test:routes": "node tests/routeSmoke.test.js",
     "test:tablocker": "node tests/tablockerRoutes.test.js",
     "test:gemini": "node tests/geminiRoutes.test.js",
