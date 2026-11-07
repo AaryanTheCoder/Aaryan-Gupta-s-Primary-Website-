@@ -1,7 +1,7 @@
 /* Shared by the page and lightweight Node tests. No benchmark runs on import. */
 (function (root) {
   'use strict';
-  const VERSION = 'Stress Lab 1.0';
+  const VERSION = 'Stress Lab 2.0';
   const REFERENCES = { integer: 50e6, float: 10e6, memory: 2000e6, raymarch: 25, texture: 250 };
   function geometricMean(values) {
     if (!values.length || values.some(v => !Number.isFinite(v) || v <= 0)) return null;

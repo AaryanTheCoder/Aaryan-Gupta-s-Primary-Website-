@@ -41,6 +41,7 @@ function page(options = {}) {
   const html = source('index.html');
   for (const match of html.matchAll(/id="([^"]+)"/g)) { const el = new Element(); el.id = match[1]; elements[el.id] = el; }
   elements.mode.value = options.mode || 'full'; elements.preset.value = 'quick';
+  elements.graphics.value = options.profile || 'auto';
   const document = { hidden: false, getElementById: id => elements[id], createElement: () => new Element(),
     addEventListener(name, fn) { documentEvents[name] = fn; } };
   class Worker {
@@ -62,13 +63,22 @@ function page(options = {}) {
     terminate() { this.terminated = true; }
   }
   class GPU {
-    constructor() { if (options.noGPU) throw new Error('WebGL unavailable'); this.renderer = 'Test GPU'; this.timer = null; }
+    constructor(_canvas, config) {
+      if (options.noGPU) throw new Error('WebGL unavailable');
+      this.renderer = options.software ? 'llvmpipe' : 'Test GPU'; this.timer = null;
+      this.api = options.webgl1 ? 'WebGL1' : 'WebGL2';
+      this.rendererType = options.software ? 'software' : 'driver';
+      this.width = config.profile === 'maximum' ? 1920 : options.software ? 320 : 1280;
+      this.height = this.width * 9 / 16;
+      this.profile = `${this.api} / ${this.rendererType} / ${this.width}×${this.height}`;
+    }
     async run(kind, duration, signal, onSample, onReady) {
       gpuRuns++;
       if (options.gpuError) throw new Error('GPU context lost');
       signal.throwIfAborted(); onReady(); onSample(M.REFERENCES[kind] * 2);
       return { kind, rate: M.REFERENCES[kind] * 2, elapsed: duration, frames: 10,
         frameTimes: [10, 11, 10, 12, 10, 11, 10, 12, 10, 11], gpuTimes: [],
+        profile: this.profile, rendererType: this.rendererType,
         samples: Array.from({ length: 6 }, (_, i) => ({ elapsed: i * 500, rate: M.REFERENCES[kind] * 2 })) };
     }
     dispose() { gpuDisposals++; }
@@ -116,6 +126,20 @@ async function testController() {
   assert.strictEqual(combined.elements['run-state'].textContent, 'COMPLETE');
   assert.strictEqual(combined.elements['overall-score'].textContent, '—');
   assert.strictEqual(combined.elements['results-body'].children.length, 2);
+
+  const software = page({ mode: 'full', software: true });
+  await software.start();
+  assert.strictEqual(software.elements['run-state'].textContent, 'COMPLETE');
+  assert.strictEqual(software.elements['graphics-label'].textContent, 'GRAPHICS · SOFTWARE');
+  assert.match(software.elements['renderer-note'].textContent, /CPU draws/);
+  assert.strictEqual(software.elements['render-resolution'].textContent, '320 × 180');
+  const savedSoftware = JSON.parse([...software.storage.values()][0])[0];
+  assert.strictEqual(savedSoftware.system.rendererType, 'software');
+  assert.match(savedSoftware.settings.resolvedGraphicsProfile, /software/);
+  assert(savedSoftware.scores.overall > 0, 'Software rendering still receives clearly labeled scores');
+  const maximum = page({ mode: 'gpu', profile: 'maximum' });
+  await maximum.start();
+  assert.strictEqual(maximum.elements['render-resolution'].textContent, '1920 × 1080');
 
   for (const hidden of [false, true]) {
     const pending = page({ mode: 'cpu', holdWorkers: true });
@@ -173,17 +197,26 @@ async function testGPU() {
     for (const [i, name] of ['VERTEX_SHADER', 'FRAGMENT_SHADER', 'COMPILE_STATUS', 'LINK_STATUS', 'TEXTURE_2D',
       'RGBA', 'UNSIGNED_BYTE', 'TEXTURE_MIN_FILTER', 'TEXTURE_MAG_FILTER', 'LINEAR', 'RENDERER',
       'QUERY_RESULT_AVAILABLE', 'QUERY_RESULT', 'TRIANGLES', 'SYNC_GPU_COMMANDS_COMPLETE',
-      'WAIT_FAILED', 'TIMEOUT_EXPIRED'].entries()) gl[name] = i + 1;
+      'WAIT_FAILED', 'TIMEOUT_EXPIRED', 'HIGH_FLOAT', 'ARRAY_BUFFER', 'STATIC_DRAW', 'FLOAT', 'SCISSOR_TEST'].entries()) gl[name] = i + 1;
     gl.NO_ERROR = 0;
     for (const name of ['shaderSource', 'compileShader', 'attachShader', 'linkProgram', 'useProgram',
-      'bindVertexArray', 'bindTexture', 'texImage2D', 'texParameteri', 'viewport', 'uniform1i', 'uniform1f',
-      'drawArrays', 'endQuery', 'flush', 'deleteSync', 'deleteTexture', 'deleteVertexArray', 'deleteProgram', 'deleteShader']) gl[name] = () => {};
-    for (const name of ['createProgram', 'createShader', 'createVertexArray', 'createTexture', 'getUniformLocation', 'fenceSync']) gl[name] = () => ({});
+      'bindVertexArray', 'bindTexture', 'texImage2D', 'texParameteri', 'viewport', 'uniform1i', 'uniform1f', 'uniform2f',
+      'drawArrays', 'endQuery', 'flush', 'deleteSync', 'deleteTexture', 'deleteVertexArray', 'deleteProgram', 'deleteShader',
+      'bindBuffer', 'bufferData', 'enableVertexAttribArray', 'vertexAttribPointer', 'deleteBuffer', 'enable', 'disable', 'scissor']) gl[name] = () => {};
+    for (const name of ['createProgram', 'createShader', 'createVertexArray', 'createTexture', 'getUniformLocation', 'fenceSync', 'createBuffer']) gl[name] = () => ({});
+    gl.getShaderPrecisionFormat = () => ({ precision: options.lowPrecision ? 0 : 23 });
+    gl.getAttribLocation = () => 0;
+    const shaderSources = [];
+    gl.shaderSource = (_shader, source) => shaderSources.push(source);
     gl.getShaderParameter = () => !options.badShader;
     gl.getProgramParameter = () => true;
     gl.isContextLost = () => options.contextLost || lost;
     gl.getError = () => options.glError ? 99 : 0;
-    gl.readPixels = (_x, _y, _w, _h, _format, _type, pixels) => { pixels[3] = 255; };
+    const readbacks = [];
+    gl.readPixels = (_x, _y, w, h, _format, _type, pixels) => {
+      assert(pixels.length >= w * h * 4, 'Readback buffer must fit every tile pixel');
+      readbacks.push([w, h]); pixels[3] = 255;
+    };
     gl.clientWaitSync = () => options.waitFail ? gl.WAIT_FAILED : 999;
     gl.createQuery = () => { queries++; return {}; };
     gl.deleteQuery = () => { deletedQueries++; };
@@ -195,15 +228,34 @@ async function testGPU() {
     const scope = { window: {}, performance: { now: () => time += 50 },
       setTimeout: callback => queueMicrotask(callback) };
     vm.runInNewContext(source('gpu.js'), scope);
-    const canvas = { getContext: () => options.unavailable ? null : gl };
-    const gpu = new scope.window.StressGPU(canvas);
+    const contextRequests = [];
+    const canvas = { getContext: (name, attributes) => {
+      contextRequests.push(name);
+      assert.strictEqual(attributes.failIfMajorPerformanceCaveat, false, 'Do not block software contexts');
+      if (name === 'webgl2' && options.throwWebGL2) throw new Error('Unsupported context');
+      return options.unavailable || options.webgl1 && name === 'webgl2' ? null : gl;
+    } };
+    const gpu = new scope.window.StressGPU(canvas, { profile: options.profile });
+    if (gpu.api === 'WebGL1') {
+      assert(contextRequests.includes('webgl'));
+      assert.match(shaderSources[0], /attribute vec2 aPosition/);
+      assert.match(shaderSources[1], /gl_FragColor/);
+      assert.match(shaderSources[1], /texture2D\(/);
+      assert.doesNotMatch(shaderSources[1], /#version|out vec4 color|\btexture\(/);
+    }
     let result;
     try {
       const controller = new AbortController();
       if (options.abort) controller.abort(new Error('Stopped'));
-      result = await gpu.run('raymarch', 1000, controller.signal, () => {}, () => {});
-      assert(result.frames > 0 && result.rate > 0);
-      assert.strictEqual(result.resolution.join('x'), '1280x720');
+      result = await gpu.run('raymarch', options.longer ? 10000 : 1000, controller.signal,
+        () => { if (options.abortDuring) controller.abort(new Error('Stopped')); }, () => {});
+      assert((result.completedPixels > 0 || result.frames > 0) && result.rate > 0);
+      assert.strictEqual(result.resolution.join('x'), `${gpu.width}x${gpu.height}`);
+      if (gpu.tiled) {
+        assert(readbacks.every(([w, h]) => w > 1 && w <= 64 && h > 1 && h <= 64));
+        assert(result.completedPixels >= result.frames * gpu.width * gpu.height);
+        assert(result.completedPixels < (result.frames + 1) * gpu.width * gpu.height);
+      }
     } finally { gpu.dispose(); }
     assert(lost, 'Release the GPU context');
     assert.strictEqual(queries, deletedQueries, 'Every query must be released');
@@ -213,7 +265,17 @@ async function testGPU() {
   assert((await run({ timer: true })).gpuTimes.length > 0);
   const disjoint = await run({ timer: true, disjoint: true });
   assert(disjoint.discardedTimers > 0 && disjoint.gpuTimes.length === 0);
-  for (const options of [{ unavailable: true }, { software: true }, { badShader: true },
+  const software = await run({ software: true });
+  assert.strictEqual(software.rendererType, 'software');
+  assert.strictEqual(software.resolution.join('x'), '320x180');
+  assert.strictEqual(software.timingMethod, 'tiled-readback-64');
+  assert.strictEqual(software.frames, 0, 'A partial slow frame still produces a completed-pixel measurement');
+  assert.strictEqual((await run({ webgl1: true, lowPrecision: true })).precision, 'mediump');
+  assert.strictEqual((await run({ throwWebGL2: true })).api, 'WebGL1');
+  assert((await run({ webgl1: true, longer: true })).frames > 0);
+  assert.strictEqual((await run({ software: true, profile: 'maximum' })).resolution.join('x'), '1920x1080');
+  for (const options of [{ unavailable: true }, { badShader: true }, { profile: 'invalid' },
+    { webgl1: true, abortDuring: true }, { software: true, abortDuring: true },
     { contextLost: true }, { waitFail: true }, { glError: true }, { abort: true }]) {
     await assert.rejects(run(options));
   }

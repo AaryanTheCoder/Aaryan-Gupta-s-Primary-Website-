@@ -8,9 +8,9 @@
     sustained: { cpu: 20000, gpu: 45000, combined: 180000 }
   };
   const LABELS = { integer: 'Integer hashing', float: 'Floating-point math', memory: 'Buffer read + write',
-    raymarch: 'GPU ray marching', texture: 'GPU texture sampling' };
+    raymarch: 'Graphics ray marching', texture: 'Graphics texture sampling' };
   const logicalThreads = navigator.hardwareConcurrency || 1;
-  const HISTORY_KEY = 'ag-stress-lab-v1';
+  const HISTORY_KEY = 'ag-stress-lab-v2';
   let controller = null;
   let lastReport = null;
   let trace = [];
@@ -35,11 +35,12 @@
   function settings() {
     const threads = $('mode').value === 'gpu' ? 1 : Number($('threads').value);
     if (!Number.isInteger(threads) || threads < 1 || threads > 64) throw new Error('Choose a whole worker count from 1 to 64.');
-    return { mode: $('mode').value, preset: $('preset').value, threads };
+    return { mode: $('mode').value, preset: $('preset').value, threads, graphics: $('graphics').value };
   }
   function updateControls() {
     const gpuOnly = $('mode').value === 'gpu';
     $('threads').disabled = gpuOnly;
+    $('graphics').disabled = $('mode').value === 'cpu';
     $('start').disabled = !window.Worker && !gpuOnly || !$('consent').checked;
     $('start').firstChild.textContent = $('mode').value === 'combined' ? 'Start stress test ' : 'Start benchmark ';
     const config = PRESETS[$('preset').value];
@@ -51,6 +52,7 @@
   }
   $('mode').addEventListener('change', updateControls);
   $('preset').addEventListener('change', updateControls);
+  $('graphics').addEventListener('change', updateControls);
   $('consent').addEventListener('change', updateControls);
   updateControls();
 
@@ -93,7 +95,7 @@
     chartLastDraw = now;
     trace.push(rate); if (trace.length > 400) trace.shift();
     const unit = kind === 'memory' ? 'MB/s' : kind === 'integer' || kind === 'float' ? 'M iter/s' : 'MPix/s';
-    $('rate-label').textContent = `${kind === 'memory' ? 'BUFFER' : kind === 'integer' || kind === 'float' ? 'CPU' : 'GPU'} THROUGHPUT`;
+    $('rate-label').textContent = `${kind === 'memory' ? 'BUFFER' : kind === 'integer' || kind === 'float' ? 'CPU' : 'GRAPHICS'} THROUGHPUT`;
     $('live-rate').textContent = `${number(kind === 'integer' || kind === 'float' || kind === 'memory' ? rate / 1e6 : rate, 1)} ${unit}`;
     drawChart();
   }
@@ -189,12 +191,17 @@
     if (gpu) {
       const frameStats = M.summarize(stage.frameTimes);
       const slow = [...stage.frameTimes].sort((a, b) => b - a).slice(0, Math.max(1, Math.ceil(stage.frames * .01)));
-      const low = 1000 / (slow.reduce((a, b) => a + b, 0) / slow.length);
+      const low = slow.length ? 1000 / (slow.reduce((a, b) => a + b, 0) / slow.length) : null;
       stage.frameStats = frameStats;
       stage.onePercentLowFPS = low;
       stage.deviceTimeStats = M.summarize(stage.gpuTimes);
       stage.sampleStats = M.summarize(stage.samples.map(s => s.rate));
       details = `${stage.frames} frames · median ${number(frameStats?.p50, 1)} / p95 ${number(frameStats?.p95, 1)} ms · 1% low ${number(low, 1)} equiv. FPS`;
+      if (stage.timingMethod === 'tiled-readback-64') {
+        stage.tileTimeStats = M.summarize(stage.tileTimes);
+        details = `${stage.completedTiles} tiles · ${stage.frames} full frames · sampled tile median ${number(stage.tileTimeStats?.p50, 1)} / p95 ${number(stage.tileTimeStats?.p95, 1)} ms`;
+      }
+      if (stage.profile) details += ` · ${stage.profile}`;
       details += stage.deviceTimeStats ? ` · device median ${number(stage.deviceTimeStats.p50, 2)} ms` : ' · device timer unavailable / no valid samples';
       if (stage.discardedTimers) details += ` · ${stage.discardedTimers} invalid timers discarded`;
     }
@@ -218,7 +225,8 @@
     history.forEach(run => {
       const row = document.createElement('div'); row.className = 'history-item';
       for (const text of [new Date(run.date).toLocaleString(), `${run.settings.mode} / ${run.settings.preset} / ${run.settings.threads} workers`,
-        `CPU ${score(run.scores.single)} / ${score(run.scores.multi)} · GPU ${score(run.scores.gpu)}`]) {
+        `CPU ${score(run.scores.single)} / ${score(run.scores.multi)} · Graphics ${score(run.scores.gpu)}`,
+        run.system?.graphicsProfile || 'CPU only', run.system?.renderer || '']) {
         const span = document.createElement('span'); span.textContent = text; row.appendChild(span);
       }
       const points = document.createElement('strong'); points.textContent = run.scores.overall ? `${score(run.scores.overall)} pts` : run.settings.mode === 'combined' ? 'Stress complete' : 'Partial suite';
@@ -250,6 +258,9 @@
     $('errors').textContent = config.mode === 'gpu' ? 'N/A' : '0';
     $('worker-caption').textContent = `${config.threads} workers · integer + float + buffer`;
     $('progress').value = 0;
+    $('graphics-label').textContent = 'GRAPHICS · WEBGL';
+    $('render-resolution').textContent = '—';
+    $('renderer-note').textContent = 'Graphics capabilities are detected when the run starts.';
     $('results-body').replaceChildren();
     displayScores({});
     $('result-note').textContent = 'Running. Scores appear only after the selected suite finishes successfully.';
@@ -268,20 +279,29 @@
       if (needsGPU) {
         // Replacing the canvas allows a fresh context after a stopped/completed run releases the old one.
         const canvas = document.createElement('canvas');
-        canvas.id = 'render'; canvas.setAttribute('aria-label', 'Live GPU workload preview');
+        canvas.id = 'render'; canvas.setAttribute('aria-label', 'Live graphics workload preview');
         $('render').replaceWith(canvas);
-        gpu = new window.StressGPU(canvas);
+        gpu = new window.StressGPU(canvas, { profile: config.graphics });
         report.system.renderer = gpu.renderer;
+        report.system.rendererType = gpu.rendererType;
+        report.system.graphicsAPI = gpu.api;
+        report.system.graphicsProfile = gpu.profile;
+        report.settings.resolvedGraphicsProfile = gpu.profile;
         report.system.gpuTimerAvailable = Boolean(gpu.timer);
-        $('system-gpu').textContent = `GPU: ${gpu.renderer}`;
+        $('system-gpu').textContent = `Graphics: ${gpu.renderer} · ${gpu.profile}`;
+        $('graphics-label').textContent = gpu.rendererType === 'software' ? 'GRAPHICS · SOFTWARE' : `GRAPHICS · ${gpu.api}`;
+        $('render-resolution').textContent = `${gpu.width} × ${gpu.height}`;
+        $('renderer-note').textContent = `${gpu.profile}. ${gpu.rendererType === 'software'
+          ? 'Software rendering accepted: the CPU draws the graphics. This score measures software graphics performance.'
+          : 'Renderer names alone do not independently verify hardware acceleration.'} Compare graphics and overall scores only within the same profile.`;
         $('render-placeholder').hidden = true;
         // The CPU scores should not include GPU rendering load, so the context stays idle until its turn.
       } else {
         $('render-placeholder').hidden = false;
       }
       if (config.mode === 'combined') {
-        beginStage('Combined stress · CPU + GPU', preset.combined, 0, 1);
-        $('chart-caption').textContent = 'GPU MPix/s while CPU integer work runs in parallel. CPU aggregate is shown after completion.';
+        beginStage('Combined stress · CPU + graphics', preset.combined, 0, 1);
+        $('chart-caption').textContent = 'Graphics MPix/s while CPU integer work runs in parallel. Software rendering shares the CPU; aggregate integer throughput appears after completion.';
         const results = await Promise.all([
           runCPU('integer', config.threads, preset.combined, signal, () => {}, () => {}),
           gpu.run('raymarch', preset.combined, signal, rate => live(rate, 'raymarch'), measurementStarted)
@@ -314,7 +334,7 @@
       $('status').textContent = config.mode === 'combined' ? 'Stress test complete. All workloads released.' : 'Benchmark complete. All workloads released.';
       $('result-note').textContent = config.mode === 'combined'
         ? 'Combined stress completed. No calculation errors detected. This is not a guarantee of hardware stability.'
-        : `Stress Lab v1 points · higher is faster. ${config.mode === 'full' ? 'Overall combines single-worker CPU, multi-worker CPU, and GPU.' : 'Overall is available only for a full CPU + GPU suite.'} Short runs are less reliable for sustained performance.`;
+        : `Stress Lab v2 points · higher is faster. ${config.mode === 'full' ? 'Overall combines single-worker CPU, multi-worker CPU, and graphics.' : 'Overall is available only for a full CPU + graphics suite.'} ${gpu ? `Graphics profile: ${gpu.profile}. Software rendering uses the CPU; compare only matching profiles.` : ''} Short runs are less reliable for sustained performance.`;
       $('download').disabled = false;
       try {
         const entry = { version: report.version, date: report.date, settings: config, scores: report.scores, system: report.system };
@@ -328,7 +348,7 @@
       $('run-state').textContent = 'INCOMPLETE';
       $('status').textContent = error.message || 'Test stopped. No final score saved.';
       $('status').classList.add('error');
-      $('result-note').textContent = 'Incomplete run. Any rows shown are partial measurements; no final score or history entry was saved. GPU unavailable? Select CPU benchmark.';
+      $('result-note').textContent = 'Incomplete run. Any rows shown are partial measurements; no final score or history entry was saved. Graphics unavailable? Select CPU benchmark.';
       if (!$('results-body').children.length) {
         const row = document.createElement('tr'); const cell = document.createElement('td');
         cell.colSpan = 5; cell.className = 'empty'; cell.textContent = 'No completed workloads.';
