@@ -24,6 +24,7 @@ const scrollguardRoutes = require('./pages/scrollguard/routes');
 const codeCopyPasteRoutes = require('./pages/code-copy-paste/routes');
 const streamRoutes = require('./pages/stream/routes');
 const stressRoutes = require('./pages/stress/routes');
+const cardsRoutes = require('./pages/cards/routes');
 const {
   injectWidgetIntoHtmlResponses,
   serveWidget
@@ -37,7 +38,8 @@ const requestPathname = request.url.split('?')[0];
 console.log(`Request: ${request.method} ${requestPathname}`);
 addSecurityHeaders(response);
 if (requestPathname !== '/badui' && !requestPathname.startsWith('/badui/') &&
-    requestPathname !== '/stress' && !requestPathname.startsWith('/stress/')) {
+    requestPathname !== '/stress' && !requestPathname.startsWith('/stress/') &&
+    requestPathname !== '/cards' && !requestPathname.startsWith('/cards/')) {
   injectWidgetIntoHtmlResponses(request, response);
 }
 if (serveWidget(request, response)) {
@@ -95,6 +97,10 @@ if (requestPathname === '/stream' || requestPathname.startsWith('/stream/')) {
 
 if (requestPathname === '/stress' || requestPathname.startsWith('/stress/')) {
   return stressRoutes.handle(request, response);
+}
+
+if (requestPathname === '/cards' || requestPathname.startsWith('/cards/')) {
+  return cardsRoutes.handle(request, response);
 }
 
 if (requestPathname === '/api/qwen' || requestPathname.startsWith('/api/qwen/')) {
@@ -988,6 +994,12 @@ if (requestPathname === '/privacy' && (request.method === 'GET' || request.metho
         <p>Benchmark your browser’s CPU and graphics performance with live data, transparent scores, and an optional combined stress test.</p>
       </a>
 
+      <a class="widget" href="/cards">
+        <div class="route">/cards</div>
+        <h2>Cards with Friends</h2>
+        <p>Challenge friends to Bluff or Texas Hold’em, with optional voice and video around your own table.</p>
+      </a>
+
     </section>
 
     <div class="footer-note">
@@ -1023,6 +1035,7 @@ server.on('upgrade', (request, socket, head) => {
   if (tablockerRoutes.handleUpgrade(request, socket, head)) return;
   if (shooterGameRoutes.handleUpgrade(request, socket, head)) return;
   if (streamRoutes.handleUpgrade(request, socket, head)) return;
+  if (cardsRoutes.handleUpgrade(request, socket, head)) return;
   socket.destroy();
 });
 

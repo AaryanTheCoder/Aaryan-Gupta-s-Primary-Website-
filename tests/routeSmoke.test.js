@@ -82,6 +82,14 @@ function invoke(pathname, options = {}) {
   assert.match(home.body, /src="\/assets\/gemini-widget\.js\?v=gemini25"/);
   assert.match(home.body, /href="\/holiday-planner"/, 'Homepage should link to the holiday planner');
   assert.match(home.body, /href="\/stress"/);
+  assert.match(home.body, /href="\/cards"/);
+
+  const cards = await invoke('/cards');
+  assert.strictEqual(cards.statusCode, 200);
+  assert.match(cards.body, /A little table/);
+  assert.doesNotMatch(cards.body, /gemini-widget\.js/);
+  assert.match(cards.headers['permissions-policy'], /microphone=\(self\)/);
+  assert.match(home.headers['permissions-policy'], /microphone=\(\)/);
 
   const stress = await invoke('/stress');
   assert.strictEqual(stress.statusCode, 200);

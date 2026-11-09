@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f7f2" />
+    <meta
+      name="description"
+      content="A little table for good company. Play Bluff and Texas Hold’em with friends, with optional voice and video."
+    />
+    <title>Cards · A table for friends</title>
+    <link rel="stylesheet" href="/cards/style.css" />
+    <script type="module" src="/cards/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/cards"
+        ><span class="brand-mark" aria-hidden="true">♣</span> cards<span class="brand-dot"
+          >.</span
+        ></a
+      >
+      <nav aria-label="Page controls">
+        <span id="connection" class="connection" role="status">Connecting…</span>
+        <span id="myName" class="name-tag" hidden></span>
+        <button id="invitationsButton" class="quiet" hidden>Invitations</button>
+        <button class="quiet" data-command="rules">
+          How to play <span aria-hidden="true">↗</span>
+        </button>
+        <a class="home-link" href="/">Home <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="entry" class="entry">
+        <div class="intro-cards" aria-hidden="true">
+          <div class="intro-card black">A<span>♠</span></div>
+          <div class="intro-card red">A<span>♥</span></div>
+        </div>
+        <p class="eyebrow">PULL UP A CHAIR</p>
+        <h1>A little table.<br />A good time.</h1>
+        <p class="subtext">
+          Bluff, poker, and a bit of friendly competition.<br />Choose a nickname to find your
+          people.
+        </p>
+        <form id="joinForm" class="join-form">
+          <label for="nickname">Your nickname</label>
+          <div class="input-action">
+            <input
+              id="nickname"
+              name="nickname"
+              maxlength="20"
+              autocomplete="nickname"
+              placeholder="What should we call you?"
+              required
+            /><button id="joinButton" type="submit" disabled>
+              Take a seat <span aria-hidden="true">→</span>
+            </button>
+          </div>
+          <p id="joinError" class="form-error" role="alert"></p>
+        </form>
+        <p class="small-note">2–6 friends · Pretend chips · No account needed</p>
+      </section>
+
+      <section id="lobby" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">THE LOBBY</p>
+            <h1>Who’s up for a game?</h1>
+            <p class="subtext">Choose your company. We’ll deal the cards.</p>
+          </div>
+          <span class="online-pill"
+            ><span class="online-dot"></span><span id="onlineCount">0 online</span></span
+          >
+        </div>
+        <div class="lobby-layout">
+          <section class="panel players-panel" aria-labelledby="playersHeading">
+            <div class="panel-heading">
+              <h2 id="playersHeading">Around here</h2>
+              <span class="muted small">Live players</span>
+            </div>
+            <div id="playersList"></div>
+            <p class="panel-footnote">
+              Friends appear here when they open <strong>/cards</strong>.
+            </p>
+          </section>
+          <form id="createForm" class="panel settings-panel">
+            <div class="panel-heading">
+              <h2>Make it a game</h2>
+              <span class="step-label">YOUR TABLE, YOUR RULES</span>
+            </div>
+            <fieldset class="game-picker">
+              <legend class="sr-only">Choose your game</legend>
+              <label class="game-choice"
+                ><input type="radio" name="game" value="bluff" checked /><span
+                  ><span class="game-symbol">♠</span><strong>Bluff</strong
+                  ><small>Keep a straight face.</small></span
+                ></label
+              >
+              <label class="game-choice"
+                ><input type="radio" name="game" value="poker" /><span
+                  ><span class="game-symbol red">♦</span><strong>Poker</strong
+                  ><small>Texas Hold’em.</small></span
+                ></label
+              >
+            </fieldset>
+            <div id="bluffSettings" class="settings-fields">
+              <label
+                >Rank rule<select id="rankMode">
+                  <option value="same">Same rank only</option>
+                  <option value="adjacent">Same rank, one higher, or one lower</option>
+                </select></label
+              >
+              <label
+                >Jokers<select id="jokers">
+                  <option value="0">No jokers</option>
+                  <option value="1">1 joker · wild card</option>
+                  <option value="2">2 jokers · wild cards</option>
+                </select></label
+              >
+              <p class="hint">No betting. Empty your hand and survive the Bluff call to win.</p>
+            </div>
+            <div id="pokerSettings" class="settings-fields" hidden>
+              <label
+                >Starting chips per player<input
+                  id="startingChips"
+                  type="number"
+                  min="3"
+                  max="1000000"
+                  step="1"
+                  value="1000"
+              /></label>
+              <div class="two-fields">
+                <label
+                  >Small blind<input
+                    id="smallBlind"
+                    type="number"
+                    min="1"
+                    max="999999"
+                    step="1"
+                    value="10" /></label
+                ><label
+                  >Big blind<input
+                    id="bigBlind"
+                    type="number"
+                    min="2"
+                    max="999999"
+                    step="1"
+                    value="20"
+                /></label>
+              </div>
+              <p class="hint">Pretend chips only. No-limit Hold’em, with no jokers.</p>
+            </div>
+            <div class="invite-footer">
+              <span id="selectionCount" class="muted small">Select at least one friend</span
+              ><button id="challengeButton" type="submit" disabled>
+                Send challenge <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </form>
+        </div>
+        <div class="lobby-notes">
+          <span><strong>30 seconds</strong> to make your move.</span
+          ><span><strong>Your cards</strong> stay yours.</span
+          ><span><strong>Camera & mic</strong> are always optional.</span>
+        </div>
+      </section>
+
+      <section id="room" hidden>
+        <div class="room-heading">
+          <div>
+            <p class="eyebrow" id="roomEyebrow">YOUR TABLE</p>
+            <h1 id="roomTitle">Bluff</h1>
+            <p id="roomSettings" class="subtext"></p>
+          </div>
+          <div class="room-tools">
+            <button class="quiet" data-command="rules">Rules & cheat sheet</button
+            ><button class="secondary" data-command="leave">Leave table</button>
+          </div>
+        </div>
+        <div id="waitingBar" class="waiting-bar"></div>
+        <div class="play-layout">
+          <div class="table-area">
+            <div id="tableStage" class="table-stage">
+              <div class="felt"><div id="tableCenter" class="table-center"></div></div>
+              <div id="seats"></div>
+            </div>
+            <div id="turnBanner" class="turn-banner" role="status"></div>
+          </div>
+          <aside class="panel activity">
+            <div class="panel-heading">
+              <h2>At the table</h2>
+              <span class="small muted">LIVE</span>
+            </div>
+            <ol id="activityLog" aria-label="Recent game actions"></ol>
+            <div id="adminControls" class="admin-controls"></div>
+          </aside>
+        </div>
+        <section id="handSection" class="hand-section" hidden>
+          <div class="hand-heading">
+            <h2>Your hand <span id="handCount" class="muted"></span></h2>
+            <button class="quiet" data-command="arrange">
+              Arrange cards <span aria-hidden="true">⇅</span>
+            </button>
+          </div>
+          <div id="hand" class="hand" aria-label="Your cards"></div>
+          <p class="hand-help">
+            Drag to rearrange · Use Alt + ← / → on a focused card · Click to select
+          </p>
+          <div id="moveControls" class="move-controls"></div>
+        </section>
+        <section class="call-panel">
+          <div class="call-heading">
+            <div>
+              <h2>A little more face to face</h2>
+              <p class="hint" id="callStatus">
+                Join the call to hear friends. Camera and microphone start off.
+              </p>
+            </div>
+            <div class="call-controls">
+              <button id="callJoin" class="secondary">Join call</button
+              ><button id="cameraButton" class="quiet" disabled>Camera off</button
+              ><button id="micButton" class="quiet" disabled>Mic off</button
+              ><button id="soundButton" class="quiet" hidden>Play call audio</button>
+            </div>
+          </div>
+          <div id="callGrid" class="call-grid" hidden></div>
+        </section>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <span>♣ &nbsp; A table for friends.</span><span>Bluff a little. Play fair.</span>
+    </footer>
+    <div id="notice" class="notice" role="status" hidden></div>
+
+    <dialog id="inviteDialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">YOU’RE INVITED</p>
+          <h2>A seat is waiting.</h2>
+        </div>
+        <button class="icon-button" data-close="inviteDialog" aria-label="Decide later">×</button>
+      </div>
+      <div id="inviteList"></div>
+    </dialog>
+    <dialog id="confirmDialog">
+      <form method="dialog">
+        <h2 id="confirmTitle">Leave this table?</h2>
+        <p id="confirmText" class="subtext"></p>
+        <div class="dialog-actions">
+          <button class="secondary" value="cancel">Stay here</button
+          ><button id="confirmButton" value="confirm">Leave table</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="rulesDialog" class="rules-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">A QUICK REFRESHER</p>
+          <h2>The table guide</h2>
+        </div>
+        <button class="icon-button" data-close="rulesDialog" aria-label="Close rules">×</button>
+      </div>
+      <div class="rule-tabs" role="tablist" aria-label="Game rules">
+        <button
+          id="bluffTab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="bluffRules"
+          data-rule="bluff"
+        >
+          ♠ Bluff</button
+        ><button
+          id="pokerTab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pokerRules"
+          data-rule="poker"
+        >
+          ♦ Poker
+        </button>
+      </div>
+      <section id="bluffRules" role="tabpanel" aria-labelledby="bluffTab">
+        <h3>Empty your hand. Keep them guessing.</h3>
+        <ol class="rule-list">
+          <li>Everyone gets a share of the shuffled deck. The admin chooses the first rank.</li>
+          <li>
+            On your turn, select <strong>1–4 cards</strong>, choose an allowed rank, and play them
+            face down. You may tell the truth or bluff.
+          </li>
+          <li>
+            With “same rank,” keep claiming the last rank. With “one up/down,” claim the same rank,
+            one lower, or one higher than the <strong>last claim</strong>. Ace is 1; King and Ace do
+            not wrap.
+          </li>
+          <li>
+            After each play, everyone else has <strong>5 seconds</strong> to call Bluff. Only that
+            latest play is revealed. A joker matches any claimed rank.
+          </li>
+          <li>
+            A bluff? Its player takes the <strong>whole pile</strong>. Truthful cards? The caller
+            takes it. The winner of the call chooses the next opening rank.
+          </li>
+          <li>
+            You can pass. If everyone else passes, discard the pile; its last player opens again. An
+            expired <strong>30-second</strong> turn counts as a pass.
+          </li>
+          <li>
+            Play your last cards and survive the call window to win. A truthful final play also wins
+            if challenged.
+          </li>
+        </ol>
+        <div class="rule-note">
+          <strong>Two players?</strong> Before dealing, the admin can remove 10 random hidden cards
+          once. This locks the game to two players. Jokers and rank rules are chosen before sending
+          invitations.
+        </div>
+      </section>
+      <section id="pokerRules" role="tabpanel" aria-labelledby="pokerTab" hidden>
+        <h3>Two private cards. Five shared cards.</h3>
+        <ol class="rule-list">
+          <li>
+            Everyone begins with the chosen number of <strong>pretend chips</strong>. The dealer
+            button moves clockwise each hand. Small and big blinds put in the opening bets.
+          </li>
+          <li>
+            You receive two private cards. Betting happens before the <strong>flop</strong> (3
+            shared cards), the <strong>turn</strong> (1), and the <strong>river</strong> (1).
+          </li>
+          <li>
+            <strong>Check</strong> if you owe nothing; <strong>call</strong> to match;
+            <strong>bet/raise</strong> to increase; or <strong>fold</strong> to leave the hand. The
+            amount box means your <strong>total bet for this betting round</strong>.
+          </li>
+          <li>
+            A full raise must increase the current bet by at least the previous full raise (or the
+            big blind). You can go <strong>all-in</strong> for less, but a short raise does not
+            normally reopen raising for players who already acted. Several short raises can add up
+            to reopen it.
+          </li>
+          <li>
+            All-in players can only win the chips they matched. Extra bets form
+            <strong>side pots</strong>. Unmatched chips return to their owner.
+          </li>
+          <li>
+            At showdown, make your best five-card hand using any combination of your cards and the
+            board—even all five shared cards. Ties split the pot; odd chips go clockwise from the
+            dealer.
+          </li>
+          <li>
+            After <strong>30 seconds</strong>, you check automatically when possible; otherwise you
+            fold. Win everyone’s chips to win the match.
+          </li>
+        </ol>
+        <h3>Hand rankings <span class="muted small">Strongest → weakest</span></h3>
+        <div class="rankings">
+          <div>
+            <strong>1. Royal flush</strong><span class="mini-hand red">A♥ K♥ Q♥ J♥ 10♥</span
+            ><small>The highest straight flush.</small>
+          </div>
+          <div>
+            <strong>2. Straight flush</strong><span class="mini-hand">9♠ 8♠ 7♠ 6♠ 5♠</span
+            ><small>Five in order, same suit.</small>
+          </div>
+          <div>
+            <strong>3. Four of a kind</strong><span class="mini-hand">K♠ K♥ K♦ K♣ 2♠</span
+            ><small>Four matching ranks.</small>
+          </div>
+          <div>
+            <strong>4. Full house</strong><span class="mini-hand">Q♠ Q♥ Q♦ 6♣ 6♠</span
+            ><small>Three of a kind and a pair.</small>
+          </div>
+          <div>
+            <strong>5. Flush</strong><span class="mini-hand red">A♦ J♦ 8♦ 5♦ 2♦</span
+            ><small>Same suit, any ranks.</small>
+          </div>
+          <div>
+            <strong>6. Straight</strong><span class="mini-hand">8♣ 7♦ 6♠ 5♥ 4♣</span
+            ><small>Five in order, mixed suits.</small>
+          </div>
+          <div>
+            <strong>7. Three of a kind</strong><span class="mini-hand">7♠ 7♥ 7♦ K♣ 2♠</span
+            ><small>Three matching ranks.</small>
+          </div>
+          <div>
+            <strong>8. Two pair</strong><span class="mini-hand">J♠ J♥ 4♦ 4♣ A♠</span
+            ><small>Two different pairs.</small>
+          </div>
+          <div>
+            <strong>9. One pair</strong><span class="mini-hand">10♠ 10♥ A♦ 8♣ 3♠</span
+            ><small>Two matching ranks.</small>
+          </div>
+          <div>
+            <strong>10. High card</strong><span class="mini-hand">A♣ J♦ 8♠ 5♥ 2♣</span
+            ><small>No combination above.</small>
+          </div>
+        </div>
+        <p class="rule-note">
+          Aces can be high or low: A–2–3–4–5 is the lowest straight. Suits are equal; remaining high
+          cards break ties. With two players, the dealer posts the small blind and acts first before
+          the flop, then last afterward.
+        </p>
+      </section>
+      <p class="rules-shared">
+        The admin may end a game at any time. Ending Poker early returns bets from the unfinished
+        hand. After a connection drop, your seat is held for 60 seconds while normal turns continue.
+        Leaving Bluff ends that game; leaving Poker folds your hand. Calls are optional and may be
+        blocked by restrictive networks. Rooms reset when the server restarts.
+      </p>
+    </dialog>
+  </body>
+</html>
