@@ -14,12 +14,14 @@ function settingsFor(type, input = {}) {
   if (type === 'bluff') {
     const jokers = input.jokers ?? 0;
     const rankMode = input.rankMode ?? 'same';
+    const voiceMode = input.voiceMode ?? false;
     requireMove(
       Number.isInteger(jokers) && jokers >= 0 && jokers <= 2,
       'Choose 0, 1, or 2 jokers.'
     );
     requireMove(['same', 'adjacent'].includes(rankMode), 'Choose a valid rank rule.');
-    return { jokers, rankMode };
+    requireMove(typeof voiceMode === 'boolean', 'Voice declarations must be on or off.');
+    return { jokers, rankMode, voiceMode };
   }
   requireMove(type === 'poker', 'Choose Bluff or Poker.');
   const startingChips = input.startingChips ?? 1000;

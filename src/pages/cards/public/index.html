@@ -10,6 +10,7 @@
     />
     <title>Cards · A table for friends</title>
     <link rel="stylesheet" href="/cards/style.css" />
+    <link rel="stylesheet" href="/cards/bluff.css" />
     <script type="module" src="/cards/app.js"></script>
   </head>
   <body>
@@ -118,6 +119,13 @@
                 </select></label
               >
               <p class="hint">No betting. Empty your hand and survive the Bluff call to win.</p>
+              <label class="voice-setting"
+                ><input id="voiceMode" type="checkbox" /> Voice declarations
+                <span class="hint"
+                  >Say your rank, then confirm. First use downloads a local voice model (~40
+                  MB).</span
+                ></label
+              >
             </div>
             <div id="pokerSettings" class="settings-fields" hidden>
               <label
@@ -159,7 +167,7 @@
           </form>
         </div>
         <div class="lobby-notes">
-          <span><strong>30 seconds</strong> to make your move.</span
+          <span><strong id="moveDuration">60 seconds</strong> to make your move.</span
           ><span><strong>Your cards</strong> stay yours.</span
           ><span><strong>Camera & mic</strong> are always optional.</span>
         </div>
@@ -177,38 +185,58 @@
             ><button class="secondary" data-command="leave">Leave table</button>
           </div>
         </div>
-        <div id="waitingBar" class="waiting-bar"></div>
-        <div class="play-layout">
-          <div class="table-area">
-            <div id="tableStage" class="table-stage">
-              <div class="felt"><div id="tableCenter" class="table-center"></div></div>
-              <div id="seats"></div>
-            </div>
-            <div id="turnBanner" class="turn-banner" role="status"></div>
-          </div>
-          <aside class="panel activity">
-            <div class="panel-heading">
-              <h2>At the table</h2>
-              <span class="small muted">LIVE</span>
-            </div>
-            <ol id="activityLog" aria-label="Recent game actions"></ol>
-            <div id="adminControls" class="admin-controls"></div>
-          </aside>
+        <div id="bluffTools" class="bluff-tools" hidden>
+          <span id="voiceStatus" class="hint" role="status" hidden></span>
+          <div id="bluffMediaControls"></div>
+          <button id="phoneModeButton" class="quiet" type="button">Phone mode</button>
+          <div id="bluffAdminHost"></div>
         </div>
-        <section id="handSection" class="hand-section" hidden>
-          <div class="hand-heading">
-            <h2>Your hand <span id="handCount" class="muted"></span></h2>
-            <button class="quiet" data-command="arrange">
-              Arrange cards <span aria-hidden="true">⇅</span>
-            </button>
+        <nav id="phoneTabs" class="phone-tabs" aria-label="Bluff views" hidden>
+          <button type="button" data-phone-view="game" aria-pressed="true">Table & cards</button>
+          <button type="button" data-phone-view="video" aria-pressed="false">
+            Video & controls →
+          </button>
+        </nav>
+        <div id="phoneVideoPage" hidden>
+          <div id="phoneToolsHost"></div>
+          <div id="phoneRoomTools"></div>
+          <p class="hint">Swipe left to return to the table.</p>
+          <div id="phoneVideoSeats"></div>
+        </div>
+        <div id="gameSurface">
+          <div id="waitingBar" class="waiting-bar"></div>
+          <div class="play-layout">
+            <div class="table-area">
+              <div id="tableStage" class="table-stage">
+                <div class="felt"><div id="tableCenter" class="table-center"></div></div>
+                <div id="seats"></div>
+              </div>
+              <div id="turnBanner" class="turn-banner" role="status"></div>
+            </div>
+            <aside id="tableActivity" class="panel activity">
+              <div class="panel-heading">
+                <h2>At the table</h2>
+                <span class="small muted">LIVE</span>
+              </div>
+              <ol id="activityLog" aria-label="Recent game actions"></ol>
+              <div id="adminControls" class="admin-controls"></div>
+            </aside>
           </div>
-          <div id="hand" class="hand" aria-label="Your cards"></div>
-          <p class="hand-help">
-            Drag to rearrange · Use Alt + ← / → on a focused card · Click to select
-          </p>
-          <div id="moveControls" class="move-controls"></div>
-        </section>
-        <section class="call-panel">
+          <section id="handSection" class="hand-section" hidden>
+            <div class="hand-heading">
+              <h2>Your hand <span id="handCount" class="muted"></span></h2>
+              <button class="quiet" data-command="arrange">
+                Arrange cards <span aria-hidden="true">⇅</span>
+              </button>
+            </div>
+            <div id="hand" class="hand" aria-label="Your cards"></div>
+            <p class="hand-help">
+              Drag to rearrange · Use Alt + ← / → on a focused card · Click to select
+            </p>
+            <div id="moveControls" class="move-controls"></div>
+          </section>
+        </div>
+        <section id="callPanel" class="call-panel">
           <div class="call-heading">
             <div>
               <h2>A little more face to face</h2>
@@ -216,11 +244,14 @@
                 Join the call to hear friends. Camera and microphone start off.
               </p>
             </div>
-            <div class="call-controls">
-              <button id="callJoin" class="secondary">Join call</button
-              ><button id="cameraButton" class="quiet" disabled>Camera off</button
-              ><button id="micButton" class="quiet" disabled>Mic off</button
-              ><button id="soundButton" class="quiet" hidden>Play call audio</button>
+            <div id="pokerMediaControls">
+              <div id="mediaControls" class="call-controls">
+                <button id="callJoin" class="secondary">Join call</button
+                ><button id="cameraButton" class="quiet" disabled>Camera off</button
+                ><button id="micButton" class="quiet" disabled>Mic off</button
+                ><button id="soundButton" class="quiet" hidden>Play call audio</button>
+                <button id="audioButton" class="quiet" hidden aria-pressed="true">Audio on</button>
+              </div>
             </div>
           </div>
           <div id="callGrid" class="call-grid" hidden></div>
@@ -231,6 +262,33 @@
       <span>♣ &nbsp; A table for friends.</span><span>Bluff a little. Play fair.</span>
     </footer>
     <div id="notice" class="notice" role="status" hidden></div>
+
+    <dialog id="phoneDialog">
+      <h2>Use phone mode?</h2>
+      <p class="subtext">
+        Keep the table, all your cards, and game buttons on one screen. Swipe right for video and
+        controls.
+      </p>
+      <div class="dialog-actions">
+        <button id="phoneNo" class="secondary" type="button">Keep this layout</button
+        ><button id="phoneYes" type="button">Use phone mode</button>
+      </div>
+    </dialog>
+    <dialog id="voiceDialog">
+      <h2 id="voiceTitle">Declare your cards</h2>
+      <p id="voiceMessage" class="subtext" role="status"></p>
+      <p id="voiceRank" class="voice-rank"></p>
+      <details id="voiceManual">
+        <summary>Choose a rank manually</summary>
+        <div id="voiceRanks" class="voice-ranks"></div>
+      </details>
+      <p class="hint">Your turn timer keeps running. Cards stay in your hand until you confirm.</p>
+      <div class="dialog-actions">
+        <button id="voiceCancel" class="secondary" type="button">Cancel</button
+        ><button id="voiceRetry" class="secondary" type="button">Try again</button
+        ><button id="voiceDeclare" type="button" disabled>Declare & play</button>
+      </div>
+    </dialog>
 
     <dialog id="inviteDialog">
       <div class="dialog-heading">
@@ -293,8 +351,10 @@
             not wrap.
           </li>
           <li>
-            After each play, everyone else has <strong>5 seconds</strong> to call Bluff. Only that
-            latest play is revealed. A joker matches any claimed rank.
+            The next turn starts immediately. Everyone except the last player can call Bluff on the
+            latest claim until the next play, the pile clears, or <strong>60 seconds</strong>
+            from that claim expire. Passing does not restart that clock. Only the challenged play is
+            revealed. A joker matches any claimed rank.
           </li>
           <li>
             A bluff? Its player takes the <strong>whole pile</strong>. Truthful cards? The caller
@@ -302,17 +362,23 @@
           </li>
           <li>
             You can pass. If everyone else passes, discard the pile; its last player opens again. An
-            expired <strong>30-second</strong> turn counts as a pass.
+            expired <strong>60-second</strong> turn counts as a pass.
           </li>
           <li>
-            Play your last cards and survive the call window to win. A truthful final play also wins
-            if challenged.
+            Play your last cards and survive the 60-second call window to win. All opponents can
+            accept the final claim to finish early. A truthful final play also wins if challenged.
+          </li>
+          <li>
+            Drag 1–4 selected cards to the table, or use Play. In voice mode, say one rank and
+            confirm it in the popup; legal-rank buttons are available if voice fails. Your turn
+            timer keeps running.
           </li>
         </ol>
         <div class="rule-note">
           <strong>Two players?</strong> Before dealing, the admin can remove 10 random hidden cards
           once. This locks the game to two players. Jokers and rank rules are chosen before sending
-          invitations.
+          invitations. Bluff requests camera and microphone on entry; you can turn them off. Phone
+          mode keeps cards and controls together, with video on the other view.
         </div>
       </section>
       <section id="pokerRules" role="tabpanel" aria-labelledby="pokerTab" hidden>

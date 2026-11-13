@@ -1,0 +1,485 @@
+/* Bluff additions are scoped here so Poker keeps its existing layout. */
+.voice-setting {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 5px 9px;
+  align-items: center;
+}
+.voice-setting input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.voice-setting .hint {
+  grid-column: 2;
+  font-weight: 400;
+}
+.voice-rank {
+  font-family: var(--serif);
+  font-size: 30px;
+  margin: 18px 0;
+}
+.voice-ranks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0;
+}
+.voice-ranks button {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+#voiceManual {
+  margin: 15px 0;
+}
+#voiceManual summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.bluff-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+}
+.bluff-tools button {
+  font-size: 11px;
+  padding: 8px 10px;
+}
+.bluff-tools .admin-controls {
+  padding: 0;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bluff-tools .admin-controls .hint {
+  display: none;
+}
+.bluff-room .play-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.bluff-room .seat {
+  padding: 0;
+  width: 144px;
+  max-width: 144px;
+  height: 106px;
+  display: block;
+  border: 2px solid #dce3d4;
+  overflow: hidden;
+}
+.bluff-room .seat.current {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px #83b69360;
+}
+.bluff-room .seat-media,
+.bluff-room .seat-media .call-tile {
+  height: 100%;
+  width: 100%;
+  border-radius: 0;
+}
+.bluff-room .seat-media .call-tile > p {
+  display: none;
+}
+.bluff-room .seat-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #163b2ee0;
+  padding: 5px 8px;
+  color: #fff;
+  pointer-events: none;
+}
+.bluff-room .seat-name {
+  color: #fff;
+  max-width: 100%;
+  font-size: 11px;
+}
+.bluff-room .seat-stats {
+  color: #e2eee2;
+  font-size: 10px;
+}
+.bluff-room .hand .card {
+  touch-action: none;
+}
+.bluff-room .felt.drop-ready {
+  outline: 3px solid var(--green);
+  box-shadow: inset 0 0 0 3px #a5bd97;
+}
+.card-drop-ghost {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  transform: translate(-50%, -110%);
+  padding: 9px 15px;
+  background: var(--green);
+  color: white;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+}
+.phone-tabs {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+.phone-tabs button {
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 7px 12px;
+}
+.phone-tabs button[aria-pressed='true'] {
+  background: #e4eddd;
+  color: var(--green);
+}
+@media (min-width: 761px) {
+  .bluff-room:not(.phone-mode) .table-stage {
+    height: 440px;
+    margin: 16px 0;
+  }
+  .bluff-room:not(.phone-mode) .felt {
+    inset: 72px 100px 90px;
+  }
+}
+@media (max-width: 760px) {
+  .bluff-room:not(.phone-mode) .seat {
+    width: 98px;
+    min-width: 0;
+    max-width: 98px;
+    height: 72px;
+  }
+  .bluff-room:not(.phone-mode) .seat-info {
+    padding: 3px 5px;
+  }
+  .bluff-room:not(.phone-mode) .seat-name {
+    font-size: 10px;
+  }
+  .bluff-room:not(.phone-mode) .seat-stats {
+    font-size: 9px;
+  }
+}
+
+/* Phone mode gives the remaining height to a complete grid of rank/suit labels.
+   The video view reuses these same seat elements; no second set of feeds exists. */
+body.phone-mode {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.phone-mode .topbar,
+.phone-mode .site-footer {
+  display: none;
+}
+.phone-mode main {
+  height: 100dvh;
+  min-height: 0;
+  max-width: none;
+  overflow: hidden;
+  padding: max(4px, env(safe-area-inset-top)) max(7px, env(safe-area-inset-right))
+    max(4px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
+}
+.phone-mode #room {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.phone-mode .room-heading {
+  display: none;
+}
+.phone-mode #gameSurface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 3px;
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
+.phone-mode .play-layout {
+  display: block;
+  flex: 0 0 clamp(96px, 27dvh, 190px);
+  min-height: 0;
+}
+.phone-mode .table-area {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.phone-mode .table-stage {
+  height: auto !important;
+  min-height: 0;
+  flex: 1;
+  margin: 0 !important;
+}
+.phone-mode .felt {
+  inset: 0 !important;
+  border-width: 4px;
+  border-radius: 24px;
+}
+.phone-mode .felt:before {
+  inset: 5px;
+  border-radius: 18px;
+}
+.phone-mode .table-center {
+  padding: 4px;
+  max-height: 100%;
+  overflow: auto;
+}
+.phone-mode .table-center h2 {
+  font-size: 20px;
+  letter-spacing: 0;
+}
+.phone-mode .table-caption {
+  display: none;
+}
+.phone-mode .table-center .hint {
+  font-size: 10px;
+  line-height: 1.25;
+  margin: 3px auto;
+  max-width: 290px;
+}
+.phone-mode .pile {
+  height: 30px;
+  width: 70px;
+  margin: 5px auto;
+}
+.phone-mode .card-back {
+  width: 23px;
+  height: 29px;
+  border-width: 2px;
+  left: 22px;
+  top: 0;
+}
+.phone-mode .card-back:nth-child(2) {
+  left: 28px;
+  top: 2px;
+}
+.phone-mode .pile-count {
+  left: 40px;
+  bottom: -2px;
+  font-size: 9px;
+  padding: 1px 5px;
+}
+.phone-mode .reveal-cards {
+  margin: 3px 0;
+}
+.phone-mode .reveal-cards .card.static {
+  height: 36px;
+  width: 25px;
+  padding: 3px;
+}
+.phone-mode .reveal-cards .suit {
+  top: 14px;
+  font-size: 14px;
+}
+.phone-mode .reveal-cards .corner {
+  font-size: 10px;
+}
+.phone-mode .turn-banner {
+  height: 25px;
+  min-height: 25px;
+  font-size: 11px;
+  gap: 7px;
+}
+.phone-mode .turn-banner .timer {
+  padding: 0 7px;
+}
+.phone-mode .hand-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.phone-mode .hand-heading {
+  height: 25px;
+  min-height: 25px;
+  flex-shrink: 0;
+}
+.phone-mode .hand-heading h2 {
+  font-size: 12px;
+}
+.phone-mode .hand-heading button {
+  font-size: 10px;
+  padding: 3px 6px;
+}
+.phone-mode .hand {
+  display: grid;
+  grid-template-columns: repeat(var(--hand-columns, 8), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--hand-rows, 1), minmax(0, 1fr));
+  flex: 1;
+  min-height: 0;
+  gap: 3px;
+  padding: 3px 0;
+  overflow: visible;
+  align-items: stretch;
+  justify-content: normal;
+  touch-action: none;
+}
+.phone-mode .hand .card {
+  width: 100%;
+  height: 100%;
+  min-height: 24px;
+  max-height: 72px;
+  align-self: center;
+  padding: 2px 3px;
+  box-shadow: none;
+  border-radius: 4px;
+  transform: none;
+  line-height: 1.1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.phone-mode .hand .card .corner {
+  font-size: 14px;
+  display: inline;
+}
+.phone-mode .hand .card .suit {
+  font-size: 15px;
+  position: static;
+  display: inline;
+}
+.phone-mode .hand .card .bottom-corner {
+  display: none;
+}
+.phone-mode .hand .card.selected {
+  border: 2px solid var(--green);
+  background: #d9ebcf;
+  transform: none;
+}
+.phone-mode .hand .card.dragging {
+  opacity: 0.4;
+  transform: none;
+}
+.phone-mode .hand-help {
+  display: none;
+}
+.phone-mode .move-controls {
+  min-height: 46px;
+  flex-shrink: 0;
+  gap: 5px;
+  padding: 2px 0;
+  align-items: center;
+}
+.phone-mode .move-controls button {
+  font-size: 12px;
+  padding: 9px 11px;
+}
+.phone-mode .move-controls label {
+  font-size: 10px;
+  width: 58px;
+  line-height: 1;
+}
+.phone-mode .move-controls select {
+  font-size: 16px;
+  padding: 5px 6px;
+  margin-top: 2px;
+  height: 31px;
+}
+.phone-mode .move-message {
+  font-size: 11px;
+  line-height: 1.3;
+  max-width: 220px;
+}
+.phone-mode .waiting-bar {
+  padding: 7px 9px;
+  margin: 0;
+  gap: 5px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.phone-mode .waiting-bar strong {
+  font-size: 11px;
+}
+.phone-mode .waiting-actions button {
+  padding: 6px 8px;
+  font-size: 10px;
+}
+.phone-mode #phoneVideoPage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
+.phone-mode #phoneVideoPage > .hint {
+  padding: 5px 0;
+}
+.phone-mode #phoneRoomTools .room-tools {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  margin: 5px 0;
+}
+.phone-mode #seats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px 0;
+}
+.phone-mode #seats .seat {
+  position: relative;
+  left: auto !important;
+  top: auto !important;
+  transform: none;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: clamp(100px, 24dvh, 180px);
+}
+.phone-mode #seats .seat-name {
+  max-width: 100%;
+}
+.phone-mode .bluff-tools {
+  gap: 5px;
+  margin: 6px 0;
+  align-items: center;
+}
+.phone-mode .bluff-tools button {
+  font-size: 11px;
+}
+.phone-mode #voiceDialog,
+.phone-mode #phoneDialog {
+  padding: 20px;
+}
+.phone-mode #voiceDialog .dialog-actions {
+  gap: 6px;
+}
+.phone-mode #voiceDialog .dialog-actions button {
+  font-size: 12px;
+  padding: 9px 11px;
+}
+@media (max-height: 420px) {
+  .phone-mode .play-layout {
+    flex-basis: 64px;
+  }
+  .phone-mode .hand-heading {
+    height: 20px;
+    min-height: 20px;
+  }
+  .phone-mode .phone-tabs button {
+    padding: 4px 10px;
+  }
+  .phone-mode .move-controls {
+    min-height: 40px;
+  }
+  .phone-mode .turn-banner {
+    height: 20px;
+    min-height: 20px;
+  }
+  .phone-mode .pile {
+    display: none;
+  }
+}

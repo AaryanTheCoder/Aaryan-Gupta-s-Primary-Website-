@@ -1,4 +1,7 @@
 import { TableCall } from './media.js';
+import { VoiceDeclaration } from './voice.js';
+import { BluffPhoneLayout } from './phone.js';
+import { cardsForDrag, canDropCards } from './ranks.mjs';
 
 const $ = (selector) => document.querySelector(selector);
 const escape = (value) =>
@@ -67,6 +70,48 @@ function send(message) {
 }
 
 const call = new TableCall(send, notify);
+const phone = new BluffPhoneLayout();
+const now = () => Date.now() + state.offset;
+const voice = new VoiceDeclaration({
+  game: () => state.room?.game,
+  room: () => state.room,
+  self: () => state.me?.id,
+  now,
+  localStream: () => call.local,
+  submit: sendMove
+});
+
+function sendMove(command) {
+  if (send(command))
+    for (const button of document.querySelectorAll('[data-move]')) button.disabled = true;
+}
+
+function playSelection(ids = [...state.cards]) {
+  const game = state.room?.game;
+  if (!canDropCards(game, state.me?.id, ids, now())) {
+    notify('Select 1–4 cards and wait for your turn.');
+    return;
+  }
+  if (state.room.settings.voiceMode) voice.open(ids);
+  else
+    sendMove({
+      type: 'move',
+      action: 'play',
+      cards: ids,
+      rank: Number($('#claimRank')?.value),
+      turnId: game.turnId
+    });
+}
+
+function canChallenge(game = state.room?.game) {
+  return (
+    game?.type === 'bluff' &&
+    ['playing', 'final'].includes(game.phase) &&
+    !!game.lastPlay &&
+    game.lastPlay.id !== state.me?.id &&
+    now() < game.challengeDeadline
+  );
+}
 
 function connect() {
   socket = new WebSocket(
@@ -112,14 +157,17 @@ function connect() {
       ) {
         state.order = [];
         state.cards.clear();
+        $('#hand').dataset.handKey = '';
       }
       if (!state.room)
         state.invites.forEach((value, id) => {
           if (value.expiresAt <= Date.now() + state.offset) state.invites.delete(id);
         });
-      call.sync(state.room, state.me?.id);
       renderRoom();
       showScreen();
+      phone.sync(state.room);
+      call.sync(state.room, state.me?.id);
+      voice.sync(state.room);
     } else if (message.type === 'invitation') {
       state.invites.set(message.invitation.id, message.invitation);
       renderInvites(true);
@@ -130,6 +178,7 @@ function connect() {
     else if (message.type === 'replaced') {
       replaced = true;
       call.stop(false);
+      voice.cancel();
       notify('This seat was opened in another tab. Reload to reconnect here.');
     } else if (message.type === 'error') {
       state.submitting = false;
@@ -139,6 +188,8 @@ function connect() {
         state.room = null;
         state.invites.clear();
         call.sync(null, null);
+        phone.sync(null);
+        voice.sync(null);
         $('#myName').hidden = true;
         showScreen();
         renderInvites(false);
@@ -151,7 +202,8 @@ function connect() {
   socket.addEventListener('close', () => {
     state.online = false;
     state.submitting = false;
-    call.stop(false);
+    call.suspend();
+    voice.cancel();
     state.invites.clear();
     renderInvites(false);
     updateConnection();
@@ -179,6 +231,7 @@ function updateConnection() {
 }
 
 function showScreen() {
+  document.body.classList.toggle('bluff-room', state.room?.type === 'bluff');
   $('#entry').hidden = !!state.me;
   $('#lobby').hidden = !state.me || !!state.room;
   $('#room').hidden = !state.me || !state.room;
@@ -186,7 +239,7 @@ function showScreen() {
 
 function settingsText(type, settings) {
   return type === 'bluff'
-    ? `${settings.rankMode === 'same' ? 'Same rank' : 'Same rank or one up/down'} · ${settings.jokers ? `${settings.jokers} wild joker${settings.jokers === 1 ? '' : 's'}` : 'No jokers'}`
+    ? `${settings.rankMode === 'same' ? 'Same rank' : 'Same rank or one up/down'} · ${settings.jokers ? `${settings.jokers} wild joker${settings.jokers === 1 ? '' : 's'}` : 'No jokers'}${settings.voiceMode ? ' · Voice declarations' : ''}`
     : `${settings.startingChips.toLocaleString()} starting chips · ${settings.smallBlind}/${settings.bigBlind} blinds · Pretend chips`;
 }
 
@@ -233,6 +286,14 @@ function renderRoom() {
   const room = state.room;
   if (!room) return;
   const game = room.game;
+  const isBluff = room.type === 'bluff';
+  $('#bluffTools').hidden = !isBluff;
+  $('#tableActivity').hidden = isBluff;
+  $('#callPanel').hidden = isBluff;
+  const mediaHost = $(isBluff ? '#bluffMediaControls' : '#pokerMediaControls');
+  if ($('#mediaControls').parentNode !== mediaHost) mediaHost.append($('#mediaControls'));
+  const adminHost = $(isBluff ? '#bluffAdminHost' : '#tableActivity');
+  if ($('#adminControls').parentNode !== adminHost) adminHost.append($('#adminControls'));
   const admin = room.adminId === state.me.id;
   $('#roomTitle').textContent = gameName(room.type);
   $('#roomEyebrow').textContent = game
@@ -253,21 +314,23 @@ function renderRoom() {
   const seats = room.players.slice(ownIndex).concat(room.players.slice(0, ownIndex));
   $('#tableStage').className = `table-stage players-${seats.length}`;
   $('#seats').className = `seats-${seats.length}`;
-  $('#seats').innerHTML = seats
-    .map((p, index) => {
-      const stats = game?.players.find((value) => value.id === p.id);
-      let description = !p.connected
-        ? 'Reconnecting…'
-        : !game
-          ? 'Ready to play'
-          : room.type === 'bluff'
-            ? `${stats?.cardCount ?? 0} cards`
-            : `${(stats?.stack ?? 0).toLocaleString()} chips${stats?.folded ? ' · Folded' : stats?.allIn ? ' · All-in' : ''}`;
-      if (stats?.bet) description += ` · ${stats.bet} bet`;
-      const badge = p.id === room.adminId ? ' ♧' : '';
-      return `<div class="seat ${game?.turnPlayerId === p.id ? 'current' : ''} ${!p.connected ? 'offline' : ''}" data-position="${index}"><span class="avatar" aria-hidden="true">${escape(p.name[0].toUpperCase())}</span><div><div class="seat-name" title="${escape(p.name)}${p.id === room.adminId ? ' · Admin' : ''}">${escape(p.name)}${p.id === state.me.id ? ' (you)' : ''}${badge}${game?.dealerId === p.id ? ' Ⓓ' : ''}</div><div class="seat-stats">${escape(description)}</div></div>${game?.turnPlayerId === p.id ? '<span class="seat-dot" aria-label="Current turn"></span>' : ''}</div>`;
-    })
-    .join('');
+  if (isBluff) renderBluffSeats(seats, game, room);
+  else
+    $('#seats').innerHTML = seats
+      .map((p, index) => {
+        const stats = game?.players.find((value) => value.id === p.id);
+        let description = !p.connected
+          ? 'Reconnecting…'
+          : !game
+            ? 'Ready to play'
+            : room.type === 'bluff'
+              ? `${stats?.cardCount ?? 0} cards`
+              : `${(stats?.stack ?? 0).toLocaleString()} chips${stats?.folded ? ' · Folded' : stats?.allIn ? ' · All-in' : ''}`;
+        if (stats?.bet) description += ` · ${stats.bet} bet`;
+        const badge = p.id === room.adminId ? ' ♧' : '';
+        return `<div class="seat ${game?.turnPlayerId === p.id ? 'current' : ''} ${!p.connected ? 'offline' : ''}" data-position="${index}"><span class="avatar" aria-hidden="true">${escape(p.name[0].toUpperCase())}</span><div><div class="seat-name" title="${escape(p.name)}${p.id === room.adminId ? ' · Admin' : ''}">${escape(p.name)}${p.id === state.me.id ? ' (you)' : ''}${badge}${game?.dealerId === p.id ? ' Ⓓ' : ''}</div><div class="seat-stats">${escape(description)}</div></div>${game?.turnPlayerId === p.id ? '<span class="seat-dot" aria-label="Current turn"></span>' : ''}</div>`;
+      })
+      .join('');
   $('#tableCenter').innerHTML = centerHtml(room);
   $('#activityLog').innerHTML = (game?.log || room.invitations.map((i) => `${i.name}: ${i.status}`))
     .slice()
@@ -285,6 +348,34 @@ function renderRoom() {
   renderMoves();
   updateTimer();
   updateConnection();
+  if (isBluff) call.render();
+}
+
+function renderBluffSeats(seats, game, room) {
+  const container = $('#seats');
+  const keep = new Set(seats.map((player) => player.id));
+  for (const seat of [...container.children]) if (!keep.has(seat.dataset.seatId)) seat.remove();
+  seats.forEach((player, index) => {
+    let seat = [...container.children].find((el) => el.dataset.seatId === player.id);
+    if (!seat) {
+      seat = document.createElement('div');
+      seat.dataset.seatId = player.id;
+      seat.innerHTML =
+        '<div class="seat-media"></div><div class="seat-info"><div class="seat-name"></div><div class="seat-stats"></div></div>';
+      container.append(seat);
+    }
+    seat.className = `seat ${game?.turnPlayerId === player.id ? 'current' : ''} ${!player.connected ? 'offline' : ''}`;
+    seat.dataset.position = String(index);
+    const name = seat.querySelector('.seat-name');
+    name.textContent = `${player.name}${player.id === state.me.id ? ' (you)' : ''}${player.id === room.adminId ? ' ♧' : ''}`;
+    name.title = player.name;
+    const stats = game?.players.find((p) => p.id === player.id);
+    seat.querySelector('.seat-stats').textContent = !player.connected
+      ? 'Reconnecting…'
+      : stats
+        ? `${stats.cardCount} cards${game.turnPlayerId === player.id ? ' · Your turn'.replace('Your', player.id === state.me.id ? 'Your' : 'Their') : ''}`
+        : 'Ready to play';
+  });
 }
 
 function centerHtml(room) {
@@ -294,7 +385,7 @@ function centerHtml(room) {
   const ended = game.phase === 'ended';
   const result = game.result;
   if (room.type === 'bluff') {
-    return `<div class="table-caption">${ended ? 'THAT’S A WRAP' : game.phase === 'challenge' ? 'TRUTH OR BLUFF?' : 'THE MIDDLE'}</div><h2>${ended ? (game.winnerId ? `${escape(playerName(game.winnerId))} wins!` : 'Game ended') : game.lastPlay ? `${game.lastPlay.count} × ${rankLabel(game.lastPlay.rank)}` : 'Choose a rank'}</h2>${result ? `<div class="reveal-cards">${result.cards.map((c) => cardHtml(c)).join('')}</div><p class="hint">${escape(result.text)}</p>` : `<div class="pile"><span class="card-back"></span><span class="card-back"></span><span class="pile-count">${game.pileCount}</span></div><p class="hint">${game.lastPlay ? `${escape(playerName(game.lastPlay.id))} made the last claim.` : 'Start a fresh pile with any rank.'}</p>`}`;
+    return `<div class="table-caption">${ended ? 'THAT’S A WRAP' : game.phase === 'final' ? 'FINAL CLAIM' : 'THE MIDDLE'}</div><h2>${ended ? (game.winnerId ? `${escape(playerName(game.winnerId))} wins!` : 'Game ended') : game.lastPlay ? `${game.lastPlay.count} × ${rankLabel(game.lastPlay.rank)}` : 'Choose a rank'}</h2>${result ? `<div class="reveal-cards">${result.cards.map((c) => cardHtml(c)).join('')}</div><p class="hint">${escape(result.text)}</p>` : `<div class="pile"><span class="card-back"></span><span class="card-back"></span><span class="pile-count">${game.pileCount}</span></div><p class="hint">${game.lastPlay ? `${escape(playerName(game.lastPlay.id))} made the last claim.` : 'Start a fresh pile with any rank.'}</p>`}${game.phase === 'final' ? `<p class="hint">${game.acceptedFinalIds.length}/${room.players.length - 1} opponents accepted.</p>` : ''}`;
   }
   return `<div class="table-caption">${ended ? 'MATCH COMPLETE' : game.phase === 'between' ? 'HAND COMPLETE' : game.street.toUpperCase()}</div>${ended ? `<h2>${game.winnerId ? `${escape(playerName(game.winnerId))} wins!` : 'Game ended'}</h2>` : ''}<div class="community">${game.board.map((c) => cardHtml(c)).join('')}${Array.from({ length: 5 - game.board.length }, () => '<span class="empty-card" aria-hidden="true"></span>').join('')}</div><span class="pot">${game.phase === 'between' || ended ? 'Next hand, fresh possibilities' : `Pot · ${game.pot.toLocaleString()}`}</span>${result ? `<p class="hint">${escape(result.text)}</p>${result.revealed.map((p) => `<div class="showdown-row">${escape(playerName(p.id))}<span class="reveal-cards">${p.cards.map((c) => cardHtml(c)).join('')}</span></div>`).join('')}` : ''}`;
 }
@@ -308,15 +399,20 @@ function arrange(cards) {
     );
 }
 
-function renderHand() {
+function renderHand(force = false) {
   const hand = state.room.game.hand;
   const available = new Map(hand.map((card) => [card.id, card]));
   state.order = state.order.filter((id) => available.has(id));
   const existing = new Set(state.order);
   state.order.push(...arrange(hand.filter((c) => !existing.has(c.id))).map((c) => c.id));
   for (const id of state.cards) if (!available.has(id)) state.cards.delete(id);
-  $('#hand').innerHTML = state.order.map((id) => cardHtml(available.get(id), true)).join('');
+  const key = state.order.join(',');
+  if (force || $('#hand').dataset.handKey !== key) {
+    $('#hand').innerHTML = state.order.map((id) => cardHtml(available.get(id), true)).join('');
+    $('#hand').dataset.handKey = key;
+  }
   $('#handCount').textContent = `${hand.length} card${hand.length === 1 ? '' : 's'}`;
+  phone.fitHand();
 }
 
 function liveButton(action, text, enabled = true, className = '') {
@@ -338,22 +434,33 @@ function renderMoves() {
     return;
   }
   if (game.type === 'bluff') {
-    if (game.phase === 'challenge')
-      controls.innerHTML =
-        game.lastPlay.id !== state.me.id
-          ? liveButton('bluff', 'Call Bluff!') +
-            '<span class="hint">Challenge the latest play before the timer ends.</span>'
-          : '<p class="move-message">Keep that poker face. Your friends have five seconds to call Bluff.</p>';
-    else if (game.phase === 'reveal')
-      controls.innerHTML =
-        '<p class="move-message">Cards revealed. The winner of the call opens the next pile.</p>';
+    let content = '';
+    if (game.phase === 'final') {
+      const accepted = game.acceptedFinalIds.includes(state.me.id);
+      content =
+        game.lastPlay.id === state.me.id
+          ? '<p class="move-message">Your final claim is waiting for acceptance or a Bluff call.</p>'
+          : liveButton(
+              'acceptFinal',
+              accepted ? 'Accepted' : 'Accept claim',
+              !accepted,
+              'secondary'
+            );
+    } else if (game.phase === 'reveal')
+      content = '<p class="move-message">Cards revealed. The winner opens next.</p>';
     else if (game.turnPlayerId === state.me.id) {
       const chosenRank = game.legalRanks.includes(oldRank)
         ? oldRank
         : game.claimRank || game.legalRanks[0];
-      controls.innerHTML = `<label>Claimed rank<select id="claimRank">${game.legalRanks.map((rank) => `<option value="${rank}" ${rank === chosenRank ? 'selected' : ''}>${rankLabel(rank)}</option>`).join('')}</select></label>${liveButton('play', `Play ${state.cards.size || ''} card${state.cards.size === 1 ? '' : 's'}`, state.cards.size >= 1 && state.cards.size <= 4)}${liveButton('pass', 'Pass', true, 'secondary')}`;
+      const picker = state.room.settings.voiceMode
+        ? ''
+        : `<label>Rank<select id="claimRank">${game.legalRanks.map((rank) => `<option value="${rank}" ${rank === chosenRank ? 'selected' : ''}>${rankLabel(rank)}</option>`).join('')}</select></label>`;
+      content = `${picker}${liveButton('play', `Play ${state.cards.size || ''} card${state.cards.size === 1 ? '' : 's'}`, canDropCards(game, state.me.id, [...state.cards], now()))}${liveButton('pass', 'Pass', now() < game.deadline, 'secondary')}`;
     } else
-      controls.innerHTML = `<p class="move-message">${escape(playerName(game.turnPlayerId))} is choosing their cards.</p>`;
+      content = `<p class="move-message">${escape(playerName(game.turnPlayerId))} is choosing their cards.</p>`;
+    if (canChallenge(game))
+      content += liveButton('bluff', 'Bluff <span data-challenge-clock></span>');
+    controls.innerHTML = content;
   } else if (game.phase === 'between')
     controls.innerHTML = '<p class="move-message">The next hand will start automatically.</p>';
   else if (game.legal) {
@@ -365,6 +472,7 @@ function renderMoves() {
 }
 
 function updateTimer() {
+  voice.validate();
   const game = state.room?.game;
   const banner = $('#turnBanner');
   if (!game) {
@@ -377,8 +485,8 @@ function updateTimer() {
   }
   const remaining = Math.max(0, Math.ceil((game.deadline - Date.now() - state.offset) / 1000));
   const label =
-    game.phase === 'challenge'
-      ? 'Call Bluff or let the claim stand'
+    game.phase === 'final'
+      ? 'Final claim · accept or call Bluff'
       : game.phase === 'reveal'
         ? 'Next pile starts in'
         : game.phase === 'between'
@@ -387,6 +495,13 @@ function updateTimer() {
             ? 'Your move'
             : `${playerName(game.turnPlayerId)}’s move`;
   banner.innerHTML = `<span>${escape(label)}</span><span class="timer ${remaining <= 5 ? 'urgent' : ''}">${remaining}s</span>`;
+  if (game.type === 'bluff') {
+    const challengeSeconds = Math.max(0, Math.ceil((game.challengeDeadline - now()) / 1000));
+    for (const label of document.querySelectorAll('[data-challenge-clock]'))
+      label.textContent = `· ${challengeSeconds}s`;
+    const bluffButton = $('[data-move="bluff"]');
+    if (bluffButton) bluffButton.hidden = !canChallenge(game);
+  }
   if (remaining === 0)
     for (const button of document.querySelectorAll('[data-move]')) button.disabled = true;
 }
@@ -451,13 +566,18 @@ $('#createForm').addEventListener('change', () => {
   const poker = $('input[name="game"]:checked').value === 'poker';
   $('#bluffSettings').hidden = poker;
   $('#pokerSettings').hidden = !poker;
+  $('#moveDuration').textContent = poker ? '30 seconds' : '60 seconds';
 });
 $('#createForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const type = $('input[name="game"]:checked').value;
   const settings =
     type === 'bluff'
-      ? { rankMode: $('#rankMode').value, jokers: Number($('#jokers').value) }
+      ? {
+          rankMode: $('#rankMode').value,
+          jokers: Number($('#jokers').value),
+          voiceMode: $('#voiceMode').checked
+        }
       : {
           startingChips: Number($('#startingChips').value),
           smallBlind: Number($('#smallBlind').value),
@@ -469,7 +589,10 @@ $('#createForm').addEventListener('submit', (event) => {
 let confirmAction = null;
 $('#confirmDialog').addEventListener('close', () => {
   if ($('#confirmDialog').returnValue === 'confirm' && confirmAction) {
-    if (confirmAction === 'leave') call.stop(false);
+    if (confirmAction === 'leave') {
+      call.stop(false);
+      voice.cancel();
+    }
     send({ type: confirmAction });
   }
   confirmAction = null;
@@ -515,14 +638,19 @@ document.addEventListener('click', (event) => {
   }
   const move = event.target.closest('[data-move]');
   if (move && state.room?.game) {
+    if (move.dataset.move === 'play' && state.room.type === 'bluff') {
+      playSelection();
+      return;
+    }
     const command = { type: 'move', action: move.dataset.move, turnId: state.room.game.turnId };
     if (command.action === 'play') {
       command.cards = [...state.cards];
       command.rank = Number($('#claimRank').value);
     }
     if (command.action === 'raise') command.amount = Number($('#raiseAmount').value);
-    if (send(command))
-      for (const button of document.querySelectorAll('[data-move]')) button.disabled = true;
+    if (['bluff', 'acceptFinal'].includes(command.action))
+      command.claimId = state.room.game.lastPlay?.claimId;
+    sendMove(command);
     return;
   }
   const button = event.target.closest('[data-command]');
@@ -564,48 +692,124 @@ $('#hand').addEventListener('pointerdown', (event) => {
   const card = event.target.closest('[data-card]');
   if (!card || event.button !== 0) return;
   suppressClick = false;
-  drag = { card, pointer: event.pointerId, x: event.clientX, y: event.clientY, active: false };
-  card.setPointerCapture(event.pointerId);
+  drag = {
+    card,
+    pointer: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    active: false,
+    table: false,
+    bluff: state.room?.type === 'bluff',
+    ids: cardsForDrag(card.dataset.card, [...state.cards]),
+    originalOrder: state.order.slice(),
+    originalSelected: [...state.cards]
+  };
+  card.setPointerCapture?.(event.pointerId);
 });
 $('#hand').addEventListener(
   'pointermove',
   (event) => {
     if (!drag || drag.pointer !== event.pointerId) return;
-    if (!drag.active && Math.abs(event.clientX - drag.x) < 8) return;
-    if (!drag.active && Math.abs(event.clientY - drag.y) > Math.abs(event.clientX - drag.x)) {
+    const dx = Math.abs(event.clientX - drag.x);
+    const dy = Math.abs(event.clientY - drag.y);
+    if (!drag.active && (drag.bluff ? Math.hypot(dx, dy) < 8 : dx < 8)) return;
+    if (!drag.active && !drag.bluff && dy > dx) {
       drag = null;
       return;
     }
     drag.active = true;
     drag.card.classList.add('dragging');
     event.preventDefault();
-    const others = [...$('#hand').children].filter((card) => card !== drag.card);
-    const before = others.find((card) => {
-      const rect = card.getBoundingClientRect();
-      return event.clientX < rect.left + rect.width / 2;
-    });
-    $('#hand').insertBefore(drag.card, before || null);
     const bounds = $('#hand').getBoundingClientRect();
-    if (event.clientX > bounds.right - 30) $('#hand').scrollLeft += 14;
-    if (event.clientX < bounds.left + 30) $('#hand').scrollLeft -= 14;
+    const felt = $('.felt');
+    const table = felt.getBoundingClientRect();
+    const overTable =
+      event.clientX >= table.left &&
+      event.clientX <= table.right &&
+      event.clientY >= table.top &&
+      event.clientY <= table.bottom;
+    if (drag.bluff && (overTable || event.clientY < bounds.top - 12)) {
+      drag.table = true;
+      // Put cards back in their original slots while the group is above the table.
+      for (const id of drag.originalOrder) {
+        const node = [...$('#hand').children].find((el) => el.dataset.card === id);
+        if (node) $('#hand').append(node);
+      }
+      if (!drag.ghost) {
+        drag.ghost = document.createElement('div');
+        drag.ghost.className = 'card-drop-ghost';
+        drag.ghost.textContent = `${drag.ids.length} card${drag.ids.length === 1 ? '' : 's'}`;
+        document.body.append(drag.ghost);
+      }
+      drag.ghost.style.left = `${event.clientX}px`;
+      drag.ghost.style.top = `${event.clientY}px`;
+      felt.classList.toggle(
+        'drop-ready',
+        overTable && canDropCards(state.room?.game, state.me?.id, drag.ids, now())
+      );
+    } else {
+      drag.table = false;
+      drag.ghost?.remove();
+      drag.ghost = null;
+      felt.classList.remove('drop-ready');
+      const others = [...$('#hand').children].filter((card) => card !== drag.card);
+      const before = others.find((card) => {
+        const rect = card.getBoundingClientRect();
+        return event.clientX < rect.left + rect.width / 2;
+      });
+      $('#hand').insertBefore(drag.card, before || null);
+      if (event.clientX > bounds.right - 30) $('#hand').scrollLeft += 14;
+      if (event.clientX < bounds.left + 30) $('#hand').scrollLeft -= 14;
+    }
   },
   { passive: false }
 );
-function finishDrag() {
+function finishDrag(cancelled = false, event) {
   if (!drag) return;
-  if (drag.active) {
-    state.order = [...$('#hand').children].map((card) => card.dataset.card);
-    suppressClick = true;
-  }
-  drag.card.classList.remove('dragging');
+  const saved = drag;
   drag = null;
+  saved.card.classList.remove('dragging');
+  saved.ghost?.remove();
+  $('.felt').classList.remove('drop-ready');
+  if (!saved.active) return;
+  suppressClick = true;
+  if (!saved.bluff) {
+    state.order = [...$('#hand').children].map((card) => card.dataset.card);
+    return;
+  }
+  const table = $('.felt').getBoundingClientRect();
+  const overTable =
+    event &&
+    event.clientX >= table.left &&
+    event.clientX <= table.right &&
+    event.clientY >= table.top &&
+    event.clientY <= table.bottom;
+  const handBounds = $('#hand').getBoundingClientRect();
+  const overHand = event && event.clientY >= handBounds.top && event.clientY <= handBounds.bottom;
+  const play =
+    !cancelled &&
+    saved.table &&
+    overTable &&
+    canDropCards(state.room?.game, state.me?.id, saved.ids, now());
+  state.order =
+    !cancelled && !saved.table && overHand
+      ? [...$('#hand').children].map((card) => card.dataset.card)
+      : saved.originalOrder;
+  state.cards = new Set(play ? saved.ids : saved.originalSelected);
+  renderHand(true);
+  renderMoves();
+  if (play) playSelection(saved.ids);
 }
-$('#hand').addEventListener('pointerup', finishDrag);
-$('#hand').addEventListener('pointercancel', finishDrag);
+$('#hand').addEventListener('pointerup', (event) => finishDrag(false, event));
+$('#hand').addEventListener('pointercancel', () => finishDrag(true));
+$('#hand').addEventListener('lostpointercapture', () => finishDrag(true));
 
 setInterval(() => {
   if (state.room) updateTimer();
   updateInviteTimers();
 }, 250);
-window.addEventListener('pagehide', () => call.stop(false));
+window.addEventListener('pagehide', () => {
+  call.stop(false);
+  voice.dispose();
+});
 connect();

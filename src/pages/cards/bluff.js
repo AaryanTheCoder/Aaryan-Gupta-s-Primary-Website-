@@ -1,4 +1,7 @@
 const { makeDeck, shuffle, requireMove, addLog } = require('./deck');
+const { randomUUID } = require('crypto');
+
+const TURN_MS = 60000;
 
 function create(players, settings, now, preparedDeck) {
   const deck = preparedDeck || shuffle(makeDeck(settings.jokers));
@@ -9,7 +12,9 @@ function create(players, settings, now, preparedDeck) {
     phase: 'playing',
     turnIndex: 0,
     turnId: 1,
-    deadline: now + 30000,
+    deadline: now + TURN_MS,
+    challengeDeadline: null,
+    acceptedFinalIds: [],
     pile: [],
     discarded: [],
     claimRank: null,
@@ -26,6 +31,7 @@ function create(players, settings, now, preparedDeck) {
 function end(game, reason, winnerId = null) {
   game.phase = 'ended';
   game.deadline = null;
+  game.challengeDeadline = null;
   game.turnId++;
   game.winnerId = winnerId;
   addLog(game, reason);
@@ -35,7 +41,7 @@ function nextTurn(game, index, now) {
   game.turnIndex = index;
   game.phase = 'playing';
   game.turnId++;
-  game.deadline = now + 30000;
+  game.deadline = now + TURN_MS;
 }
 
 function legalRanks(game) {
@@ -48,13 +54,28 @@ function legalRanks(game) {
 }
 
 function action(game, playerId, move, now) {
-  requireMove(move.turnId === game.turnId, 'That move has expired. Please use the current turn.');
   const player = game.players.find((p) => p.id === playerId);
   requireMove(player, 'You are not in this game.');
 
-  if (move.action === 'bluff') {
-    requireMove(game.phase === 'challenge' && now < game.deadline, 'The Bluff window has closed.');
+  if (move.action === 'bluff' || move.action === 'acceptFinal') {
+    // A claim keeps its own ID and clock across passes. A delayed challenge
+    // must never accidentally reveal the cards from a newer claim.
+    requireMove(
+      ['playing', 'final'].includes(game.phase) && game.lastPlay && now < game.challengeDeadline,
+      'The Bluff window has closed.'
+    );
+    requireMove(move.claimId === game.lastPlay.claimId, 'That claim has been replaced.');
     requireMove(game.lastPlay.id !== playerId, 'You cannot call Bluff on yourself.');
+    if (move.action === 'acceptFinal') {
+      requireMove(game.phase === 'final', 'Only a final claim can be accepted.');
+      requireMove(!game.acceptedFinalIds.includes(playerId), 'You already accepted this claim.');
+      game.acceptedFinalIds.push(playerId);
+      if (game.acceptedFinalIds.length === game.players.length - 1) {
+        const winner = game.players.find((p) => p.id === game.lastPlay.id);
+        end(game, `${winner.name} wins! Everyone accepted the final claim.`, winner.id);
+      }
+      return;
+    }
     const last = game.lastPlay;
     const lied = last.cards.some((card) => card.rank !== 0 && card.rank !== last.rank);
     const loser = lied ? game.players.find((p) => p.id === last.id) : player;
@@ -67,6 +88,8 @@ function action(game, playerId, move, now) {
     addLog(game, game.result.text);
     game.pile = [];
     game.lastPlay = null;
+    game.challengeDeadline = null;
+    game.acceptedFinalIds = [];
     game.claimRank = null;
     game.passes = 0;
     game.turnIndex = game.players.indexOf(winner);
@@ -79,6 +102,7 @@ function action(game, playerId, move, now) {
     return;
   }
 
+  requireMove(move.turnId === game.turnId, 'That move has expired. Please use the current turn.');
   requireMove(game.phase === 'playing' && now < game.deadline, 'Wait for the next turn.');
   requireMove(game.players[game.turnIndex].id === playerId, 'It is not your turn.');
   if (move.action === 'pass') {
@@ -102,13 +126,17 @@ function action(game, playerId, move, now) {
   const selected = new Set(move.cards);
   player.hand = player.hand.filter((card) => !selected.has(card.id));
   game.pile.push(...cards);
-  game.lastPlay = { id: playerId, cards, rank: move.rank };
+  game.lastPlay = { id: playerId, cards, rank: move.rank, claimId: randomUUID() };
+  game.challengeDeadline = now + TURN_MS;
+  game.acceptedFinalIds = [];
   game.claimRank = move.rank;
   game.passes = 0;
   game.result = null;
-  game.phase = 'challenge';
-  game.turnId++;
-  game.deadline = now + 5000;
+  if (!player.hand.length) {
+    game.phase = 'final';
+    game.turnId++;
+    game.deadline = game.challengeDeadline;
+  } else nextTurn(game, (game.turnIndex + 1) % game.players.length, now);
   addLog(
     game,
     `${player.name} claimed ${cards.length} × ${rankLabel(move.rank)}. Call Bluff now, or let it stand.`
@@ -124,6 +152,7 @@ function pass(game, now) {
     game.discarded.push(...game.pile);
     game.pile = [];
     game.lastPlay = null;
+    game.challengeDeadline = null;
     game.claimRank = null;
     game.passes = 0;
     addLog(
@@ -135,14 +164,23 @@ function pass(game, now) {
 }
 
 function tick(game, now) {
-  if (game.deadline === null || now < game.deadline) return false;
-  if (game.phase === 'challenge') {
-    const last = game.players[game.turnIndex];
-    if (!last.hand.length) end(game, `${last.name} wins!`, last.id);
-    else nextTurn(game, (game.turnIndex + 1) % game.players.length, now);
-  } else if (game.phase === 'reveal') nextTurn(game, game.turnIndex, now);
-  else if (game.phase === 'playing') pass(game, now);
-  return true;
+  if (game.phase === 'ended') return false;
+  let changed = false;
+  if (game.phase === 'final' && now >= game.deadline) {
+    const winner = game.players.find((p) => p.id === game.lastPlay.id);
+    end(game, `${winner.name} wins!`, winner.id);
+    return true;
+  }
+  if (game.challengeDeadline !== null && now >= game.challengeDeadline) {
+    game.challengeDeadline = null;
+    changed = true;
+  }
+  if (game.deadline !== null && now >= game.deadline) {
+    if (game.phase === 'reveal') nextTurn(game, game.turnIndex, now);
+    else if (game.phase === 'playing') pass(game, now);
+    changed = true;
+  }
+  return changed;
 }
 
 function rankLabel(rank) {
@@ -157,12 +195,19 @@ function view(game, playerId) {
     phase: game.phase,
     turnId: game.turnId,
     deadline: game.deadline,
+    challengeDeadline: game.challengeDeadline,
+    acceptedFinalIds: game.acceptedFinalIds,
     turnPlayerId: game.phase === 'playing' ? game.players[game.turnIndex].id : null,
     winnerId: game.winnerId,
     pileCount: game.pile.length,
     claimRank: game.claimRank,
     lastPlay: game.lastPlay
-      ? { id: game.lastPlay.id, rank: game.lastPlay.rank, count: game.lastPlay.cards.length }
+      ? {
+          id: game.lastPlay.id,
+          rank: game.lastPlay.rank,
+          count: game.lastPlay.cards.length,
+          claimId: game.lastPlay.claimId
+        }
       : null,
     players: game.players.map((p) => ({ id: p.id, cardCount: p.hand.length })),
     hand: game.players.find((p) => p.id === playerId)?.hand || [],

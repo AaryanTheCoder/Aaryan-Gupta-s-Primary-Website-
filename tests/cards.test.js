@@ -19,7 +19,7 @@ function test(name, fn) {
 }
 const people = (count) =>
   Array.from({ length: count }, (_, index) => ({ id: `p${index}`, name: `Player ${index}` }));
-const bluffSettings = { rankMode: 'same', jokers: 0 };
+const bluffSettings = { rankMode: 'same', jokers: 0, voiceMode: false };
 const pokerSettings = { startingChips: 1000, smallBlind: 10, bigBlind: 20 };
 const chips = (game) => game.players.reduce((sum, p) => sum + p.stack + p.total, 0);
 const current = (game) => game.players[game.turnIndex];
@@ -53,6 +53,8 @@ test('Settings reject bad numbers and rules', () => {
   assert.deepEqual(settingsFor('poker'), pokerSettings);
   for (const jokers of [-1, 3, '2', NaN]) assert.throws(() => settingsFor('bluff', { jokers }));
   assert.throws(() => settingsFor('bluff', { rankMode: 'anything' }));
+  assert.throws(() => settingsFor('bluff', { voiceMode: 'yes' }));
+  assert.equal(settingsFor('bluff', { voiceMode: true }).voiceMode, true);
   for (const startingChips of [1.5, 0, Infinity, '1000', 1e15])
     assert.throws(() => settingsFor('poker', { startingChips }));
   assert.throws(() => settingsFor('poker', { bigBlind: 1000 }));
@@ -86,7 +88,9 @@ test('Bluff rejects illegal, duplicate, stale, and out-of-turn plays', () => {
   assert.throws(() => move(bluff, game, 'play', { cards: [game.players[1].hand[0].id], rank: 1 }));
   assert.throws(() => move(bluff, game, 'play', { cards: [id], rank: 14 }));
   move(bluff, game, 'play', { cards: [id], rank: 5 });
-  assert.throws(() => bluff.action(game, 'p0', { action: 'bluff', turnId: game.turnId }, 1001));
+  assert.throws(() =>
+    bluff.action(game, 'p0', { action: 'bluff', claimId: game.lastPlay.claimId }, 1001)
+  );
   assert.throws(() => bluff.action(game, 'p1', { action: 'bluff', turnId: 1 }, 1001));
   bluff.tick(game, 6000);
   assert.throws(() =>
@@ -116,7 +120,7 @@ test('Correct Bluff call takes whole pile, reveals only latest play, and caller 
   move(bluff, game, 'play', { cards: ['spades-2'], rank: 2 });
   bluff.tick(game, 6000);
   move(bluff, game, 'play', { cards: ['spades-3'], rank: 2 }, 6001);
-  bluff.action(game, 'p2', { action: 'bluff', turnId: game.turnId }, 6002);
+  bluff.action(game, 'p2', { action: 'bluff', claimId: game.lastPlay.claimId }, 6002);
   assert.equal(game.players[1].hand.length, 3);
   assert.deepEqual(
     game.result.cards.map((c) => c.id),
@@ -133,16 +137,16 @@ test('Truthful last card and jokers win false calls; a lying last card cannot wi
     const game = bluff.create(people(2), bluffSettings, 0);
     game.players[0].hand = [final];
     move(bluff, game, 'play', { cards: [final.id], rank: 1 });
-    assert.equal(game.phase, 'challenge');
+    assert.equal(game.phase, 'final');
     assert.equal(game.winnerId, null);
-    bluff.action(game, 'p1', { action: 'bluff', turnId: game.turnId }, 1001);
+    bluff.action(game, 'p1', { action: 'bluff', claimId: game.lastPlay.claimId }, 1001);
     assert.equal(game.winnerId, 'p0');
     assert.equal(game.phase, 'ended');
   }
   const game = bluff.create(people(2), bluffSettings, 0);
   game.players[0].hand = cards('2s');
   move(bluff, game, 'play', { cards: ['spades-2'], rank: 1 });
-  bluff.action(game, 'p1', { action: 'bluff', turnId: game.turnId }, 1001);
+  bluff.action(game, 'p1', { action: 'bluff', claimId: game.lastPlay.claimId }, 1001);
   assert.equal(game.winnerId, null);
   assert.equal(game.players[0].hand.length, 1);
   assert.equal(current(game).id, 'p1');
@@ -152,18 +156,97 @@ test('Bluff final card waits full window, and timeout passes discard the pile', 
   const game = bluff.create(people(2), bluffSettings, 0);
   game.players[0].hand = cards('2s');
   move(bluff, game, 'play', { cards: ['spades-2'], rank: 1 });
-  assert.equal(bluff.tick(game, 5999), false);
-  assert.equal(bluff.tick(game, 6000), true);
+  assert.equal(bluff.tick(game, 60999), false);
+  assert.equal(bluff.tick(game, 61000), true);
   assert.equal(game.winnerId, 'p0');
   const passes = bluff.create(people(3), bluffSettings, 0);
   move(bluff, passes, 'play', { cards: [current(passes).hand[0].id], rank: 8 });
-  bluff.tick(passes, 6000);
-  bluff.tick(passes, 36000);
-  bluff.tick(passes, 66000);
+  bluff.tick(passes, 61000);
+  bluff.tick(passes, 121000);
   assert.equal(passes.pile.length, 0);
   assert.equal(passes.discarded.length, 1);
   assert.equal(current(passes).id, 'p0');
   assert.equal(passes.claimRank, null);
+});
+
+test('Bluff turns start immediately, last a minute, and challenges survive passes', () => {
+  const game = bluff.create(people(4), bluffSettings, 0);
+  assert.equal(game.deadline, 60000);
+  move(bluff, game, 'play', { cards: [current(game).hand[0].id], rank: 5 }, 1000);
+  assert.equal(current(game).id, 'p1');
+  assert.equal(game.phase, 'playing');
+  assert.equal(game.deadline, 61000);
+  assert.equal(game.challengeDeadline, 61000);
+  const claimId = game.lastPlay.claimId;
+  const oldTurn = game.turnId;
+  move(bluff, game, 'pass', {}, 15000);
+  assert.equal(current(game).id, 'p2');
+  assert.equal(game.deadline, 75000);
+  assert.equal(game.challengeDeadline, 61000);
+  // A non-current player can challenge the same claim even across a pass.
+  bluff.action(game, 'p3', { action: 'bluff', claimId, turnId: oldTurn }, 20000);
+  assert.equal(game.phase, 'reveal');
+});
+
+test('Challenge expiry does not restart a passed turn or remove its rank rule', () => {
+  const game = bluff.create(people(4), bluffSettings, 0);
+  move(bluff, game, 'play', { cards: [current(game).hand[0].id], rank: 5 }, 1000);
+  const claimId = game.lastPlay.claimId;
+  move(bluff, game, 'pass', {}, 30000);
+  assert.equal(bluff.tick(game, 61000), true);
+  assert.equal(current(game).id, 'p2');
+  assert.equal(game.deadline, 90000);
+  assert.equal(game.challengeDeadline, null);
+  assert.deepEqual(bluff.legalRanks(game), [5]);
+  assert.ok(game.pile.length);
+  assert.throws(() => bluff.action(game, 'p1', { action: 'bluff', claimId }, 61001));
+});
+
+test('A replacement play invalidates old calls and gives the new claim a fresh minute', () => {
+  const game = bluff.create(people(3), bluffSettings, 0);
+  const total = game.players.flatMap((p) => p.hand).length;
+  move(bluff, game, 'play', { cards: [current(game).hand[0].id], rank: 5 }, 1000);
+  const oldClaim = game.lastPlay.claimId;
+  move(bluff, game, 'play', { cards: [current(game).hand[0].id], rank: 5 }, 20000);
+  assert.notEqual(game.lastPlay.claimId, oldClaim);
+  assert.equal(game.challengeDeadline, 80000);
+  assert.throws(() => bluff.action(game, 'p2', { action: 'bluff', claimId: oldClaim }, 21000));
+  assert.equal(game.pile.length + game.players.flatMap((p) => p.hand).length, total);
+  bluff.action(game, 'p0', { action: 'bluff', claimId: game.lastPlay.claimId }, 22000);
+  assert.throws(() => bluff.action(game, 'p2', { action: 'bluff', claimId: oldClaim }, 22001));
+  assert.equal(game.pile.length + game.players.flatMap((p) => p.hand).length, total);
+});
+
+test('Final claims can be accepted early, cannot accept themselves, and cannot be played over', () => {
+  const game = bluff.create(people(3), bluffSettings, 0);
+  game.players[0].hand = cards('Ks');
+  move(bluff, game, 'play', { cards: ['spades-13'], rank: 13 }, 1000);
+  const claimId = game.lastPlay.claimId;
+  assert.equal(game.phase, 'final');
+  assert.throws(() => bluff.action(game, 'p0', { action: 'acceptFinal', claimId }, 2000));
+  assert.throws(() => bluff.action(game, 'p1', { action: 'pass', turnId: game.turnId }, 2000));
+  assert.throws(() => bluff.action(game, 'p1', { action: 'acceptFinal', claimId: 'old' }, 2000));
+  bluff.action(game, 'p1', { action: 'acceptFinal', claimId }, 2000);
+  assert.equal(game.phase, 'final');
+  assert.equal(bluff.view(game, 'p2').acceptedFinalIds.length, 1);
+  assert.throws(() => bluff.action(game, 'p1', { action: 'acceptFinal', claimId }, 2001));
+  bluff.action(game, 'p2', { action: 'acceptFinal', claimId }, 3000);
+  assert.equal(game.phase, 'ended');
+  assert.equal(game.winnerId, 'p0');
+});
+
+test('A correct call on a final claim cancels pending acceptances and returns the cards', () => {
+  const game = bluff.create(people(3), bluffSettings, 0);
+  game.players[0].hand = cards('2s');
+  move(bluff, game, 'play', { cards: ['spades-2'], rank: 13 }, 1000);
+  const claimId = game.lastPlay.claimId;
+  bluff.action(game, 'p1', { action: 'acceptFinal', claimId }, 2000);
+  bluff.action(game, 'p2', { action: 'bluff', claimId }, 3000);
+  assert.equal(game.winnerId, null);
+  assert.equal(game.players[0].hand.length, 1);
+  assert.deepEqual(game.acceptedFinalIds, []);
+  bluff.tick(game, 6000);
+  assert.equal(current(game).id, 'p2');
 });
 
 test('Poker ranks every hand, wheels, kickers, and best five of seven', () => {
@@ -570,7 +653,7 @@ test('Reconnect holds nickname and seat, resumes private hand, and expires after
   f.hub.disconnect(f.clients[0].peer);
   assert.equal(f.hub.sessions.get(f.clients[0].id).connected, false);
   f.advance(30000);
-  assert.notEqual(current(room.game).id, f.clients[0].id);
+  assert.equal(current(room.game).id, f.clients[0].id, 'A Bluff turn now lasts sixty seconds');
   const messages = [];
   const peer = f.hub.connect((message) => messages.push(JSON.parse(JSON.stringify(message))));
   f.hub.receive(peer, { type: 'resume', token: f.clients[0].token });
@@ -679,10 +762,28 @@ test('Page/assets/HEAD, CSP, microphone policy, traversal, and invalid methods',
     assert.match(res.headers['permissions-policy'], /microphone=\(self\)/);
     assert.match(res.headers['content-security-policy'], /script-src 'self'/);
   }
-  for (const file of ['app.js', 'media.js', 'style.css'])
+  for (const file of [
+    'app.js',
+    'media.js',
+    'style.css',
+    'bluff.css',
+    'phone.js',
+    'voice.js',
+    'ranks.mjs',
+    'rank-audio-worklet.js'
+  ])
     assert.equal(route(`/cards/${file}`).status, 200);
   assert.equal(route('/cards', 'HEAD').body, '');
   assert.equal(route('/cards/app.js', 'HEAD').body, '');
+  const modelHead = route('/cards/voice-assets/vosk-model-small-en-us-0.15.tar.gz', 'HEAD');
+  assert.equal(modelHead.status, 200);
+  assert.equal(modelHead.body, '');
+  assert.ok(modelHead.headers['content-length'] > 40000000);
+  assert.match(modelHead.headers['cache-control'], /immutable/);
+  const workerHead = route('/cards/voice-assets/vosk-worker-0.0.8.js', 'HEAD');
+  assert.match(workerHead.headers['content-security-policy'], /'wasm-unsafe-eval'/);
+  assert.doesNotMatch(workerHead.headers['content-security-policy'], /'unsafe-eval'/);
+  assert.doesNotMatch(route('/cards').headers['content-security-policy'], /wasm-unsafe-eval/);
   assert.equal(route('/cards', 'POST').status, 405);
   for (const file of [
     '../routes.js',
@@ -742,6 +843,40 @@ async function socketSmoke() {
   const clients = [];
   const port = server.address().port;
   try {
+    // Verify the large model is streamed intact, rather than only checking its
+    // filesystem copy. Browser recognition depends on this exact response.
+    await new Promise((resolve, reject) => {
+      const crypto = require('crypto');
+      const manifest = require('../src/pages/cards/public/voice-assets/manifest.json');
+      const hash = crypto.createHash('sha256');
+      let bytes = 0;
+      const req = http.get(
+        `http://127.0.0.1:${port}/cards/voice-assets/vosk-model-small-en-us-0.15.tar.gz`,
+        (res) => {
+          assert.equal(res.statusCode, 200);
+          assert.match(res.headers['cache-control'], /immutable/);
+          res.on('data', (chunk) => {
+            bytes += chunk.length;
+            hash.update(chunk);
+          });
+          res.on('end', () => {
+            try {
+              assert.equal(bytes, Number(res.headers['content-length']));
+              assert.equal(
+                hash.digest('hex'),
+                manifest.sha256['vosk-model-small-en-us-0.15.tar.gz']
+              );
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          });
+          res.on('error', reject);
+        }
+      );
+      req.setTimeout(5000, () => req.destroy(new Error('Model download timed out.')));
+      req.on('error', reject);
+    });
     const open = async (name) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/cards/ws`, {
         origin: `http://127.0.0.1:${port}`
@@ -776,7 +911,7 @@ async function socketSmoke() {
       })
     );
     const challenged = await until(() =>
-      b.messages.find((m) => m.type === 'room' && m.room?.game?.phase === 'challenge')
+      b.messages.find((m) => m.type === 'room' && m.room?.game?.lastPlay?.count === 1)
     );
     assert.equal(challenged.room.game.lastPlay.count, 1);
     assert.equal(challenged.room.game.lastPlay.cards, undefined);

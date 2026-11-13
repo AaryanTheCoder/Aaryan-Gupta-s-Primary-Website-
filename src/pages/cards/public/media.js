@@ -12,14 +12,24 @@ export class TableCall {
     this.roomId = null;
     this.generation = 0;
     this.busy = new Set();
+    this.tiles = new Map();
+    this.bluff = false;
+    this.audioEnabled = true;
+    this.audioBlocked = false;
+    this.desired = { joined: false, camera: false, microphone: false };
     document
       .querySelector('#callJoin')
       .addEventListener('click', () => (this.joined ? this.stop(true) : this.join()));
     document.querySelector('#cameraButton').addEventListener('click', () => this.toggle('video'));
     document.querySelector('#micButton').addEventListener('click', () => this.toggle('audio'));
     document.querySelector('#soundButton').addEventListener('click', () => {
-      for (const video of document.querySelectorAll('#callGrid video'))
-        video.play().catch(() => {});
+      this.audioBlocked = false;
+      for (const tile of this.tiles.values()) this.play(tile.querySelector('video'));
+      this.render();
+    });
+    document.querySelector('#audioButton').addEventListener('click', () => {
+      this.audioEnabled = !this.audioEnabled;
+      this.render();
     });
   }
 
@@ -39,6 +49,7 @@ export class TableCall {
       return;
     }
     this.joined = true;
+    this.desired.joined = true;
     this.publish();
     this.syncPeers();
   }
@@ -46,7 +57,9 @@ export class TableCall {
   async toggle(kind) {
     if (!this.joined || this.busy.has(kind)) return;
     const oldTrack = this.local.getTracks().find((track) => track.kind === kind);
+    const preference = kind === 'video' ? 'camera' : 'microphone';
     if (oldTrack) {
+      this.desired[preference] = false;
       oldTrack.stop();
       this.local.removeTrack(oldTrack);
       await this.replaceTrack(kind, null);
@@ -54,10 +67,12 @@ export class TableCall {
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
+      this.desired[preference] = false;
       this.notify('Camera/mic requires HTTPS and browser permission.');
       return;
     }
     const generation = this.generation;
+    this.desired[preference] = true;
     this.busy.add(kind);
     this.render();
     try {
@@ -80,6 +95,8 @@ export class TableCall {
       const track = stream.getTracks()[0];
       this.local.addTrack(track);
       track.onended = () => {
+        if (generation !== this.generation) return;
+        this.desired[preference] = false;
         this.local.removeTrack(track);
         this.replaceTrack(kind, null).catch(() => {});
         if (this.joined) this.publish();
@@ -87,11 +104,14 @@ export class TableCall {
       await this.replaceTrack(kind, track);
       this.publish();
     } catch {
-      this.notify(
-        'Could not open that camera or microphone. Check browser permission and try again.'
-      );
+      if (generation === this.generation) {
+        this.desired[preference] = false;
+        this.notify(
+          'Could not open that camera or microphone. Check browser permission and try again.'
+        );
+      }
     } finally {
-      this.busy.delete(kind);
+      if (generation === this.generation) this.busy.delete(kind);
       this.render();
     }
   }
@@ -108,14 +128,35 @@ export class TableCall {
   }
 
   sync(room, selfId) {
-    if (this.roomId !== room?.id) {
+    const entered = this.roomId !== (room?.id || null);
+    if (entered) {
       this.stop(false);
       this.roomId = room?.id || null;
+      this.bluff = room?.type === 'bluff';
+      this.desired = { joined: this.bluff, camera: this.bluff, microphone: this.bluff };
+      this.audioEnabled = true;
+      this.audioBlocked = false;
+      this.tiles.forEach((tile) => tile.remove());
+      this.tiles.clear();
     }
     this.selfId = selfId;
     this.players = room?.players || [];
+    if (this.bluff && (entered || this.suspended)) {
+      this.suspended = false;
+      if (this.desired.joined) {
+        this.join();
+        if (this.desired.camera) this.toggle('video');
+        if (this.desired.microphone) this.toggle('audio');
+      }
+    }
     this.syncPeers();
     this.render();
+  }
+
+  suspend() {
+    // A network drop stops capture, but does not undo a player's mute choices.
+    this.stop(false);
+    this.suspended = true;
   }
 
   syncPeers() {
@@ -232,6 +273,7 @@ export class TableCall {
 
   stop(publish = false) {
     this.generation++;
+    this.busy.clear();
     this.joined = false;
     this.local?.getTracks().forEach((track) => {
       track.stop();
@@ -239,8 +281,18 @@ export class TableCall {
     });
     for (const peer of this.peers.values()) peer.pc.close();
     this.peers.clear();
+    if (publish) this.desired = { joined: false, camera: false, microphone: false };
     if (publish) this.publish();
     this.render();
+  }
+
+  play(video) {
+    video.play().catch(() => {
+      if (!video.muted) {
+        this.audioBlocked = true;
+        document.querySelector('#soundButton').hidden = false;
+      }
+    });
   }
 
   render() {
@@ -258,19 +310,39 @@ export class TableCall {
         : `${label} ${enabled ? 'on' : 'off'}`;
       button.setAttribute('aria-pressed', String(enabled));
     }
-    document.querySelector('#soundButton').hidden = !this.joined;
+    document.querySelector('#soundButton').hidden =
+      !this.joined || (this.bluff && !this.audioBlocked);
+    document.querySelector('#soundButton').textContent = this.bluff
+      ? 'Tap to hear audio'
+      : 'Play call audio';
+    const audioButton = document.querySelector('#audioButton');
+    audioButton.hidden = !this.bluff || !this.joined;
+    audioButton.textContent = this.audioEnabled ? 'Audio on' : 'Audio off';
+    audioButton.setAttribute('aria-pressed', String(this.audioEnabled));
     document.querySelector('#callStatus').textContent = this.joined
       ? 'Calls connect directly. Restricted Wi-Fi may block them; the card game keeps working.'
       : 'Join the call to hear friends. Camera and microphone start off.';
     const grid = document.querySelector('#callGrid');
     grid.hidden = !this.joined;
-    const participants = this.joined
-      ? this.players.filter((p) => p.id === this.selfId || (p.media.joined && p.connected))
-      : [];
+    const participants = this.bluff
+      ? this.players
+      : this.joined
+        ? this.players.filter((p) => p.id === this.selfId || (p.media.joined && p.connected))
+        : [];
     const keep = new Set(participants.map((p) => p.id));
-    for (const tile of grid.children) if (!keep.has(tile.dataset.player)) tile.remove();
+    for (const [id, tile] of this.tiles)
+      if (!keep.has(id)) {
+        tile.remove();
+        this.tiles.delete(id);
+      }
     for (const player of participants) {
-      let tile = [...grid.children].find((el) => el.dataset.player === player.id);
+      const host = this.bluff
+        ? [...document.querySelectorAll('[data-seat-id]')]
+            .find((el) => el.dataset.seatId === player.id)
+            ?.querySelector('.seat-media')
+        : grid;
+      if (!host) continue;
+      let tile = this.tiles.get(player.id);
       if (!tile) {
         tile = document.createElement('div');
         tile.className = 'call-tile';
@@ -282,19 +354,26 @@ export class TableCall {
         video.playsInline = true;
         const caption = document.createElement('p');
         tile.append(placeholder, video, caption);
-        grid.append(tile);
+        this.tiles.set(player.id, tile);
       }
+      if (tile.parentNode !== host) host.append(tile);
       const self = player.id === this.selfId;
       const stream = self ? this.local : this.peers.get(player.id)?.stream;
       const video = tile.querySelector('video');
-      video.muted = self;
+      video.muted = self || (this.bluff && !this.audioEnabled);
       video.classList.toggle('self', self);
       if (video.srcObject !== stream) {
         video.srcObject = stream || null;
-        video.play().catch(() => {});
       }
+      if (stream?.getTracks().length && video.paused) this.play(video);
       // Keep remote audio playing even when its video is visually hidden.
-      const showingVideo = self ? camera : player.media.camera;
+      const showingVideo = self
+        ? camera
+        : this.bluff
+          ? this.joined &&
+            player.media.camera &&
+            !!stream?.getVideoTracks().some((track) => track.readyState !== 'ended')
+          : player.media.camera;
       video.hidden = !showingVideo;
       tile.querySelector('.call-placeholder').hidden = showingVideo;
       tile.querySelector('.call-placeholder').textContent = player.name[0].toUpperCase();

@@ -8,7 +8,17 @@ const FILES = {
   'index.html': 'text/html; charset=utf-8',
   'style.css': 'text/css; charset=utf-8',
   'app.js': 'application/javascript; charset=utf-8',
-  'media.js': 'application/javascript; charset=utf-8'
+  'media.js': 'application/javascript; charset=utf-8',
+  'bluff.css': 'text/css; charset=utf-8',
+  'phone.js': 'application/javascript; charset=utf-8',
+  'voice.js': 'application/javascript; charset=utf-8',
+  'ranks.mjs': 'application/javascript; charset=utf-8',
+  'rank-audio-worklet.js': 'application/javascript; charset=utf-8',
+  'voice-assets/vosk-browser-0.0.8.js': 'application/javascript; charset=utf-8',
+  'voice-assets/vosk-worker-0.0.8.js': 'application/javascript; charset=utf-8',
+  'voice-assets/vosk-model-small-en-us-0.15.tar.gz': 'application/gzip',
+  'voice-assets/COPYING': 'text/plain; charset=utf-8',
+  'voice-assets/NOTICE': 'text/plain; charset=utf-8'
 };
 const hub = new GameHub();
 const wss = new WebSocket.Server({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
@@ -24,7 +34,7 @@ function handle(req, res) {
     host.length <= 255 && /^[a-z0-9.:[\]-]+$/i.test(host) ? ` ws://${host} wss://${host}` : '';
   res.setHeader(
     'Content-Security-Policy',
-    `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'${socketSources}; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`
+    `default-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'self'${socketSources}; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`
   );
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });
@@ -39,6 +49,27 @@ function handle(req, res) {
   if (!Object.hasOwn(FILES, file)) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Cards file not found');
+    return;
+  }
+  if (file.startsWith('voice-assets/'))
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  if (file === 'voice-assets/vosk-worker-0.0.8.js') {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; worker-src 'none'"
+    );
+  }
+  const filePath = path.join(PUBLIC_DIR, file);
+  if (file.endsWith('.tar.gz')) {
+    res.writeHead(200, {
+      'Content-Type': FILES[file],
+      'Content-Length': fs.statSync(filePath).size
+    });
+    if (req.method === 'HEAD') res.end();
+    else
+      fs.createReadStream(filePath)
+        .on('error', () => res.destroy())
+        .pipe(res);
     return;
   }
   res.writeHead(200, { 'Content-Type': FILES[file] });
