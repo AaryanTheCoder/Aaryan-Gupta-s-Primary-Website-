@@ -34,6 +34,10 @@ The assets have versioned filenames and immutable caching. Change filenames
 and model URLs when replacing their contents in a future release. The browser
 runtime also caches the extracted model in IndexedDB.
 
+The root `.gitattributes` keeps model archives binary and fixes voice JavaScript
+to LF line endings. The checksum manifest uses those canonical bytes, so Git's
+automatic line-ending conversion cannot break verification on another machine.
+
 ## Testing
 
 `node tests/cardsVoiceRuntime.test.js` runs the actual shipped WASM worker,
